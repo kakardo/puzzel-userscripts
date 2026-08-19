@@ -9,7 +9,9 @@
 // @version      3.1_2026-03-31
 // @description  Highlights Assigned-To and Status fields with safer refresh after programmatic updates and scroll return.
 // @match        https://puzzel.cm.puzzel.com/tickets/*
-// @require      file:///C:/Users/KardoRostam/OneDrive%20-%20Puzzel%20AS/Kardo/Eget/Kod/DOM_(Document_Object_Model)/PCM_DOM_Shared_Local_1.3_2026-03-31.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local_1.6_2026-04-16.user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/Puzzel%20Styler%20%28Ticket%20Field%29-3.1_2026-03-31.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/Puzzel%20Styler%20%28Ticket%20Field%29-3.1_2026-03-31.user.js
 // @grant        none
 // ==/UserScript==
 

@@ -10,7 +10,9 @@
 // @description  Shows persistent alerts with priority and title when new tickets appear in the PCM ticket list
 // @match        https://puzzel.cm.puzzel.com/tickets
 // @match        https://puzzel.cm.puzzel.com/tickets?*
-// @require      file:///C:/Users/KardoRostam/OneDrive%20-%20Puzzel%20AS/Kardo/Eget/Kod/Modular Scripts\tm-shared\DOM_(Document_Object_Model)\PCM_DOM_Shared_Local_1.6_2026-04-16.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local_1.6_2026-04-16.user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM_New_Ticket_Notifier_1.5_2026-04-24.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM_New_Ticket_Notifier_1.5_2026-04-24.user.js
 // @grant        none
 // ==/UserScript==
 

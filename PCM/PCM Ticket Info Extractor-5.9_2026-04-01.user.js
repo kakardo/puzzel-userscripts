@@ -10,7 +10,9 @@
 // @description Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
 // @author Kardo Rostam
 // @match https://puzzel.cm.puzzel.com/tickets/*
-// @require file:///C:/Users/KardoRostam/OneDrive%20-%20Puzzel%20AS/Kardo/Eget/Kod/DOM_(Document_Object_Model)/PCM_DOM_Shared_Local.user.js
+// @require https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local_1.6_2026-04-16.user.js
+// @downloadURL https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM%20Ticket%20Info%20Extractor-5.9_2026-04-01.user.js
+// @updateURL https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM%20Ticket%20Info%20Extractor-5.9_2026-04-01.user.js
 // @grant none
 // ==/UserScript==
 

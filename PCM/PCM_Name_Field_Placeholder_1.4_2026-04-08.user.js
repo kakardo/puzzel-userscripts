@@ -11,7 +11,9 @@
 // @match        https://puzzel.cm.puzzel.com/*
 // @grant        none
 // @run-at       document-idle
-// @require      file:///C:/Users/KardoRostam/OneDrive%20-%20Puzzel%20AS/Kardo/Eget/Kod/DOM_(Document_Object_Model)/PCM_DOM_Shared_Local.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local_1.6_2026-04-16.user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM_Name_Field_Placeholder_1.4_2026-04-08.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM_Name_Field_Placeholder_1.4_2026-04-08.user.js
 // ==/UserScript==
 
 (function () {
