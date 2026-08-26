@@ -1,12 +1,12 @@
-// @file_name = PCM_Dark_Background_(Ticket_View_Customers_Organisations)_1.1_2026-03-25.user.js
+// @file_name = PCM_Dark_Mode_(Ticket,_Org,_Customer_Background).user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-03-25
+// @version = 1.2_2026-08-27
 // @created = 2026-03-25 (v1.1)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket, Org, Customer Background)
 // @namespace    https://puzzel.cm.puzzel.com/
-// @version      1.1_2026-03-25
+// @version      1.2_2026-08-27
 // @description  Paints only the page background black on ticket detail pages, customers, and organisations pages.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*

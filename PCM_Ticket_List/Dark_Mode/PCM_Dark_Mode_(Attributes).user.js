@@ -1,18 +1,18 @@
-// @file_name = PCM_Dark_Mode_-_(Attributes)_4.5_2026-03-27.user.js
+// @file_name = PCM_Dark_Mode_(Attributes).user.js
 // @author = Kardo Rostam
-// @version = 4.5_2026-03-27
-// @created = 2026-03-27
+// @version = 4.7_2026-08-27
+// @created = 2026-03-27 (v4.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Attributes)
 // @namespace    https://puzzel.cm.puzzel.com/
-// @version      4.5_2026-03-27
-// @description  Small efficiency patch: keeps the working Attributes behavior, but avoids duplicate observer startup, debounces reactive apply calls, and skips unnecessary status class rewrites.
+// @version      4.7_2026-08-27
+// @description  Uses the shared PCM_DOM library for boot/retry and style injection. Keeps the working Attributes behavior: avoids duplicate observer startup, debounces reactive apply calls, and skips unnecessary status class rewrites.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
 // @run-at       document-idle
-// @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
 // ==/UserScript==
@@ -20,8 +20,16 @@
 (() => {
   'use strict';
 
+  const REQUIRE_ERROR = 'PCM Dark Mode (Attributes): PCM_DOM shared helpers are missing. Load PCM_DOM_Shared_Local.user.js first.';
+
+  if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag) {
+    console.error(REQUIRE_ERROR);
+    return;
+  }
+
   const STORAGE_KEY = 'pzTicketsDarkModeOn';
 
+  const STYLE_ID = 'pz-ta-dark-style';
   const SCOPE_CLASS = 'pz-ta-dark-scope';
   const SCOPE_ATTR  = 'data-pz-ta-dark';
   const GLOBAL_ATTR = 'data-pz-ta-global-dark';
@@ -199,9 +207,9 @@
     return ticketsWidgetObserver;
   }
 
-  GM_addStyle(`
+  window.PCM_DOM.ensureStyleTag(STYLE_ID, `
     /* ============================================================
-       v4.1 – FIELD BOXES UNIFIED (SAFE FAILSAFE BASE)
+       v4.1 - FIELD BOXES UNIFIED (SAFE FAILSAFE BASE)
        Purpose: Make all boxes look like the "good" green ones.
        ============================================================ */
 
@@ -563,25 +571,14 @@
     domObserver.observe(document.body, { childList: true, subtree: true });
   }
 
-  function boot() {
-    if (!document.body) return false;
+  const bootConfig = window.PCM_DOM.mergeConfig
+    ? window.PCM_DOM.mergeConfig({ BOOT_MAX_TRIES: 40, BOOT_INTERVAL_MS: 400 })
+    : { BOOT_MAX_TRIES: 40, BOOT_INTERVAL_MS: 400 };
+
+  window.PCM_DOM.bootUntil(function() {
+    return !!document.body && !!findRoot();
+  }, function() {
     apply();
-
-    if (findRoot()) {
-      startDomObserver();
-      return true;
-    }
-
-    return false;
-  }
-
-  const MAX_TRIES = 40;
-  const INTERVAL = 400;
-  let tries = 0;
-  (function tick() {
-    const ready = boot();
-    tries++;
-    if (ready || tries >= MAX_TRIES) return;
-    setTimeout(tick, INTERVAL);
-  })();
+    startDomObserver();
+  }, bootConfig);
 })();

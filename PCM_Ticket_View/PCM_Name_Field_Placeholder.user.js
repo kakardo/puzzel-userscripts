@@ -1,19 +1,19 @@
-// @file_name = PCM_Name_Field_Placeholder_1.4_2026-04-08.user.js
+// @file_name = PCM_Name_Field_Placeholder.user.js
 // @author = Kardo Rostam
-// @version = 1.4_2026-04-08
+// @version = 1.5_2026-08-27
 // @created = 2026-04-08 09:47
 
 // ==UserScript==
 // @name         PCM Name Field Placeholder
 // @namespace    https://puzzel.com/
-// @version      1.4_2026-04-08
+// @version      1.5_2026-08-27
 // @description  Adds a purple placeholder name link above the email in Customer Intelligence only when no visible name already exists. Runs once per page load with limited retries.
 // @match        https://puzzel.cm.puzzel.com/*
 // @grant        none
 // @run-at       document-idle
-// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local_1.6_2026-04-16.user.js
-// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM_Name_Field_Placeholder_1.4_2026-04-08.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM_Name_Field_Placeholder_1.4_2026-04-08.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Name_Field_Placeholder.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Name_Field_Placeholder.user.js
 // ==/UserScript==
 
 (function () {

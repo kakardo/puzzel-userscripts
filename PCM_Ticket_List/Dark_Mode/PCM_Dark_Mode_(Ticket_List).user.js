@@ -1,12 +1,12 @@
-// @file_name = PCM_Dark_Mode_(Ticket_List)_5.5_2026-03-26.user.js
+// @file_name = PCM_Dark_Mode_(Ticket_List).user.js
 // @author = Kardo Rostam
-// @version = 5.5_2026-03-26
+// @version = 5.6_2026-08-27
 // @created = 2026-03-26 (v5.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket List)
 // @namespace    https://puzzel.cm.puzzel.com/
-// @version      5.5_2026-03-26
+// @version      5.6_2026-08-27
 // @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/

@@ -1,18 +1,18 @@
-// @file_name = PCM_New_Ticket_Notifier_1.5_2026-04-24.txt
+// @file_name = PCM_New_Ticket_Notifier.user.js
 // @author = Kardo Rostam
-// @version = 1.5_2026-04-24
+// @version = 1.6_2026-08-27
 // @created = 2026-04-24 (v1.0)
 
 // ==UserScript==
 // @name         PCM New Ticket Notifier
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6_2026-08-27
 // @description  Shows persistent alerts with priority and title when new tickets appear in the PCM ticket list
 // @match        https://puzzel.cm.puzzel.com/tickets
 // @match        https://puzzel.cm.puzzel.com/tickets?*
-// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local_1.6_2026-04-16.user.js
-// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM_New_Ticket_Notifier_1.5_2026-04-24.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM_New_Ticket_Notifier_1.5_2026-04-24.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_New_Ticket_Notifier.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_New_Ticket_Notifier.user.js
 // @grant        none
 // ==/UserScript==
 

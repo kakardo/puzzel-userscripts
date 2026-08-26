@@ -1,12 +1,12 @@
-// @file_name = PCM_Auto_Refresh_1.8_Ring_TopAlign_2026-03-27.user.js
+// @file_name = PCM_Auto_Refresh.user.js
 // @author = Kardo Rostam
-// @version = 1.8_2026-03-27
+// @version = 1.9_2026-08-27
 // @created = 2026-02-19 11:08
 
 // ==UserScript==
 // @name         PCM Auto Refresh
 // @namespace    http://tampermonkey.net/
-// @version      1.8
+// @version      1.9_2026-08-27
 // @description  Auto-refresh PCM dashboard and ticket list with native-looking dt-button UI, dark mode palette, ring on right (top-aligned)
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets

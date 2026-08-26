@@ -1,18 +1,18 @@
-// @file_name = PCM_Ticket_Info_Extractor_5.9_2026-04-01.txt
+// @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 5.9_2026-04-01
+// @version = 6.0_2026-08-27
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name PCM Ticket Info Extractor
 // @namespace http://tampermonkey.net/
-// @version 5.9_2026-04-01
+// @version 6.0_2026-08-27
 // @description Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
 // @author Kardo Rostam
 // @match https://puzzel.cm.puzzel.com/tickets/*
-// @require https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local_1.6_2026-04-16.user.js
-// @downloadURL https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM%20Ticket%20Info%20Extractor-5.9_2026-04-01.user.js
-// @updateURL https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM/PCM%20Ticket%20Info%20Extractor-5.9_2026-04-01.user.js
+// @require https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
+// @downloadURL https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
+// @updateURL https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
 // @grant none
 // ==/UserScript==
 

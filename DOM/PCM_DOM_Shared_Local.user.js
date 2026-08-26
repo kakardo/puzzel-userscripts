@@ -1,6 +1,6 @@
-// @file_name = PCM_DOM_Shared_Local_1.6_2026-04-16.user.js
+// @file_name = PCM_DOM_Shared_Local.user.js
 // @author = Kardo Rostam
-// @version = 1.6_2026-04-16
+// @version = 1.7_2026-08-27
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
