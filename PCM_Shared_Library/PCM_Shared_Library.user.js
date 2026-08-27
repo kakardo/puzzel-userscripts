@@ -1,12 +1,14 @@
-// @file_name = PCM_DOM_Shared_Local.user.js
+// @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 1.8_2026-08-27
+// @version = 1.9_2026-08-27
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
-    PCM DOM Shared Local
-    --------------------
-    External DOM library for Tampermonkey scripts.
+    PCM Shared Library
+    -----------
+    Shared DOM AND runtime helpers for the PCM Tampermonkey scripts:
+    anything several feature scripts would otherwise duplicate lives here.
+    (Named PCM_DOM_Shared_Local until v1.9; the global stays PCM_DOM.)
 
     Goal:
     - Keep DOM/runtime behavior here
@@ -33,6 +35,7 @@
     - text and element deduping (v1.8)
     - localStorage JSON read/write (v1.8)
     - visibility gate: skip work while the tab is hidden, catch up on return (v1.8)
+    - SPA navigation hooks: one shared history wrap, per-script callbacks (v1.9)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -415,6 +418,41 @@
         return first.closest('form') || first.parentElement || document.body || document.documentElement || null;
     }
 
+    // One shared answer to "the SPA navigated": wraps history.pushState and
+    // history.replaceState ONCE per page (even when several scripts load
+    // their own copy of this library, thanks to the marker on the wrapped
+    // function) and dispatches a single shared event. Each caller's
+    // callback also hears popstate and hashchange.
+    const NAVIGATION_EVENT = 'pcm-dom-navigation';
+
+    function installNavigationHooks(onNavigate) {
+        if (typeof onNavigate === 'function') {
+            window.addEventListener(NAVIGATION_EVENT, onNavigate, true);
+            window.addEventListener('popstate', onNavigate, true);
+            window.addEventListener('hashchange', onNavigate, true);
+        }
+
+        const fire = function() {
+            try { window.dispatchEvent(new Event(NAVIGATION_EVENT)); } catch (_) { /* ignore */ }
+        };
+
+        const wrap = function(methodName) {
+            const original = history[methodName];
+            if (typeof original !== 'function' || original.__pcmDomNavWrapped) return;
+
+            const wrapped = function() {
+                const result = original.apply(this, arguments);
+                fire();
+                return result;
+            };
+            wrapped.__pcmDomNavWrapped = true;
+            history[methodName] = wrapped;
+        };
+
+        wrap('pushState');
+        wrap('replaceState');
+    }
+
     function bootUntil(testFn, onReady, config) {
         let tries = 0;
         let timerId = 0;
@@ -694,6 +732,7 @@
         readJson: readJson,
         writeJson: writeJson,
         createVisibilityGate: createVisibilityGate,
+        installNavigationHooks: installNavigationHooks,
         query: query,
         queryAll: queryAll,
         queryText: queryText,

@@ -1,17 +1,17 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 6.3_2026-08-27
+// @version = 6.4_2026-08-27
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.3_2026-08-27
+// @version      6.4_2026-08-27
 // @description  Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
-// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
@@ -61,7 +61,7 @@
   const CUSTOMER_NAME_ID = 'pcm-ticket-customer-name';
   const COMPANY_NAME_ID = 'pcm-ticket-company-name';
   const BLOCKED_NAME_VALUES = new Set(['customer intelligence', 'customer tickets', 'customer attributes', 'organisations', 'remove']);
-  const REQUIRE_ERROR = 'PCM Ticket Info Extractor: PCM_DOM shared helpers are missing. Load PCM_DOM_Shared_Local.user.js first.';
+  const REQUIRE_ERROR = 'PCM Ticket Info Extractor: PCM_DOM shared helpers are missing. Load PCM_Shared_Library.user.js first.';
 
   // Shared helpers from PCM_DOM (single source of truth since lib 1.8).
   // Lazy arrows: the guard further down verifies PCM_DOM before any use.

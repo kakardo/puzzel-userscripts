@@ -1,6 +1,6 @@
 # @file_name = lint_scripts.py
 # @author = Kardo Rostam
-# @version = 1.0_2026-08-27
+# @version = 1.1_2026-08-27
 # @created = 2026-08-27 06:20
 
 # Lints every userscript against the repo rules (LLM_prompt_instructions):
@@ -30,7 +30,7 @@ DASHES = "–—"
 BLOCK_KEY_ORDER = ["name", "namespace", "version", "description", "author",
                    "match", "run-at", "require", "grant", "downloadURL", "updateURL"]
 OPTIONAL_KEYS = {"require"}
-LIB_RELPATH = "DOM/PCM_DOM_Shared_Local.user.js"
+LIB_RELPATH = "PCM_Shared_Library/PCM_Shared_Library.user.js"
 
 errors = []
 

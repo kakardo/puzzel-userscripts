@@ -1,18 +1,18 @@
 // @file_name = PCM_Dark_Mode_(Attributes).user.js
 // @author = Kardo Rostam
-// @version = 5.0_2026-08-27
+// @version = 5.1_2026-08-27
 // @created = 2026-03-27 (v4.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Attributes)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      5.0_2026-08-27
+// @version      5.1_2026-08-27
 // @description  Uses the shared PCM_DOM library for boot/retry and style injection. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the document-wide XPath search only runs when the cheap ID lookup fails. Keeps the working Attributes behavior.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
 // @run-at       document-idle
-// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/Dark_Mode/PCM_Dark_Mode_(Attributes).user.js
@@ -22,7 +22,7 @@
 (() => {
   'use strict';
 
-  const REQUIRE_ERROR = 'PCM Dark Mode (Attributes): PCM_DOM shared helpers are missing. Load PCM_DOM_Shared_Local.user.js first.';
+  const REQUIRE_ERROR = 'PCM Dark Mode (Attributes): PCM_DOM shared helpers are missing. Load PCM_Shared_Library.user.js first.';
 
   if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag || !window.PCM_DOM?.createVisibilityGate) {
     console.error(REQUIRE_ERROR + ' (lib 1.8 or newer required)');

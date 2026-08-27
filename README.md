@@ -8,7 +8,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
 
 ## Structure
 
-- `DOM/`: shared DOM helper library (`PCM_DOM_Shared_Local`), loaded via `@require` by scripts that read or watch the page's DOM. Keeps DOM/runtime logic (boot/retry, style injection, observers, widget lookup) in one place so feature scripts only handle their own state and styling.
+- `PCM_Shared_Library/`: shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scripts that read or watch the page's DOM. Keeps DOM/runtime logic (boot/retry, style injection, observers, widget lookup) in one place so feature scripts only handle their own state and styling.
 - `PCM_Ticket_View/`: scripts for the ticket detail page (`/tickets/*`):
   - `PCM_Ticket_Info_Extractor`: surfaces CustomerID, Customer Name, and Company Name from Customer Intelligence. Uses the shared DOM library.
   - `PCM_Name_Field_Placeholder`: adds a placeholder name link in Customer Intelligence when no name is set.
@@ -26,9 +26,9 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
 
 ## Design logic: one shared DOM library per application, not one per folder
 
-All PCM scripts target the same web app (puzzel.cm.puzzel.com, SmartAdmin/jarviswidget, Bootstrap accordions, DataTables, Chosen), so the same DOM helpers are valid on every PCM page. One shared library in `DOM/` avoids per-folder copies drifting apart.
+All PCM scripts target the same web app (puzzel.cm.puzzel.com, SmartAdmin/jarviswidget, Bootstrap accordions, DataTables, Chosen), so the same DOM helpers are valid on every PCM page. One shared library in `PCM_Shared_Library/` avoids per-folder copies drifting apart.
 
-The boundary is the application, not the repo. `PCC_Agent_View/` targets app.puzzel.com, an ARIA-grid SPA with nothing structurally in common with PCM, so PCC scripts must NOT require `PCM_DOM_Shared_Local`. If a third PCC script ever needs the agents grid or SPA navigation handling, extract the rebind/nav-hook machinery from `PCC_Agent_Highlighter` into a separate `PCC_DOM_Shared` module rather than reusing the PCM library.
+The boundary is the application, not the repo. `PCC_Agent_View/` targets app.puzzel.com, an ARIA-grid SPA with nothing structurally in common with PCM, so PCC scripts must NOT require `PCM_Shared_Library`. If a third PCC script ever needs the agents grid or SPA navigation handling, extract the rebind/nav-hook machinery from `PCC_Agent_Highlighter` into a separate `PCC_DOM_Shared` module rather than reusing the PCM library.
 
 Not every script should use it, though. The rule of thumb:
 
@@ -83,9 +83,9 @@ Scripts with `@downloadURL` and `@updateURL` point at their own raw GitHub URL. 
 
 ## Shared DOM library
 
-Scripts that use the shared library pull in `DOM/PCM_DOM_Shared_Local.user.js` via `@require`, pointed at the raw GitHub URL.
+Scripts that use the shared library pull in `PCM_Shared_Library/PCM_Shared_Library.user.js` via `@require`, pointed at the raw GitHub URL.
 
-Since v1.8 the library also owns the small utilities the scripts used to duplicate: `cleanText`, `wait`, `escapeRegExp`, `uniqueTexts`, `uniqueElements`, `readJson`/`writeJson`, and `createVisibilityGate` (the battery pattern: skip work while the tab is hidden, one catch-up run on return). New scripts should use these instead of writing their own. Scripts that depend on newer helpers must check for them in their startup guard so a stale cached library fails loudly.
+Since v1.8 the library also owns the small utilities the scripts used to duplicate: `cleanText`, `wait`, `escapeRegExp`, `uniqueTexts`, `uniqueElements`, `readJson`/`writeJson`, and `createVisibilityGate` (the battery pattern: skip work while the tab is hidden, one catch-up run on return). Since v1.9 it also owns `installNavigationHooks`: one shared history wrap for SPA navigation detection with per-script callbacks, replacing the per-script copies that stacked multiple wrappers on `history.pushState`. New scripts should use these instead of writing their own. Scripts that depend on newer helpers must check for them in their startup guard so a stale cached library fails loudly.
 
 Important: Tampermonkey fetches `@require` content once and caches it. It only re-fetches when the parent script's own `@version` changes (or on a manual "Check for userscript updates"). So after editing the shared DOM library, bump the `@version` of every script that requires it, otherwise they keep running the cached copy.
 

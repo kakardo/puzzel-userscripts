@@ -1,17 +1,17 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-08-27
+// @version = 1.1_2026-08-27
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-08-27
+// @version      1.1_2026-08-27
 // @description  Adds one-click buttons under the Team dropdown that select a configured team in the Chosen widget. Teams are a config array at the top. The button for the currently selected team is marked active.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
-// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Team_Quick_Select.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Team_Quick_Select.user.js
@@ -39,8 +39,8 @@
    * INTERNAL SETTINGS
    ******************************************************************/
   const D = window.PCM_DOM;
-  if (!D || !D.bootUntil || !D.ensureStyleTag || !D.cleanText) {
-    console.error('PCM Team Quick Select: PCM_DOM shared helpers are missing (lib 1.8 or newer required).');
+  if (!D || !D.bootUntil || !D.ensureStyleTag || !D.cleanText || !D.installNavigationHooks) {
+    console.error('PCM Team Quick Select: PCM_DOM shared helpers are missing (lib 1.9 or newer required).');
     return;
   }
 
@@ -208,28 +208,8 @@
     return true;
   }
 
-  function installRouteHooks() {
-    const onRouteChange = () => {
-      D.bootUntil(buildButtons, function () {}, { BOOT_MAX_TRIES: 40, BOOT_INTERVAL_MS: 250 });
-    };
-
-    const wrapHistoryMethod = (methodName) => {
-      const original = history[methodName];
-      if (typeof original !== 'function') return;
-      history[methodName] = function () {
-        const result = original.apply(this, arguments);
-        window.dispatchEvent(new Event('pcm-team-quick-route-change'));
-        return result;
-      };
-    };
-
-    wrapHistoryMethod('pushState');
-    wrapHistoryMethod('replaceState');
-    window.addEventListener('popstate', onRouteChange, true);
-    window.addEventListener('hashchange', onRouteChange, true);
-    window.addEventListener('pcm-team-quick-route-change', onRouteChange, true);
-  }
-
-  installRouteHooks();
+  D.installNavigationHooks(function () {
+    D.bootUntil(buildButtons, function () {}, { BOOT_MAX_TRIES: 40, BOOT_INTERVAL_MS: 250 });
+  });
   D.bootUntil(buildButtons, function () {}, { BOOT_MAX_TRIES: 60, BOOT_INTERVAL_MS: 250 });
 })();
