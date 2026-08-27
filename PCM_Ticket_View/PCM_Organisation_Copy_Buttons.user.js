@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 2.4_2026-08-27
+// @version = 2.6_2026-08-27
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.4_2026-08-27
+// @version      2.6_2026-08-27
 // @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Uses the shared PCM DOM library for general DOM work. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -30,7 +30,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '2.4_2026-08-27';
+  const SCRIPT_VERSION = '2.6_2026-08-27';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -262,6 +262,7 @@
     state.done.attributes = false;
     state.done.forms = false;
     state.done.autofill = false;
+    stopFormsObserver();
     clearAllCaches();
     cleanupInjectedUi();
   }
@@ -580,9 +581,15 @@
   }
 
   function findFormField(labelText) {
-    const label = qa('label, div, span, strong, b')
+    const wanted = clean(labelText).toLowerCase();
+
+    const label = qa('label, legend, div, span, strong, b, p, h1, h2, h3, h4, h5, h6, td, th')
+      .filter((el) => !el.closest(`#${FORMS_INJECT_ID}`) && !el.closest(`#${ATTRIBUTES_INJECT_ID}`))
       .filter(visible)
-      .find((el) => clean(text(el)) === labelText);
+      .find((el) => {
+        const value = clean(text(el)).toLowerCase();
+        return value === wanted || value === wanted + ':';
+      });
     if (!label) return null;
 
     const forId = label.getAttribute ? label.getAttribute('for') : '';
@@ -591,8 +598,30 @@
       if (direct) return direct;
     }
 
-    const block = label.closest('.form-group, .field, .control-group, [class*="field"], [class*="group"], [class*="col"]') || label.parentElement;
-    return block ? q('input, textarea', block) : null;
+    // Walk up from the label and prefer the first field that FOLLOWS it in
+    // document order: in a vertical form that is the box under the label,
+    // not an earlier field that happens to share an ancestor.
+    const isCandidate = (el) =>
+      el.type !== 'hidden' &&
+      !el.disabled &&
+      !el.closest(`#${FORMS_INJECT_ID}`) &&
+      !el.closest(`#${ATTRIBUTES_INJECT_ID}`);
+
+    let scope = label;
+    for (let i = 0; i < 6 && scope; i += 1) {
+      scope = scope.parentElement;
+      if (!scope || scope === document.body) break;
+
+      const fields = qa('input, textarea, select', scope).filter(isCandidate);
+      if (!fields.length) continue;
+
+      const following = fields.find((el) =>
+        label.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING
+      );
+      return following || fields[0];
+    }
+
+    return null;
   }
 
   function setFieldValueIfEmpty(input, value) {
@@ -630,6 +659,70 @@
     // Only done when both fields were found; retries keep looking for a
     // late-rendered one, bounded by ROUTE_MAX_RETRIES as usual.
     return !!(idField && refField);
+  }
+
+  // Puzzel re-renders #form-fields-wrapper when the form answers arrive from
+  // the server, replacing the inputs and wiping our colours and autofill.
+  // A scoped observer on the form's fieldset reapplies after each re-render.
+  // Capped per route so it can never fight the app in a loop.
+  const REAPPLY_DEBOUNCE_MS = 150;
+  const REAPPLY_MAX_PER_ROUTE = 15;
+
+  let formsObserver = null;
+  let formsObserverRoot = null;
+  let reapplyTimer = 0;
+  let reapplyCount = 0;
+
+  function stopFormsObserver() {
+    if (formsObserver) formsObserver.disconnect();
+    formsObserverRoot = null;
+    reapplyTimer = D.clearTimer(reapplyTimer);
+    reapplyCount = 0;
+  }
+
+  function scheduleReapply() {
+    if (reapplyCount >= REAPPLY_MAX_PER_ROUTE) return;
+    reapplyTimer = D.clearTimer(reapplyTimer);
+    reapplyTimer = window.setTimeout(() => {
+      reapplyTimer = 0;
+      reapplyAfterRerender();
+    }, REAPPLY_DEBOUNCE_MS);
+  }
+
+  function reapplyAfterRerender() {
+    reapplyCount += 1;
+
+    const info = readTicketInfo();
+    if (!hasUsableTicketInfo(info)) return;
+
+    const formsUi = q(`#${FORMS_INJECT_ID}`);
+    if (!formsUi || !formsUi.isConnected) {
+      clearFormsCache();
+      state.done.forms = ensureFormsButtons(info) || state.done.forms;
+    }
+
+    const attributesUi = q(`#${ATTRIBUTES_INJECT_ID}`);
+    if (!attributesUi || !attributesUi.isConnected) {
+      clearAttributesCache();
+      state.done.attributes = ensureAttributesButtons(info) || state.done.attributes;
+    }
+
+    ensureFormAutofill(info);
+    ensureFormsObserver();
+  }
+
+  function ensureFormsObserver() {
+    const wrapper = q('#form-fields-wrapper');
+    const root = (wrapper && (wrapper.closest('fieldset') || wrapper.parentElement)) || state.cache.formParent;
+    if (!root || !root.isConnected || formsObserverRoot === root) return;
+
+    if (!formsObserver) {
+      formsObserver = new MutationObserver(scheduleReapply);
+    }
+
+    formsObserver.disconnect();
+    formsObserver.observe(root, { childList: true, subtree: true });
+    formsObserverRoot = root;
   }
 
   function routeIsCurrent(routeKey) {
@@ -673,6 +766,10 @@
 
       if (!state.done.autofill) {
         state.done.autofill = ensureFormAutofill(info) || state.done.autofill;
+      }
+
+      if (state.done.forms || state.done.autofill) {
+        ensureFormsObserver();
       }
     } else {
       clearAllCaches();
