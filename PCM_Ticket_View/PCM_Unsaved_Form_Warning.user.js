@@ -1,12 +1,12 @@
 // @file_name = PCM_Unsaved_Form_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-08-27
+// @version = 1.2_2026-08-27
 // @created = 2026-08-27 09:37
 
 // ==UserScript==
 // @name         PCM Unsaved Form Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-08-27
+// @version      1.2_2026-08-27
 // @description  Snapshot-based unsaved change detection for the ticket Forms widget. Highlights every field whose value differs from the loaded state (including values typed by the Copy Buttons autofill) and shows a warning text next to the Save button. Highlight colour/mode and warning text are settings at the top.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -106,7 +106,10 @@
   let dirty = false;
   let fieldsObserver = null;
   let fieldsObserverRoot = null;
-  let lastTrustedChangeAt = 0;
+  // Any field change counts here, trusted keystrokes AND synthetic autofill
+  // events: PCM re-renders as an echo of both, and neither echo may rebase
+  // the baseline, or unsaved marks would vanish.
+  let lastFieldChangeAt = 0;
 
   function findForm() {
     return D.query('#ticket-forms-form') ||
@@ -251,11 +254,12 @@
       fieldsObserver = new MutationObserver((mutations) => {
         if (!mutationTouchesFields(mutations)) return;
 
-        // Field swap caused by YOUR recent change (Form / Puzzel Service
-        // cascades): keep the baseline so those changes stay marked, and
-        // re-evaluate the new fields against it. Field swap with no recent
-        // user interaction is an app refresh (initial answers load): rebase.
-        if (Date.now() - lastTrustedChangeAt < USER_RERENDER_WINDOW_MS) {
+        // Field swap caused by a recent change (your Form / Puzzel Service
+        // cascades, or the app echoing an autofill): keep the baseline so
+        // those changes stay marked, and re-evaluate the new fields against
+        // it. Field swap with no recent change at all is an app refresh
+        // (initial answers load): rebase.
+        if (Date.now() - lastFieldChangeAt < USER_RERENDER_WINDOW_MS) {
           evaluateGate.schedule();
         } else {
           rebaseGate.schedule();
@@ -281,7 +285,7 @@
     const onFieldEvent = (event) => {
       const form = findForm();
       if (!form || !form.contains(event.target)) return;
-      if (event.isTrusted) lastTrustedChangeAt = Date.now();
+      lastFieldChangeAt = Date.now();
       // Re-arm the re-render observer if the app replaced its root.
       ensureFieldsObserver();
       evaluateGate.schedule();
