@@ -2,6 +2,10 @@
 
 Tampermonkey scripts for the Puzzel PCM web application.
 
+[![Download all scripts (zip)](https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20Download%20all%20scripts-Puzzel__Userscripts.zip-2ea44f?style=for-the-badge)](https://github.com/kakardo/puzzel-userscripts/releases/download/latest/Puzzel_Userscripts.zip)
+
+Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded file. All scripts install in one go. Full details under [Installing](#installing).
+
 ## Structure
 
 - `DOM/`: shared DOM helper library (`PCM_DOM_Shared_Local`), loaded via `@require` by scripts that read or watch the page's DOM. Keeps DOM/runtime logic (boot/retry, style injection, observers, widget lookup) in one place so feature scripts only handle their own state and styling.
