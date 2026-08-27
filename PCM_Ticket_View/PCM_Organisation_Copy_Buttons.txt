@@ -1,21 +1,22 @@
-// ==UserScript==
-// @name         PCM Organisation Copy Buttons
-// @namespace    https://puzzel.cm.puzzel.com/
-// @version      2.1_2026-08-27
-// @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Uses the local PCM DOM shared script for general DOM work. Optimized as a bounded retry injector per ticket route.
-// @author       Kardo Rostam
-// @match        https://puzzel.cm.puzzel.com/tickets/*
-// @require      file:///C:/Users/KardoRostam/OneDrive%20-%20Puzzel%20AS/Kardo/Eget/Kod/DOM_(Document_Object_Model)/PCM_DOM_Shared_Local.user.js
-// @grant        GM_setClipboard
-// @run-at       document-idle
-// ==/UserScript==
 // @file_name = PCM_Organisation_Copy_Buttons.txt
 // @author = Kardo Rostam
-// @version = 2.1_2026-08-27
+// @version = 2.2_2026-08-27
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Delivered as .txt for download reliability.
 // @note = Reads customer data only from the extractor outputs published by the PCM Ticket Info Extractor script.
+
+// ==UserScript==
+// @name         PCM Organisation Copy Buttons
+// @namespace    https://github.com/kakardo/puzzel-userscripts
+// @version      2.2_2026-08-27
+// @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Uses the local PCM DOM shared script for general DOM work. Optimized as a bounded retry injector per ticket route.
+// @author       Kardo Rostam
+// @match        https://puzzel.cm.puzzel.com/tickets/*
+// @run-at       document-idle
+// @require      file:///C:/Users/KardoRostam/OneDrive%20-%20Puzzel%20AS/Kardo/Eget/Kod/DOM_(Document_Object_Model)/PCM_DOM_Shared_Local.user.js
+// @grant        GM_setClipboard
+// ==/UserScript==
 
 (function () {
   'use strict';

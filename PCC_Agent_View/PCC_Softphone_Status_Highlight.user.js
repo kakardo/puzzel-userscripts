@@ -1,15 +1,19 @@
 // @file_name = PCC_Softphone_Status_Highlight.user.js
 // @author = Kardo Rostam
-// @version = 2.9_2026-08-27
+// @version = 3.0_2026-08-27
 // @created = 2026-02-16 16:28 (v1.0)
+
 // ==UserScript==
-// @name         Softphone Status Highlight (Sibling Value Target)
-// @namespace    https://example.local/
-// @version      2.9_2026-08-27
+// @name         PCC Softphone Status Highlight
+// @namespace    https://github.com/kakardo/puzzel-userscripts
+// @version      3.0_2026-08-27
 // @description  Color ONLY the existing value span after the 'Softphone:' label. Online = green (normal). Offline = red (3x). Event-driven and battery friendly: header-scoped observer, no attribute observation, class writes only on state change.
+// @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent/*
 // @run-at       document-idle
 // @grant        none
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Softphone_Status_Highlight.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Softphone_Status_Highlight.user.js
 // ==/UserScript==
 (function(){
   'use strict';

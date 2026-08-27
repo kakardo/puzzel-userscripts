@@ -1,20 +1,22 @@
 // @file_name = PCM_Dark_Mode_(Attributes).user.js
 // @author = Kardo Rostam
-// @version = 4.9_2026-08-27
+// @version = 5.0_2026-08-27
 // @created = 2026-03-27 (v4.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Attributes)
-// @namespace    https://puzzel.cm.puzzel.com/
-// @version      4.9_2026-08-27
+// @namespace    https://github.com/kakardo/puzzel-userscripts
+// @version      5.0_2026-08-27
 // @description  Uses the shared PCM_DOM library for boot/retry and style injection. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the document-wide XPath search only runs when the cheap ID lookup fails. Keeps the working Attributes behavior.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
-// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
 // @run-at       document-idle
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/Dark_Mode/PCM_Dark_Mode_(Attributes).user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/Dark_Mode/PCM_Dark_Mode_(Attributes).user.js
 // ==/UserScript==
 
 (() => {

@@ -1,19 +1,20 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 6.1_2026-08-27
+// @version = 6.2_2026-08-27
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
-// @name PCM Ticket Info Extractor
-// @namespace http://tampermonkey.net/
-// @version 6.1_2026-08-27
-// @description Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
-// @author Kardo Rostam
-// @match https://puzzel.cm.puzzel.com/tickets/*
-// @require https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
-// @downloadURL https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
-// @updateURL https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
-// @grant none
+// @name         PCM Ticket Info Extractor
+// @namespace    https://github.com/kakardo/puzzel-userscripts
+// @version      6.2_2026-08-27
+// @description  Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
+// @author       Kardo Rostam
+// @match        https://puzzel.cm.puzzel.com/tickets/*
+// @run-at       document-idle
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
+// @grant        none
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
 // ==/UserScript==
 
 (function() {

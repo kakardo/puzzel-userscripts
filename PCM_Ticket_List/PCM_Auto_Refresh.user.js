@@ -1,16 +1,20 @@
 // @file_name = PCM_Auto_Refresh.user.js
 // @author = Kardo Rostam
-// @version = 2.0_2026-08-27
+// @version = 2.1_2026-08-27
 // @created = 2026-02-19 11:08
 
 // ==UserScript==
 // @name         PCM Auto Refresh
-// @namespace    http://tampermonkey.net/
-// @version      2.0_2026-08-27
+// @namespace    https://github.com/kakardo/puzzel-userscripts
+// @version      2.1_2026-08-27
 // @description  Auto-refresh PCM dashboard and ticket list with native-looking dt-button UI, dark mode palette, ring on right (top-aligned). Battery friendly: ring painting is skipped while the tab is hidden; the reload schedule keeps running so background refreshes (and the New Ticket Notifier) still work.
+// @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
+// @run-at       document-idle
 // @grant        none
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Auto_Refresh.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Auto_Refresh.user.js
 // ==/UserScript==
 
 (function () {
