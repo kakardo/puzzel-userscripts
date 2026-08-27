@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 2.9_2026-08-27
+// @version = 3.0_2026-08-27
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.9_2026-08-27
+// @version      3.0_2026-08-27
 // @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -30,7 +30,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '2.9_2026-08-27';
+  const SCRIPT_VERSION = '3.0_2026-08-27';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -691,24 +691,27 @@
     const info = readTicketInfo();
 
     const pairs = [
-      { kind: 'id', label: 'Customer ID', value: info.customerId, exact: true },
-      { kind: 'name', label: 'Customer Ref', value: info.customerName, exact: false }
+      { kind: 'id', label: 'Customer ID', fieldClass: 'kardo-field-id', value: info.customerId, exact: true },
+      { kind: 'name', label: 'Customer Ref', fieldClass: 'kardo-field-name', value: info.customerName, exact: false }
     ];
 
     for (const pair of pairs) {
+      const field = findFormField(pair.label);
+
+      // Restore the identity colour if a re-render dropped it. Classes only,
+      // never values, so clearing a field by hand stays possible.
+      if (field) field.classList.add(pair.fieldClass);
+
       const buttons = qa(`#${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-${pair.kind}`);
       if (!buttons.length) continue;
 
       let mismatch = false;
       const target = clean(pair.value);
-      if (target) {
-        const field = findFormField(pair.label);
-        if (field) {
-          const current = clean(field.value);
-          mismatch = pair.exact
-            ? current !== target
-            : current.toLowerCase() !== target.toLowerCase();
-        }
+      if (target && field) {
+        const current = clean(field.value);
+        mismatch = pair.exact
+          ? current !== target
+          : current.toLowerCase() !== target.toLowerCase();
       }
 
       buttons.forEach((btn) => {
@@ -716,6 +719,9 @@
         if (tag) tag.classList.toggle('kardo-visible', mismatch);
       });
     }
+
+    // Re-arm the re-render observer if the app replaced its root.
+    ensureFormsObserver();
   }
 
   const mismatchGate = D.createVisibilityGate(updateMismatchIndicators, 150);
@@ -725,7 +731,9 @@
   // A scoped observer on the form's fieldset reapplies after each re-render.
   // Capped per route so it can never fight the app in a loop.
   const REAPPLY_DEBOUNCE_MS = 150;
-  const REAPPLY_MAX_PER_ROUTE = 15;
+  // High enough to survive hierarchical tickets where Form / Puzzel Service
+  // changes re-render the fields many times; still a loop safety net.
+  const REAPPLY_MAX_PER_ROUTE = 60;
 
   let formsObserver = null;
   let formsObserverRoot = null;
@@ -772,8 +780,12 @@
   }
 
   function ensureFormsObserver() {
+    // Root on the FORM element: it survives the fieldset swaps that Form /
+    // Puzzel Service changes cause. A detached root re-arms on next call.
+    if (formsObserverRoot && !formsObserverRoot.isConnected) formsObserverRoot = null;
+
     const wrapper = q('#form-fields-wrapper');
-    const root = (wrapper && (wrapper.closest('fieldset') || wrapper.parentElement)) || state.cache.formParent;
+    const root = (wrapper && (wrapper.closest('form') || wrapper.closest('fieldset') || wrapper.parentElement)) || state.cache.formParent;
     if (!root || !root.isConnected || formsObserverRoot === root) return;
 
     if (!formsObserver) {

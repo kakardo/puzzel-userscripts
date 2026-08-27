@@ -1,12 +1,12 @@
 // @file_name = PCM_Unsaved_Form_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-08-27
+// @version = 1.1_2026-08-27
 // @created = 2026-08-27 09:37
 
 // ==UserScript==
 // @name         PCM Unsaved Form Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-08-27
+// @version      1.1_2026-08-27
 // @description  Snapshot-based unsaved change detection for the ticket Forms widget. Highlights every field whose value differs from the loaded state (including values typed by the Copy Buttons autofill) and shows a warning text next to the Save button. Highlight colour/mode and warning text are settings at the top.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -240,8 +240,11 @@
   }
 
   function ensureFieldsObserver() {
-    const wrapper = D.query('#form-fields-wrapper');
-    const root = (wrapper && wrapper.closest('fieldset')) || wrapper || findForm();
+    // Root on the FORM element: it survives the fieldset swaps that Form /
+    // Puzzel Service changes cause. A detached root re-arms on next call.
+    if (fieldsObserverRoot && !fieldsObserverRoot.isConnected) fieldsObserverRoot = null;
+
+    const root = findForm() || D.query('#form-fields-wrapper');
     if (!root || !root.isConnected || fieldsObserverRoot === root) return;
 
     if (!fieldsObserver) {
@@ -279,6 +282,8 @@
       const form = findForm();
       if (!form || !form.contains(event.target)) return;
       if (event.isTrusted) lastTrustedChangeAt = Date.now();
+      // Re-arm the re-render observer if the app replaced its root.
+      ensureFieldsObserver();
       evaluateGate.schedule();
     };
 
