@@ -1,21 +1,23 @@
-// @file_name = PCM_Organisation_Copy_Buttons.txt
+// @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 2.2_2026-08-27
+// @version = 2.3_2026-08-27
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
-// @note = Delivered as .txt for download reliability.
+// @note = Converted from .txt to a standard installable userscript in v2.3.
 // @note = Reads customer data only from the extractor outputs published by the PCM Ticket Info Extractor script.
 
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.2_2026-08-27
-// @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Uses the local PCM DOM shared script for general DOM work. Optimized as a bounded retry injector per ticket route.
+// @version      2.3_2026-08-27
+// @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Uses the shared PCM DOM library for general DOM work. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
-// @require      file:///C:/Users/KardoRostam/OneDrive%20-%20Puzzel%20AS/Kardo/Eget/Kod/DOM_(Document_Object_Model)/PCM_DOM_Shared_Local.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
 // @grant        GM_setClipboard
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Organisation_Copy_Buttons.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Organisation_Copy_Buttons.user.js
 // ==/UserScript==
 
 (function () {

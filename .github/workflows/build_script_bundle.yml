@@ -1,13 +1,12 @@
 # @file_name = build_script_bundle.yml
 # @author = Kardo Rostam
-# @version = 1.0_2026-08-27
+# @version = 1.1_2026-08-27
 # @created = 2026-08-27 02:58
 
 # Rebuilds Puzzel_Userscripts.zip on every push that touches a script and
 # attaches it to the rolling "latest" release, so the download link in the
 # README always serves the current versions. The DOM library is excluded
-# (no ==UserScript== block; scripts fetch it via @require), as is the
-# Organisation Copy Buttons .txt (local file:// require, not drag-droppable).
+# (no ==UserScript== block; scripts fetch it via @require).
 
 name: Build script bundle
 

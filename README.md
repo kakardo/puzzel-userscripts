@@ -14,7 +14,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCM_Name_Field_Placeholder`: adds a placeholder name link in Customer Intelligence when no name is set.
   - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
   - `PCM_New_Ticket_Notifier`: alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
-  - `PCM_Organisation_Copy_Buttons` (.txt): copy buttons for CustomerId/Name, reading the Extractor's published outputs. Requires a local copy of the DOM library via `file://`.
+  - `PCM_Organisation_Copy_Buttons`: copy buttons for CustomerId/Name, reading the Extractor's published outputs. Uses the shared DOM library.
 - `PCM_Ticket_List/`: scripts for the ticket list page (`/tickets`) and dashboard (`/`):
   - `PCM_Auto_Refresh`: auto-reloads the page on an interval with a countdown ring UI. Standalone.
   - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). Only the Attributes script uses the shared DOM library.
@@ -40,7 +40,7 @@ Current status:
 | PCM_Ticket_Info_Extractor | Yes | Reads CI widget, accordion rows, tables; helpers aliased to the lib since 6.1 |
 | PCM_New_Ticket_Notifier | Yes | Table reading, observers, dedupe and JSON storage from the lib |
 | Puzzel_Styler_(Ticket_Field) | Yes | Entirely built on `createFieldRuntime` |
-| PCM_Organisation_Copy_Buttons | Yes (local `file://` copy) | General DOM work via `PCM_DOM` |
+| PCM_Organisation_Copy_Buttons | Yes | General DOM work via `PCM_DOM`; GitHub `@require` since 2.3 |
 | PCM_Name_Field_Placeholder | Requires, unused | Has the `@require` but calls no lib functions; bounded one-shot retries |
 | PCM Dark Mode (Attributes) | Yes (since 4.6) | Watches widget state; `bootUntil`, `ensureStyleTag`, `createVisibilityGate` |
 | PCM Dark Mode (Ticket List) | No | Mostly CSS plus a small toggle; marginal benefit |
