@@ -41,7 +41,7 @@ Current status:
 | PCM_New_Ticket_Notifier | Yes | Table reading, observers, dedupe and JSON storage from the lib |
 | Puzzel_Styler_(Ticket_Field) | Yes | Entirely built on `createFieldRuntime` |
 | PCM_Organisation_Copy_Buttons | Yes | General DOM work via `PCM_DOM`; GitHub `@require` since 2.3 |
-| PCM_Name_Field_Placeholder | Requires, unused | Has the `@require` but calls no lib functions; bounded one-shot retries |
+| PCM_Name_Field_Placeholder | No (since 1.8) | Calls no lib functions; bounded one-shot retries, so it stays dependency-free |
 | PCM Dark Mode (Attributes) | Yes (since 4.6) | Watches widget state; `bootUntil`, `ensureStyleTag`, `createVisibilityGate` |
 | PCM Dark Mode (Ticket List) | No | Mostly CSS plus a small toggle; marginal benefit |
 | PCM Dark Mode (Ticket, Org, Customer Background) | No | Pure CSS |
@@ -84,6 +84,13 @@ Scripts that use the shared library pull in `DOM/PCM_DOM_Shared_Local.user.js` v
 Since v1.8 the library also owns the small utilities the scripts used to duplicate: `cleanText`, `wait`, `escapeRegExp`, `uniqueTexts`, `uniqueElements`, `readJson`/`writeJson`, and `createVisibilityGate` (the battery pattern: skip work while the tab is hidden, one catch-up run on return). New scripts should use these instead of writing their own. Scripts that depend on newer helpers must check for them in their startup guard so a stale cached library fails loudly.
 
 Important: Tampermonkey fetches `@require` content once and caches it. It only re-fetches when the parent script's own `@version` changes (or on a manual "Check for userscript updates"). So after editing the shared DOM library, bump the `@version` of every script that requires it, otherwise they keep running the cached copy.
+
+## CI
+
+Two GitHub Actions workflows run automatically:
+
+- `lint_scripts.yml`: on every push and pull request, syntax-checks all userscripts and enforces the repo rules via `tools/lint_scripts.py`: uniform headers, matching `@version` fields, correct download/update URLs, version format, no em/en dashes, a bumped `@version` on every changed script, and the DOM library cascade (a library change must bump every requiring script in the same commit).
+- `build_script_bundle.yml`: rebuilds the download bundle on script changes (see Installing).
 
 ## Energy efficiency rules
 

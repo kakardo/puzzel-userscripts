@@ -1,12 +1,12 @@
 // @file_name = PCM_New_Ticket_Notifier.user.js
 // @author = Kardo Rostam
-// @version = 1.9_2026-08-27
+// @version = 2.0_2026-08-27
 // @created = 2026-04-24 (v1.0)
 
 // ==UserScript==
 // @name         PCM New Ticket Notifier
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.9_2026-08-27
+// @version      2.0_2026-08-27
 // @description  Shows persistent alerts with priority and title when new tickets appear in the PCM ticket list. Alerting keeps working in hidden tabs; the 15s background timer is a cheap watchdog instead of a full rescan.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -34,7 +34,7 @@
 
     const SCRIPT = {
         name: 'PCM New Ticket Notifier',
-        version: '1.9_2026-08-27'
+        version: '2.0_2026-08-27'
     };
 
     const CONFIG = {
@@ -58,7 +58,7 @@
         SOUND_FREQUENCY_A: 880,
         SOUND_FREQUENCY_B: 1175,
         SOUND_DURATION_MS: 180,
-        DEBUG_LOGS: true
+        DEBUG_LOGS: false
     };
 
     const CSS = `

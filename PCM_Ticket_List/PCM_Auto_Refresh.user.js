@@ -1,13 +1,13 @@
 // @file_name = PCM_Auto_Refresh.user.js
 // @author = Kardo Rostam
-// @version = 2.1_2026-08-27
+// @version = 2.2_2026-08-27
 // @created = 2026-02-19 11:08
 
 // ==UserScript==
 // @name         PCM Auto Refresh
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.1_2026-08-27
-// @description  Auto-refresh PCM dashboard and ticket list with native-looking dt-button UI, dark mode palette, ring on right (top-aligned). Battery friendly: ring painting is skipped while the tab is hidden; the reload schedule keeps running so background refreshes (and the New Ticket Notifier) still work.
+// @version      2.2_2026-08-27
+// @description  Auto-refresh PCM dashboard and ticket list with native-looking dt-button UI, dark mode palette, ring on right (top-aligned). Battery friendly: ring painting is skipped while the tab is hidden, and the ticket list refreshes via the DataTable's own ajax reload when available (full page reload as fallback), so the reload schedule keeps background refreshes (and the New Ticket Notifier) working.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -99,6 +99,47 @@
     }
   }
 
+  // Soft reload: refresh the ticket list via the DataTable's own ajax call
+  // instead of reloading the whole page. Strictly feature-detected; any doubt
+  // falls back to the old full reload (dashboard has no table, and a
+  // server-rendered table without an ajax source cannot be soft reloaded).
+  // The Notifier keeps working either way: its observer sees the tbody swap.
+  const SOFT_RELOAD_ENABLED = true;
+
+  function trySoftReload() {
+    if (!SOFT_RELOAD_ENABLED) return false;
+
+    try {
+      const jq = window.jQuery || window.$;
+      if (!jq || !jq.fn || !jq.fn.dataTable || !jq.fn.dataTable.isDataTable) return false;
+
+      const tables = Array.from(document.querySelectorAll('table')).filter((t) => jq.fn.dataTable.isDataTable(t));
+      if (!tables.length) return false;
+
+      let reloaded = false;
+      for (const table of tables) {
+        const api = jq(table).DataTable();
+        const settings = api.settings()[0] || {};
+        const hasAjax = !!(settings.ajax || (settings.oInit && settings.oInit.ajax) || settings.sAjaxSource);
+        if (!hasAjax) continue;
+        api.ajax.reload(null, false); // false keeps the current page/scroll
+        reloaded = true;
+      }
+
+      return reloaded;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function doRefresh() {
+    if (trySoftReload()) {
+      resetCountdown();
+      return;
+    }
+    location.reload();
+  }
+
   function startCountdown() {
     stopCountdown();
     startTs = Date.now();
@@ -110,7 +151,7 @@
 
       if (remainingMs <= 0) {
         stopCountdown();
-        location.reload();
+        doRefresh();
         return;
       }
 
@@ -175,7 +216,7 @@
             if (buttonSpanEl) buttonSpanEl.textContent = getBtnLabel();
             resetCountdown();
           } else {
-            alert('Please enter a number between 1000 and 3600000 (1s – 60m).');
+            alert('Please enter a number between 1000 and 3600000 (1s - 60m).');
           }
         }
         return;
@@ -345,7 +386,7 @@
     remainingMs = Math.max(0, intervalMs - elapsed);
     if (remainingMs <= 0) {
       stopCountdown();
-      location.reload();
+      doRefresh();
       return;
     }
     setRingProgress(1 - (remainingMs / intervalMs));

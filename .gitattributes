@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
-* text=auto
+* text=auto eol=lf
+
+# Scripts and docs are always LF so checkouts match the repo exactly
+# and git stops warning about CRLF conversion on Windows.
+*.user.js text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.txt text eol=lf

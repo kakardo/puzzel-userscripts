@@ -1,0 +1,35 @@
+# @file_name = lint_scripts.yml
+# @author = Kardo Rostam
+# @version = 1.0_2026-08-27
+# @created = 2026-08-27 06:20
+
+# Runs on every push and pull request: syntax-checks every userscript with
+# node, then enforces the repo rules (uniform headers, version format, both
+# @version fields matching, correct download/update URLs, no em/en dashes,
+# version bumped on change, DOM library cascade) via tools/lint_scripts.py.
+
+name: Lint scripts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Syntax check
+        run: |
+          set -e
+          find . -name '*.user.js' -not -path './.git/*' | while read -r f; do
+            node --check "$f"
+          done
+
+      - name: Header and rule lint
+        run: python3 tools/lint_scripts.py --check-bump
