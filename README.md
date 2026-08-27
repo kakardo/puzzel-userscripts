@@ -49,6 +49,18 @@ If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), 
 
 ## Installing
 
+### All scripts at once
+
+Download the auto-built bundle, then in Tampermonkey go to Dashboard - Utilities - Import (Zip) and pick the zip. Tampermonkey installs every script in it in one action; the zip matches Tampermonkey's own backup layout (plain `.user.js` files at the root). If the Utilities tab is missing, set Config Mode to Beginner or Advanced in Settings. Dragging the unzipped files into the dashboard works too.
+
+```
+https://github.com/kakardo/puzzel-userscripts/releases/download/latest/Puzzel_Userscripts.zip
+```
+
+A GitHub Actions workflow (`.github/workflows/build_script_bundle.yml`) rebuilds this zip on every push that touches a script, so it always contains the current versions. The DOM library is not in the zip; scripts fetch it themselves via `@require`.
+
+### One script at a time
+
 Open the raw GitHub URL of any script in a browser with Tampermonkey installed, for example:
 
 ```

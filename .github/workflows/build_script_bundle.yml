@@ -1,0 +1,44 @@
+# @file_name = build_script_bundle.yml
+# @author = Kardo Rostam
+# @version = 1.0_2026-08-27
+# @created = 2026-08-27 02:58
+
+# Rebuilds Puzzel_Userscripts.zip on every push that touches a script and
+# attaches it to the rolling "latest" release, so the download link in the
+# README always serves the current versions. The DOM library is excluded
+# (no ==UserScript== block; scripts fetch it via @require), as is the
+# Organisation Copy Buttons .txt (local file:// require, not drag-droppable).
+
+name: Build script bundle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.user.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect installable scripts
+        run: |
+          mkdir -p bundle
+          find . -name '*.user.js' -not -path './.git/*' -not -path './DOM/*' -exec cp {} bundle/ \;
+          cd bundle
+          zip ../Puzzel_Userscripts.zip *.user.js
+          unzip -l ../Puzzel_Userscripts.zip
+
+      - name: Publish to the rolling latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest scripts
+          body: All installable userscripts, rebuilt automatically on every push. Import the zip directly in Tampermonkey via Dashboard - Utilities - Import (Zip) to install everything at once, or unzip and drag the files into the dashboard.
+          files: Puzzel_Userscripts.zip
