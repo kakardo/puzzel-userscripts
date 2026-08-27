@@ -14,7 +14,8 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCM_Name_Field_Placeholder`: adds a placeholder name link in Customer Intelligence when no name is set.
   - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
   - `PCM_New_Ticket_Notifier`: alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
-  - `PCM_Organisation_Copy_Buttons`: copy buttons for CustomerId/Name, reading the Extractor's published outputs. Uses the shared DOM library.
+  - `PCM_Organisation_Copy_Buttons`: copy buttons for CustomerId/Name, reading the Extractor's published outputs, plus autofill of empty Customer ID / Customer Ref fields. Uses the shared DOM library.
+  - `PCM_Unsaved_Form_Warning`: snapshot-based unsaved change detection for the Forms widget; highlights changed fields and shows a warning next to Save. Colour, mode, and text are settings at the top. Uses the shared DOM library.
 - `PCM_Ticket_List/`: scripts for the ticket list page (`/tickets`) and dashboard (`/`):
   - `PCM_Auto_Refresh`: auto-reloads the page on an interval with a countdown ring UI. Standalone.
   - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). Only the Attributes script uses the shared DOM library.
@@ -41,6 +42,7 @@ Current status:
 | PCM_New_Ticket_Notifier | Yes | Table reading, observers, dedupe and JSON storage from the lib |
 | Puzzel_Styler_(Ticket_Field) | Yes | Entirely built on `createFieldRuntime` |
 | PCM_Organisation_Copy_Buttons | Yes | General DOM work via `PCM_DOM`; GitHub `@require` since 2.3 |
+| PCM_Unsaved_Form_Warning | Yes | `bootUntil`, `ensureStyleTag`, `createVisibilityGate`, snapshot diffing over form fields |
 | PCM_Name_Field_Placeholder | No (since 1.8) | Calls no lib functions; bounded one-shot retries, so it stays dependency-free |
 | PCM Dark Mode (Attributes) | Yes (since 4.6) | Watches widget state; `bootUntil`, `ensureStyleTag`, `createVisibilityGate` |
 | PCM Dark Mode (Ticket List) | No | Mostly CSS plus a small toggle; marginal benefit |
