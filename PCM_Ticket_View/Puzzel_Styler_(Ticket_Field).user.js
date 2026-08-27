@@ -1,12 +1,12 @@
 // @file_name = Puzzel_Styler_(Ticket_Field).user.js
 // @author = Kardo Rostam
-// @version = 3.5_2026-08-27
+// @version = 3.6_2026-08-27
 // @created = 2026-03-31 00:00
 
 // ==UserScript==
 // @name         Puzzel Styler (Ticket Field)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.5_2026-08-27
+// @version      3.6_2026-08-27
 // @description  Highlights Assigned-To and Status fields with safer refresh after programmatic updates and scroll return.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -32,8 +32,36 @@
         error:    { key: 'error',    fill: '#E04343', edge: '#b03535', text: '#ffffff', bold: true, role: 'status' }
     };
 
+    function styledWrapper(select) {
+        return select && select.closest ? select.closest('label.select') : null;
+    }
+
+    // Make TARGET_NAME easy to find in the open Assigned To list: the
+    // matching option gets the yellow treatment whether or not it is the
+    // current assignee. Runs on every runtime update, so rebuilt option
+    // lists stay covered.
+    function styleTargetOptions(roleName, select) {
+        if (roleName !== 'assigned' || !select || !select.options) return;
+
+        for (const option of select.options) {
+            const matches = (option.textContent || '').includes(TARGET_NAME);
+            option.style.backgroundColor = matches ? '#ffef96' : '';
+            option.style.fontWeight = matches ? '700' : '';
+        }
+    }
+
     function resetStyledSelect(roleName, select) {
         if (!select) return;
+
+        // The list highlight stays even when the field itself is unstyled;
+        // that is exactly when the entry needs to be findable.
+        styleTargetOptions(roleName, select);
+
+        const wrap = styledWrapper(select);
+        if (wrap) {
+            wrap.classList.remove('pfs-styled-wrap');
+            wrap.style.removeProperty('--pfs-edge-color');
+        }
 
         select.removeAttribute('data-pfs-styled');
         select.removeAttribute('data-pfs-role');
@@ -63,6 +91,17 @@
 
     function applyStableNativeStyle(roleName, select, state) {
         if (!select || !state) return;
+
+        styleTargetOptions(roleName, select);
+
+        // SmartAdmin's label.select wrapper paints its arrow element over the
+        // select's right edge, cutting the ring. The ring is drawn on the
+        // wrapper via ::after instead, above the arrow (see cssText below).
+        const wrap = styledWrapper(select);
+        if (wrap) {
+            wrap.classList.add('pfs-styled-wrap');
+            wrap.style.setProperty('--pfs-edge-color', state.edge);
+        }
 
         select.setAttribute('data-pfs-styled', 'true');
         select.setAttribute('data-pfs-role', state.role || roleName);
@@ -150,6 +189,36 @@
                 outline: none !important;
                 border-radius: 0 !important;
                 box-shadow: 0 0 0 2px var(--pfs-edge-color) !important;
+            }
+
+            /* Wrapped selects: the ring moves to an overlay on the SmartAdmin
+               wrapper so it paints ABOVE the arrow element, which otherwise
+               covers the ring's right edge. pointer-events keeps it clickable. */
+            label.select.pfs-styled-wrap {
+                position: relative;
+            }
+
+            label.select.pfs-styled-wrap::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                right: 0;
+                bottom: 0;
+                left: 0;
+                pointer-events: none;
+                z-index: 2;
+                box-shadow: inset 0 0 0 2px var(--pfs-edge-color);
+            }
+
+            label.select.pfs-styled-wrap #user-select[data-pfs-styled="true"],
+            label.select.pfs-styled-wrap #user-select[data-pfs-styled="true"]:hover,
+            label.select.pfs-styled-wrap #user-select[data-pfs-styled="true"]:focus,
+            label.select.pfs-styled-wrap #user-select[data-pfs-styled="true"]:active,
+            label.select.pfs-styled-wrap #ticket_status[data-pfs-styled="true"],
+            label.select.pfs-styled-wrap #ticket_status[data-pfs-styled="true"]:hover,
+            label.select.pfs-styled-wrap #ticket_status[data-pfs-styled="true"]:focus,
+            label.select.pfs-styled-wrap #ticket_status[data-pfs-styled="true"]:active {
+                box-shadow: none !important;
             }
         `,
         fields: [
