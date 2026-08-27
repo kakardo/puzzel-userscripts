@@ -1,13 +1,13 @@
 // @file_name = PCM_New_Ticket_Notifier.user.js
 // @author = Kardo Rostam
-// @version = 1.6_2026-08-27
+// @version = 1.8_2026-08-27
 // @created = 2026-04-24 (v1.0)
 
 // ==UserScript==
 // @name         PCM New Ticket Notifier
 // @namespace    http://tampermonkey.net/
-// @version      1.6_2026-08-27
-// @description  Shows persistent alerts with priority and title when new tickets appear in the PCM ticket list
+// @version      1.8_2026-08-27
+// @description  Shows persistent alerts with priority and title when new tickets appear in the PCM ticket list. Alerting keeps working in hidden tabs; the 15s background timer is a cheap watchdog instead of a full rescan.
 // @match        https://puzzel.cm.puzzel.com/tickets
 // @match        https://puzzel.cm.puzzel.com/tickets?*
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
@@ -25,14 +25,14 @@
 
     const D = window.PCM_DOM;
 
-    if (!D) {
-        console.warn('[PCM New Ticket Notifier] PCM_DOM shared file was not loaded.');
+    if (!D || !D.uniqueElements || !D.readJson || !D.writeJson) {
+        console.warn('[PCM New Ticket Notifier] PCM_DOM shared file (1.8 or newer) was not loaded.');
         return;
     }
 
     const SCRIPT = {
         name: 'PCM New Ticket Notifier',
-        version: '1.5_2026-04-24'
+        version: '1.8_2026-08-27'
     };
 
     const CONFIG = {
@@ -151,23 +151,9 @@
         console.warn(`[${SCRIPT.name}] ${message}`, data || '');
     }
 
-    function readJson(key, fallbackValue) {
-        try {
-            const raw = localStorage.getItem(key);
-            if (!raw) return fallbackValue;
-            return JSON.parse(raw);
-        } catch (_) {
-            return fallbackValue;
-        }
-    }
-
-    function writeJson(key, value) {
-        try {
-            localStorage.setItem(key, JSON.stringify(value));
-        } catch (err) {
-            warn('Could not write localStorage key: ' + key, err);
-        }
-    }
+    // Shared helpers from PCM_DOM (single source of truth since lib 1.8)
+    const readJson = D.readJson;
+    const writeJson = D.writeJson;
 
     function clean(value) {
         return D.text(value || '');
@@ -325,18 +311,7 @@
         window.addEventListener('pointerdown', unlock, { once: true, passive: true });
     }
 
-    function uniqueElements(elements) {
-        const seen = new Set();
-        const result = [];
-
-        (elements || []).forEach(function(element) {
-            if (!element || seen.has(element)) return;
-            seen.add(element);
-            result.push(element);
-        });
-
-        return result;
-    }
+    const uniqueElements = D.uniqueElements;
 
     function getTicketTables() {
         return uniqueElements([
@@ -959,6 +934,14 @@
     function startBackgroundChecker() {
         backgroundTimer = D.clearTimer(backgroundTimer);
         backgroundTimer = window.setInterval(function() {
+            // Cheap watchdog: content changes are already caught by the
+            // observer, so only rebuild and rescan when the observed root was
+            // actually detached (e.g. DataTables replaced the wrapper). The
+            // previous full rescan every 15s was redundant work, visible or
+            // hidden. Alerting still works in hidden tabs: the observer fires
+            // there too, and browser timer throttling only delays this
+            // watchdog, not detection.
+            if (observerRoot && observerRoot.isConnected) return;
             startObserver();
             queueCheck(CONFIG.APPLY_DELAY_MS);
         }, CONFIG.BACKGROUND_CHECK_MS);

@@ -1,13 +1,13 @@
 // @file_name = PCM_Auto_Refresh.user.js
 // @author = Kardo Rostam
-// @version = 1.9_2026-08-27
+// @version = 2.0_2026-08-27
 // @created = 2026-02-19 11:08
 
 // ==UserScript==
 // @name         PCM Auto Refresh
 // @namespace    http://tampermonkey.net/
-// @version      1.9_2026-08-27
-// @description  Auto-refresh PCM dashboard and ticket list with native-looking dt-button UI, dark mode palette, ring on right (top-aligned)
+// @version      2.0_2026-08-27
+// @description  Auto-refresh PCM dashboard and ticket list with native-looking dt-button UI, dark mode palette, ring on right (top-aligned). Battery friendly: ring painting is skipped while the tab is hidden; the reload schedule keeps running so background refreshes (and the New Ticket Notifier) still work.
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
 // @grant        none
@@ -104,17 +104,23 @@
       const elapsed = Date.now() - startTs;
       remainingMs = Math.max(0, intervalMs - elapsed);
 
+      if (remainingMs <= 0) {
+        stopCountdown();
+        location.reload();
+        return;
+      }
+
+      // Hidden tab: keep the deadline math above (background refresh must keep
+      // working for the New Ticket Notifier), but skip all ring/style updates.
+      // Nothing is visible and style writes cost paint work on battery.
+      if (document.hidden) return;
+
       const fraction = 1 - (remainingMs / intervalMs);
       setRingProgress(fraction);
 
       if (ringInnerEl) {
         const secLeft = Math.ceil(remainingMs / 1000);
         ringInnerEl.textContent = (secLeft > 0 && secLeft <= SHOW_NUMERIC_FROM_S) ? String(secLeft) : '';
-      }
-
-      if (remainingMs <= 0) {
-        stopCountdown();
-        location.reload();
       }
     }, TICK_MS);
   }
@@ -326,6 +332,20 @@
       finishPlacement();
     }, FALLBACK_DELAY_MS);
   }
+
+  // On return to the tab: repaint the ring immediately (skipped while hidden)
+  // and reload right away if the deadline passed during browser timer throttling.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !enabled || startTs === null) return;
+    const elapsed = Date.now() - startTs;
+    remainingMs = Math.max(0, intervalMs - elapsed);
+    if (remainingMs <= 0) {
+      stopCountdown();
+      location.reload();
+      return;
+    }
+    setRingProgress(1 - (remainingMs / intervalMs));
+  });
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
     placeUI();

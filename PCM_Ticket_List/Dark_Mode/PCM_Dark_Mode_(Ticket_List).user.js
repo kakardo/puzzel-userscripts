@@ -1,13 +1,13 @@
 // @file_name = PCM_Dark_Mode_(Ticket_List).user.js
 // @author = Kardo Rostam
-// @version = 5.6_2026-08-27
+// @version = 5.7_2026-08-27
 // @created = 2026-03-26 (v5.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket List)
 // @namespace    https://puzzel.cm.puzzel.com/
-// @version      5.6_2026-08-27
-// @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors.
+// @version      5.7_2026-08-27
+// @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the observer rescopes from body to the table wrapper once DataTables renders.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -60,6 +60,15 @@
   let cachedRoot = null;
   let applyTimer = null;
   let routeRetryTimer = null;
+  let observedWrapper = null;
+  let observingBody = false;
+
+  // Created up here because apply() (via startDomObserver) can run during
+  // boot, before the bottom of the IIFE is reached. scheduleApply is a
+  // hoisted function declaration, so referencing it here is safe.
+  const domObserver = new MutationObserver(() => {
+    scheduleApply(OBSERVER_APPLY_DELAY_MS);
+  });
 
   function normalizeHex(hex, fallback) {
     if (typeof hex !== 'string') return fallback;
@@ -153,6 +162,10 @@
 
     root.setAttribute('data-pz-dark', on ? 'on' : 'off');
     if (jw && jw !== root) jw.setAttribute('data-pz-dark', on ? 'on' : 'off');
+
+    // Rescope the observer to the table wrapper as soon as it exists;
+    // cheap no-op once already scoped.
+    startDomObserver();
   }
 
   function registerMenu() {
@@ -160,13 +173,27 @@
     GM_registerMenuCommand('Dark mode: OFF', () => { setOn(false); apply(); });
   }
 
+  let pendingApply = false;
+
   function scheduleApply(delay = APPLY_DEBOUNCE_MS) {
+    // Hidden tab: skip all styling work now, catch up once on return.
+    if (document.hidden) {
+      pendingApply = true;
+      return;
+    }
     clearTimeout(applyTimer);
     applyTimer = setTimeout(() => {
       applyTimer = null;
       apply();
     }, delay);
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && pendingApply) {
+      pendingApply = false;
+      scheduleApply();
+    }
+  });
 
   function dispatchRouteChange() {
     window.dispatchEvent(new Event('pz-dark-routechange'));
@@ -603,27 +630,40 @@
     }
   })();
 
-  const domObserver = new MutationObserver(() => {
-    scheduleApply(OBSERVER_APPLY_DELAY_MS);
-  });
-
-  const startDomObserver = () => {
-    const root = findRoot();
+  // Function declaration (hoisted) because apply() calls this during boot,
+  // before this point in the file is reached. Its state lives at the top of
+  // the IIFE with the other state variables for the same reason.
+  function startDomObserver() {
+    const root = cachedRoot || findRoot();
     const tableWrap = root && root.querySelector ? root.querySelector(TABLE_WRAPPER_SELECTOR) : null;
-    if (tableWrap) {
+
+    if (tableWrap && tableWrap.isConnected) {
+      if (observedWrapper === tableWrap) return;
+      // Upgrade from the body-wide fallback to the scoped wrapper observer.
+      // Scoped observation is far cheaper: body subtree fires on every page
+      // mutation, the wrapper only on table redraws.
+      domObserver.disconnect();
+      observedWrapper = tableWrap;
+      observingBody = false;
       domObserver.observe(tableWrap, {
         childList: true,
         subtree: true,
         attributes: true,
         attributeFilter: ['class']
       });
-    } else if (document.body) {
+      return;
+    }
+
+    if (observedWrapper && !observedWrapper.isConnected) observedWrapper = null;
+    if (!observingBody && !observedWrapper && document.body) {
+      domObserver.disconnect();
+      observingBody = true;
       domObserver.observe(document.body, {
         childList: true,
         subtree: true
       });
     }
-  };
+  }
 
   startDomObserver();
 })();

@@ -1,17 +1,31 @@
 // @file_name = PCC_Agent_Highlighter.user.js
 // @author = Kardo Rostam
-// @version = 4.1_2026-08-27
+// @version = 4.2_2026-08-27
 // @created = 2026-02-10 (v2.9)
 // ==UserScript==
-// @name         Puzzel Agent Highlighter v4.0
+// @name         Puzzel Agent Highlighter
 // @namespace    http://tampermonkey.net/
-// @version      4.1_2026-08-27
-// @description  Highlights Puzzel Agent rows and badges names. v4.0 removes fragile .aa-grid-cell-wrapper dependency and fixes badges wrapping onto their own row after Puzzel DOM changes.
+// @version      4.2_2026-08-27
+// @description  Highlights Puzzel Agent rows and badges names. Battery friendly: pauses all processing while the tab is hidden and resyncs once on return.
 // @match        https://app.puzzel.com/agent*
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
 /*
+v4.2 (2026-08-27)
+------------------
+Energy efficiency pass (battery laptops; tab is often hidden or the window covered):
+- All mutation processing is skipped while the tab is hidden; one full resync runs on return
+  (visibilitychange/focus hooks already existed and now carry the whole catch-up).
+- The 5s fallback tick exits immediately when hidden.
+- Removed the 200ms waitForAgentsGrid polling loop; boot scan + shell observer handle discovery.
+- Routine shell mutations no longer trigger a full findAgentsGrid scan while the current grid
+  is alive; nav/focus/visibility events still do, and a replaced grid is caught via isConnected.
+- Status matching is now EXACT (a hypothetical "Not ready" no longer matches the "Ready" rule).
+  Profile matching stays substring-based.
+- findNameWrapper caches descendant counts instead of recomputing them in the sort comparator.
+- Dropped the stale v4.0 from @name and the console log line.
+
 v4.0 (2026-05-27)
 ------------------
 Bugfix: Puzzel changed/removed the old .aa-grid-cell-wrapper element.
@@ -55,7 +69,7 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
 (function () {
   'use strict';
 
-  console.log('[Puzzel Highlighter] v4.0 loading…');
+  console.log('[Puzzel Highlighter] loading…');
 
   // ============================================================================
   // HIGHLIGHT TREE (Your rules here)
@@ -163,7 +177,8 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     let matched = null;
     for (const node of HIGHLIGHT_TREE) {
       const statuses = getNodeStatuses(node).map(safeLower);
-      if (!statuses.some(st => s.includes(st))) continue;
+      // Exact match: substring matching would let "Not ready" match "Ready".
+      if (!statuses.some(st => s === st)) continue;
 
       if (!node.profiles || node.profiles.length === 0) {
         matched = node;
@@ -274,14 +289,12 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     // This prevents the badge from becoming a separate flex/grid item under the name.
     const candidates = [...nameHeader.querySelectorAll('*')]
       .filter(el => !el.classList?.contains('m365-name-badge'))
-      .map(el => ({ el, txt: textWithoutBadges(el) }))
+      .map(el => ({ el, txt: textWithoutBadges(el), kids: el.querySelectorAll('*').length }))
       .filter(x => x.txt && x.txt.length <= 100);
 
-    candidates.sort((a, b) => {
-      const childDiff = a.el.querySelectorAll('*').length - b.el.querySelectorAll('*').length;
-      if (childDiff !== 0) return childDiff;
-      return a.txt.length - b.txt.length;
-    });
+    // Descendant counts are cached above; recomputing them inside the
+    // comparator made the sort O(n^2) DOM queries.
+    candidates.sort((a, b) => (a.kids - b.kids) || (a.txt.length - b.txt.length));
 
     if (candidates[0]?.el) return candidates[0].el;
 
@@ -409,6 +422,13 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   function processChanges() {
     if (!AGENTS_GRID) return;
 
+    // Hidden tab: do nothing now, catch up with one full scan on return.
+    if (document.hidden) {
+      forceFullScan = true;
+      dirtyRows.clear();
+      return;
+    }
+
     // If nothing changed and no forced scan, do nothing (big efficiency win)
     if (dirtyRows.size === 0 && !forceFullScan) return;
 
@@ -472,6 +492,11 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     console.log('[Puzzel Highlighter] Agents grid detected (scoped, rebind).');
 
     gridObserver = new MutationObserver(mutations => {
+      // Hidden tab: skip per-mutation work entirely; one full scan on return.
+      if (document.hidden) {
+        forceFullScan = true;
+        return;
+      }
       for (const m of mutations) markDirtyFromMutation(m);
       scheduleProcess();
     });
@@ -489,9 +514,9 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   function maybeRebindGrid(reason) {
     const now = Date.now();
     if (now - lastRebindCheckAt < REBIND_CHECK_THROTTLE_MS) {
-      // Coalesce bursts
+      // Coalesce bursts, preserving the original reason
       clearTimeout(rebindTimer);
-      rebindTimer = setTimeout(() => maybeRebindGrid('throttled'), REBIND_CHECK_THROTTLE_MS);
+      rebindTimer = setTimeout(() => maybeRebindGrid(reason), REBIND_CHECK_THROTTLE_MS);
       return;
     }
 
@@ -501,6 +526,14 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     if (!AGENTS_GRID || !AGENTS_GRID.isConnected) {
       const grid = findAgentsGrid();
       if (grid) attachObserversToAgentsGrid(grid);
+      return;
+    }
+
+    // Routine shell mutations while the current grid is alive: skip the full
+    // findAgentsGrid scan. The grid observer covers content changes, a replaced
+    // grid is caught via the isConnected branch above, and nav/focus/visibility
+    // reasons below still run the parallel-grid scan.
+    if (reason === 'shell') {
       return;
     }
 
@@ -518,12 +551,6 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     }
   }
 
-  function waitForAgentsGrid() {
-    const grid = findAgentsGrid();
-    if (!document.body || !grid) return setTimeout(waitForAgentsGrid, 200);
-    attachObserversToAgentsGrid(grid);
-  }
-
   // ============================================================================
   // APP-SHELL OBSERVER (WATCH GRID MOUNT/UNMOUNT)
   // ============================================================================
@@ -532,6 +559,8 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     if (shellObserver) return;
 
     shellObserver = new MutationObserver(() => {
+      // Hidden tab: skip; the visibilitychange handler rebinds on return.
+      if (document.hidden) return;
       // Body changed: could be internal tab switch (Queue overview <-> My Log/Settings)
       maybeRebindGrid('shell');
     });
@@ -603,13 +632,14 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   }, true);
 
   setInterval(() => {
+    // Hidden tab: zero work; visibilitychange handles the catch-up on return.
+    if (document.hidden) return;
+
     // If the grid was unmounted while in another internal tab, rebind when we can.
     if (!AGENTS_GRID || !AGENTS_GRID.isConnected) {
       maybeRebindGrid('tick-rebind');
       return;
     }
-
-    if (document.hidden) return;
 
     const now = Date.now();
     if (now - lastFullScanAt >= FULL_SYNC_MIN_INTERVAL_MS) {
@@ -622,7 +652,7 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   // BOOT
   // ============================================================================
   hookHistoryEvents();
-  waitForAgentsGrid();
   startShellObserver();
+  maybeRebindGrid('boot');
 
 })();

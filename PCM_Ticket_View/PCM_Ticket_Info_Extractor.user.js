@@ -1,12 +1,12 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 6.0_2026-08-27
+// @version = 6.1_2026-08-27
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name PCM Ticket Info Extractor
 // @namespace http://tampermonkey.net/
-// @version 6.0_2026-08-27
+// @version 6.1_2026-08-27
 // @description Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
 // @author Kardo Rostam
 // @match https://puzzel.cm.puzzel.com/tickets/*
@@ -62,12 +62,14 @@
   const BLOCKED_NAME_VALUES = new Set(['customer intelligence', 'customer tickets', 'customer attributes', 'organisations', 'remove']);
   const REQUIRE_ERROR = 'PCM Ticket Info Extractor: PCM_DOM shared helpers are missing. Load PCM_DOM_Shared_Local.user.js first.';
 
-  const clean = (value) => String(value || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
-  const text = (el) => clean(el && (el.textContent || el.innerText || ''));
-  const visible = (el) => !!el && window.getComputedStyle(el).display !== 'none' && window.getComputedStyle(el).visibility !== 'hidden' && el.getClientRects().length > 0;
-  const unique = (values) => [...new Map((values || []).map((v) => [clean(v).toLowerCase(), clean(v)])).values()].filter(Boolean);
-  const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
-  const escapeRegExp = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Shared helpers from PCM_DOM (single source of truth since lib 1.8).
+  // Lazy arrows: the guard further down verifies PCM_DOM before any use.
+  const clean = (value) => window.PCM_DOM.cleanText(value);
+  const text = (el) => window.PCM_DOM.text(el);
+  const visible = (el) => window.PCM_DOM.visible(el);
+  const unique = (values) => window.PCM_DOM.uniqueTexts(values);
+  const wait = (ms) => window.PCM_DOM.wait(ms);
+  const escapeRegExp = (value) => window.PCM_DOM.escapeRegExp(value);
 
 
   function ciWidget() {
@@ -358,8 +360,8 @@
     return true;
   }
 
-  if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag) {
-    console.error(REQUIRE_ERROR);
+  if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag || !window.PCM_DOM?.cleanText) {
+    console.error(REQUIRE_ERROR + ' (lib 1.8 or newer required)');
     return;
   }
 

@@ -1,13 +1,13 @@
 // @file_name = PCM_Dark_Mode_(Attributes).user.js
 // @author = Kardo Rostam
-// @version = 4.7_2026-08-27
+// @version = 4.9_2026-08-27
 // @created = 2026-03-27 (v4.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Attributes)
 // @namespace    https://puzzel.cm.puzzel.com/
-// @version      4.7_2026-08-27
-// @description  Uses the shared PCM_DOM library for boot/retry and style injection. Keeps the working Attributes behavior: avoids duplicate observer startup, debounces reactive apply calls, and skips unnecessary status class rewrites.
+// @version      4.9_2026-08-27
+// @description  Uses the shared PCM_DOM library for boot/retry and style injection. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the document-wide XPath search only runs when the cheap ID lookup fails. Keeps the working Attributes behavior.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -22,8 +22,8 @@
 
   const REQUIRE_ERROR = 'PCM Dark Mode (Attributes): PCM_DOM shared helpers are missing. Load PCM_DOM_Shared_Local.user.js first.';
 
-  if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag) {
-    console.error(REQUIRE_ERROR);
+  if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag || !window.PCM_DOM?.createVisibilityGate) {
+    console.error(REQUIRE_ERROR + ' (lib 1.8 or newer required)');
     return;
   }
 
@@ -52,7 +52,6 @@
   const APPLY_DEBOUNCE_MS = 80;
   const OBSERVER_APPLY_DELAY_MS = 120;
 
-  let applyTimer = null;
   let ticketsWidgetObserver = null;
   let ticketsWidgetTarget = null;
   let statusObserver = null;
@@ -76,7 +75,9 @@
 
   function findRoot() {
     const tabPane = document.getElementById('ticket-attributes-tab');
-    const heading = document.evaluate(
+    // Lazy XPath: the document-wide text search is expensive and only needed
+    // when the cheap getElementById lookup fails.
+    const heading = tabPane ? null : document.evaluate(
       "//*[normalize-space(text())='Search by Ticket Attributes']",
       document,
       null,
@@ -146,12 +147,12 @@
     });
   }
 
+  // Shared battery pattern from PCM_DOM 1.8: debounced apply that skips work
+  // while the tab is hidden and catches up once on return.
+  const applyGate = window.PCM_DOM.createVisibilityGate(() => apply(), APPLY_DEBOUNCE_MS);
+
   function scheduleApply(delay = APPLY_DEBOUNCE_MS) {
-    clearTimeout(applyTimer);
-    applyTimer = setTimeout(() => {
-      applyTimer = null;
-      apply();
-    }, delay);
+    applyGate.schedule(delay);
   }
 
   function observeStatusChosen() {

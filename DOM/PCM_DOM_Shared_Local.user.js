@@ -1,6 +1,6 @@
 // @file_name = PCM_DOM_Shared_Local.user.js
 // @author = Kardo Rostam
-// @version = 1.7_2026-08-27
+// @version = 1.8_2026-08-27
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -29,6 +29,10 @@
     - mutation observer lifecycle
     - pause when hidden / resume refresh
     - field update runtime for existing form controls
+    - string cleaning / promise wait / regexp escaping (v1.8)
+    - text and element deduping (v1.8)
+    - localStorage JSON read/write (v1.8)
+    - visibility gate: skip work while the tab is hidden, catch up on return (v1.8)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -82,18 +86,119 @@
         return style;
     }
 
-    function text(node) {
-        return String((node && (node.textContent || node.innerText || '')) || '')
+    function cleanText(value) {
+        return String(value == null ? '' : value)
             .replace(/\u00a0/g, ' ')
             .replace(/\s+/g, ' ')
             .trim();
     }
 
+    function text(node) {
+        return cleanText(node && (node.textContent || node.innerText || ''));
+    }
+
     function visible(node) {
-        return !!node &&
-            window.getComputedStyle(node).display !== 'none' &&
-            window.getComputedStyle(node).visibility !== 'hidden' &&
+        if (!node) return false;
+        // Single computed-style read: getComputedStyle forces style
+        // recalculation, so reading it twice per element doubled the cost
+        // in per-row loops.
+        const style = window.getComputedStyle(node);
+        return style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
             node.getClientRects().length > 0;
+    }
+
+    function wait(ms) {
+        return new Promise(function(resolve) {
+            window.setTimeout(resolve, typeof ms === 'number' ? ms : 0);
+        });
+    }
+
+    function escapeRegExp(value) {
+        return String(value == null ? '' : value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function uniqueTexts(values) {
+        return [...new Map((values || []).map(function(value) {
+            const cleaned = cleanText(value);
+            return [cleaned.toLowerCase(), cleaned];
+        })).values()].filter(Boolean);
+    }
+
+    function uniqueElements(elements) {
+        const seen = new Set();
+        const result = [];
+
+        (elements || []).forEach(function(element) {
+            if (!element || seen.has(element)) return;
+            seen.add(element);
+            result.push(element);
+        });
+
+        return result;
+    }
+
+    function readJson(key, fallbackValue) {
+        try {
+            const raw = window.localStorage.getItem(key);
+            if (!raw) return fallbackValue;
+            return JSON.parse(raw);
+        } catch (_) {
+            return fallbackValue;
+        }
+    }
+
+    function writeJson(key, value) {
+        try {
+            window.localStorage.setItem(key, JSON.stringify(value));
+            return true;
+        } catch (err) {
+            console.warn('PCM_DOM.writeJson: could not write key ' + key, err);
+            return false;
+        }
+    }
+
+    // Battery pattern shared by feature scripts: debounced work that is
+    // skipped entirely while the tab is hidden, with one catch-up run when
+    // the tab becomes visible again.
+    function createVisibilityGate(runFn, defaultDelayMs) {
+        const run = typeof runFn === 'function' ? runFn : function() {};
+        const baseDelay = typeof defaultDelayMs === 'number' ? defaultDelayMs : 80;
+        let timerId = 0;
+        let pending = false;
+
+        function schedule(delayMs) {
+            if (document.hidden) {
+                pending = true;
+                return;
+            }
+            timerId = clearTimer(timerId);
+            timerId = window.setTimeout(function() {
+                timerId = 0;
+                run();
+            }, typeof delayMs === 'number' ? delayMs : baseDelay);
+        }
+
+        function cancel() {
+            pending = false;
+            timerId = clearTimer(timerId);
+        }
+
+        function onVisibilityChange() {
+            if (!document.hidden && pending) {
+                pending = false;
+                schedule();
+            }
+        }
+
+        function destroy() {
+            cancel();
+            document.removeEventListener('visibilitychange', onVisibilityChange, false);
+        }
+
+        document.addEventListener('visibilitychange', onVisibilityChange, false);
+
+        return { schedule: schedule, cancel: cancel, destroy: destroy };
     }
 
     function query(selector, root) {
@@ -579,8 +684,16 @@
         mergeConfig: mergeConfig,
         clearTimer: clearTimer,
         ensureStyleTag: ensureStyleTag,
+        cleanText: cleanText,
         text: text,
         visible: visible,
+        wait: wait,
+        escapeRegExp: escapeRegExp,
+        uniqueTexts: uniqueTexts,
+        uniqueElements: uniqueElements,
+        readJson: readJson,
+        writeJson: writeJson,
+        createVisibilityGate: createVisibilityGate,
         query: query,
         queryAll: queryAll,
         queryText: queryText,

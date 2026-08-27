@@ -1,12 +1,12 @@
 // @file_name = PCC_Softphone_Status_Highlight.user.js
 // @author = Kardo Rostam
-// @version = 2.8_2026-08-27
+// @version = 2.9_2026-08-27
 // @created = 2026-02-16 16:28 (v1.0)
 // ==UserScript==
 // @name         Softphone Status Highlight (Sibling Value Target)
 // @namespace    https://example.local/
-// @version      2.8_2026-08-27
-// @description  Color ONLY the existing value span after the 'Softphone:' label. Online = green (normal). Offline = red (3x). Observes DOM/text changes. No pseudo-elements; no duplicate text.
+// @version      2.9_2026-08-27
+// @description  Color ONLY the existing value span after the 'Softphone:' label. Online = green (normal). Offline = red (3x). Event-driven and battery friendly: header-scoped observer, no attribute observation, class writes only on state change.
 // @match        https://app.puzzel.com/agent/*
 // @run-at       document-idle
 // @grant        none
@@ -67,11 +67,16 @@
 
   function applyState(el){
     if(!el) return;
-    el.classList.add('kr-softphone-value');
-    el.classList.remove('kr-online','kr-offline');
     const txt = (el.textContent||'').toLowerCase();
-    if(/\boffline\b/.test(txt)) el.classList.add('kr-offline');
-    else if(/\bonline\b/.test(txt)) el.classList.add('kr-online');
+    const desired = /\boffline\b/.test(txt) ? 'kr-offline'
+                  : (/\bonline\b/.test(txt) ? 'kr-online' : '');
+    // Only write classes when the state actually changed. Class writes are
+    // attribute mutations; unconditional writes fed the observer a mutation on
+    // every refresh, which kept the script looping at animation-frame rate.
+    if(!el.classList.contains('kr-softphone-value')) el.classList.add('kr-softphone-value');
+    if(desired !== 'kr-online'  && el.classList.contains('kr-online'))  el.classList.remove('kr-online');
+    if(desired !== 'kr-offline' && el.classList.contains('kr-offline')) el.classList.remove('kr-offline');
+    if(desired && !el.classList.contains(desired)) el.classList.add(desired);
   }
 
   function refresh(){
@@ -81,16 +86,38 @@
       target = locateTarget();
     }
     if(target){ applyState(target); }
+    rescope();
   }
 
-  // Throttle refreshes to animation frames
+  // Throttle refreshes to animation frames. rAF does not fire in hidden tabs,
+  // so background mutations coalesce into a single refresh when the tab
+  // becomes visible again (visibilitychange below guarantees that refresh).
   let rafId = null;
   function schedule(){ if(rafId) return; rafId = requestAnimationFrame(()=>{ rafId=null; refresh(); }); }
 
-  // Observe DOM updates and text changes; this covers Aurelia re-renders
-  const mo = new MutationObserver(schedule);
-  mo.observe(document.documentElement, { childList:true, subtree:true, characterData:true, attributes:true });
-  window.addEventListener('resize', schedule, { passive:true });
+  // Value observer: scoped to section.header once it exists. No attribute
+  // observation, so our own class writes can never re-trigger a refresh.
+  const valueObserver = new MutationObserver(schedule);
+  let valueRoot = null;
+  function rescope(){
+    const header = document.querySelector('section.header');
+    const root = (header && document.documentElement.contains(header)) ? header : null;
+    if(root === valueRoot) return;
+    valueObserver.disconnect();
+    valueRoot = root;
+    if(valueRoot) valueObserver.observe(valueRoot, { childList:true, subtree:true, characterData:true });
+  }
+
+  // Structure watcher: cheap detachment guard for SPA re-renders. Its callback
+  // is two isConnected checks; it only schedules work when the header or the
+  // value span was actually replaced (or the header has not been found yet).
+  const structureObserver = new MutationObserver(() => {
+    if(!valueRoot || !valueRoot.isConnected || (target && !target.isConnected)){
+      schedule();
+    }
+  });
+  structureObserver.observe(document.documentElement, { childList:true, subtree:true });
+
   document.addEventListener('visibilitychange', schedule);
 
   // Initial run
