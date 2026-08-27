@@ -1,12 +1,12 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 6.2_2026-08-27
+// @version = 6.3_2026-08-27
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.2_2026-08-27
+// @version      6.3_2026-08-27
 // @description  Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -203,18 +203,37 @@
     await wait(typeof delay === 'number' ? delay : 500);
   }
 
-  async function waitForOrganisationRows(box, attempts, delay) {
-    let rows = [];
+  // Observer-based row waiting: resolves the moment rows render instead of
+  // sleeping through fixed 500ms/180ms waits. Bounded by a timeout so a
+  // ticket without organisation rows still finishes quickly.
+  function waitForOrganisationRows(box, timeoutMs) {
+    const existing = extractOrganisationRows(box);
+    if (existing.length) return Promise.resolve(existing);
 
-    for (let i = 0; i < attempts; i += 1) {
-      rows = extractOrganisationRows(box);
-      if (rows.length) return rows;
-      if (i < attempts - 1) {
-        await wait(typeof delay === 'number' ? delay : 180);
-      }
-    }
+    const pane = organisationsPane(box);
+    if (!pane) return Promise.resolve(existing);
 
-    return rows;
+    return new Promise((resolve) => {
+      let timer = 0;
+
+      const finish = (rows) => {
+        window.clearTimeout(timer);
+        observer.disconnect();
+        resolve(rows);
+      };
+
+      const observer = new MutationObserver(() => {
+        const rows = extractOrganisationRows(box);
+        if (rows.length) finish(rows);
+      });
+
+      observer.observe(pane, { childList: true, subtree: true });
+
+      timer = window.setTimeout(() => {
+        observer.disconnect();
+        resolve(extractOrganisationRows(box));
+      }, typeof timeoutMs === 'number' ? timeoutMs : 1500);
+    });
   }
 
   async function ensureOrganisationRows(box) {
@@ -224,11 +243,13 @@
     let openedByScript = false;
 
     if (!wasOpen && toggle) {
-      await clickControl(toggle, 500);
+      // No fixed post-click wait: the observer below picks up the rows as
+      // soon as the accordion renders them.
+      toggle.click();
       openedByScript = true;
     }
 
-    const rows = await waitForOrganisationRows(box, wasOpen ? 2 : 8, 180);
+    const rows = await waitForOrganisationRows(box, wasOpen ? 400 : 1500);
 
     if (openedByScript && toggle && visible(organisationsPane(box))) {
       await clickControl(toggle, 120);
@@ -246,7 +267,7 @@
     if (!value || !id) return value;
 
     const escapedId = escapeRegExp(id);
-    const match = value.match(new RegExp('^' + escapedId + '\\s*(?:[-–—:]\\s*)?(.*)$', 'i'));
+    const match = value.match(new RegExp('^' + escapedId + '\\s*(?:[-\\u2013\\u2014:]\\s*)?(.*)$', 'i'));
     return match && clean(match[1]) ? clean(match[1]) : value;
   }
 
