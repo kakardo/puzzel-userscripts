@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 3.1_2026-08-27
+// @version = 3.2_2026-08-27
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,12 +9,12 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.1_2026-08-27
+// @version      3.2_2026-08-27
 // @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
-// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        GM_setClipboard
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Organisation_Copy_Buttons.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Organisation_Copy_Buttons.user.js
@@ -24,13 +24,13 @@
   'use strict';
 
   const D = window.PCM_DOM;
-  if (!D || !D.createVisibilityGate) {
-    console.warn('PCM Organisation Copy Buttons: PCM_DOM (1.8 or newer) is missing.');
+  if (!D || !D.createVisibilityGate || !D.installNavigationHooks) {
+    console.warn('PCM Organisation Copy Buttons: PCM_DOM (1.9 or newer) is missing.');
     return;
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '3.1_2026-08-27';
+  const SCRIPT_VERSION = '3.2_2026-08-27';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -202,7 +202,6 @@
     routeKey: '',
     completedRouteKey: '',
     retryTimer: 0,
-    routeHooksInstalled: false,
     retries: 0,
     done: {
       attributes: false,
@@ -946,33 +945,10 @@
     scheduleRetry(0);
   }
 
-  function installRouteHooks() {
-    if (state.routeHooksInstalled) return;
-    state.routeHooksInstalled = true;
-
-    const wrapHistoryMethod = (methodName) => {
-      const original = history[methodName];
-      if (typeof original !== 'function') return;
-
-      history[methodName] = function () {
-        const result = original.apply(this, arguments);
-        window.dispatchEvent(new Event('pcm-org-copy-route-change'));
-        return result;
-      };
-    };
-
-    wrapHistoryMethod('pushState');
-    wrapHistoryMethod('replaceState');
-
-    window.addEventListener('hashchange', handlePotentialRouteChange, true);
-    window.addEventListener('popstate', handlePotentialRouteChange, true);
-    window.addEventListener('pcm-org-copy-route-change', handlePotentialRouteChange, true);
-  }
-
   function init() {
     addStyle();
     state.routeKey = getRouteKey();
-    installRouteHooks();
+    D.installNavigationHooks(handlePotentialRouteChange);
 
     // Typing in the fields must update the "(differs)" tags live.
     const onFieldEvent = (event) => {

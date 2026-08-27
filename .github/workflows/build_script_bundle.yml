@@ -1,6 +1,6 @@
 # @file_name = build_script_bundle.yml
 # @author = Kardo Rostam
-# @version = 1.1_2026-08-27
+# @version = 1.2_2026-08-27
 # @created = 2026-08-27 02:58
 
 # Rebuilds Puzzel_Userscripts.zip on every push that touches a script and
@@ -29,7 +29,7 @@ jobs:
       - name: Collect installable scripts
         run: |
           mkdir -p bundle
-          find . -name '*.user.js' -not -path './.git/*' -not -path './DOM/*' -exec cp {} bundle/ \;
+          find . -name '*.user.js' -not -path './.git/*' -not -path './PCM_Shared_Library/*' -exec cp {} bundle/ \;
           cd bundle
           zip ../Puzzel_Userscripts.zip *.user.js
           unzip -l ../Puzzel_Userscripts.zip

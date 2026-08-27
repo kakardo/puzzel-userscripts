@@ -1,17 +1,17 @@
 // @file_name = PCM_Unsaved_Form_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-08-27
+// @version = 1.3_2026-08-27
 // @created = 2026-08-27 09:37
 
 // ==UserScript==
 // @name         PCM Unsaved Form Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-08-27
+// @version      1.3_2026-08-27
 // @description  Snapshot-based unsaved change detection for the ticket Forms widget. Highlights every field whose value differs from the loaded state (including values typed by the Copy Buttons autofill) and shows a warning text next to the Save button. Highlight colour/mode and warning text are settings at the top.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
-// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/DOM/PCM_DOM_Shared_Local.user.js
+// @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Unsaved_Form_Warning.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Unsaved_Form_Warning.user.js
@@ -33,8 +33,8 @@
    * INTERNAL SETTINGS
    ******************************************************************/
   const D = window.PCM_DOM;
-  if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate) {
-    console.error('PCM Unsaved Form Warning: PCM_DOM shared helpers are missing (lib 1.8 or newer required).');
+  if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate || !D.installNavigationHooks) {
+    console.error('PCM Unsaved Form Warning: PCM_DOM shared helpers are missing (lib 1.9 or newer required).');
     return;
   }
 
@@ -42,7 +42,9 @@
   const FIELD_CLASS = 'pcm-unsaved-field';
   const STYLE_ID = 'pcm-unsaved-warning-style';
   const EVALUATE_DEBOUNCE_MS = 100;
-  const REBASE_DEBOUNCE_MS = 60; // must stay below Copy Buttons' 150ms reapply
+  // Kept well below the Copy Buttons settle wait (ajax idle plus 250ms
+  // quiet), so a load-time rebase always lands before any autofill.
+  const REBASE_DEBOUNCE_MS = 60;
   // A re-render this soon after one of YOUR change events is a dependent
   // re-render (Form or Puzzel Service swapping fields), so the baseline is
   // kept and the change stays marked. Later swaps count as app refreshes.
@@ -310,33 +312,15 @@
     }
   }
 
-  function installRouteHooks() {
-    const onRouteChange = () => {
-      // New ticket: fresh baseline once the new form exists.
-      dirty = false;
-      D.bootUntil(() => !!findForm(), rebase, { BOOT_MAX_TRIES: 40, BOOT_INTERVAL_MS: 250 });
-    };
-
-    const wrapHistoryMethod = (methodName) => {
-      const original = history[methodName];
-      if (typeof original !== 'function') return;
-      history[methodName] = function () {
-        const result = original.apply(this, arguments);
-        window.dispatchEvent(new Event('pcm-unsaved-route-change'));
-        return result;
-      };
-    };
-
-    wrapHistoryMethod('pushState');
-    wrapHistoryMethod('replaceState');
-    window.addEventListener('popstate', onRouteChange, true);
-    window.addEventListener('hashchange', onRouteChange, true);
-    window.addEventListener('pcm-unsaved-route-change', onRouteChange, true);
+  function onRouteChange() {
+    // New ticket: fresh baseline once the new form exists.
+    dirty = false;
+    D.bootUntil(() => !!findForm(), rebase, { BOOT_MAX_TRIES: 40, BOOT_INTERVAL_MS: 250 });
   }
 
   function start() {
     installListeners();
-    installRouteHooks();
+    D.installNavigationHooks(onRouteChange);
     rebase();
   }
 
