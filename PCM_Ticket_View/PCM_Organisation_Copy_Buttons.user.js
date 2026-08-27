@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 2.7_2026-08-27
+// @version = 2.8_2026-08-27
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,8 +9,8 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.7_2026-08-27
-// @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Uses the shared PCM DOM library for general DOM work. Optimized as a bounded retry injector per ticket route.
+// @version      2.8_2026-08-27
+// @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -30,7 +30,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '2.7_2026-08-27';
+  const SCRIPT_VERSION = '2.8_2026-08-27';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -128,16 +128,6 @@
     textarea.kardo-field-name {
       background-color: #fff3c4 !important;
       border-color: #e0c76a !important;
-    }
-
-    /* Deep red text and border: this value was typed by the script and has
-       NOT been saved yet. Clears on your own edit, on Save, or when the
-       app re-renders with the value already stored server-side. */
-    input.kardo-autofilled,
-    textarea.kardo-autofilled {
-      color: #8b0000 !important;
-      border-color: #8b0000 !important;
-      box-shadow: inset 0 0 0 1px #8b0000 !important;
     }
 
     #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-copied,
@@ -652,19 +642,6 @@
     return true;
   }
 
-  function markAutofilled(input) {
-    input.classList.add('kardo-autofilled');
-
-    if (!input._kardoAutofillListener) {
-      input._kardoAutofillListener = true;
-      // A real keystroke clears the mark; our own synthetic events are
-      // not trusted, so the script cannot clear it by accident.
-      input.addEventListener('input', (event) => {
-        if (event.isTrusted) input.classList.remove('kardo-autofilled');
-      });
-    }
-  }
-
   function ensureFormAutofill(info) {
     const idField = findFormField('Customer ID');
     const refField = findFormField('Customer Ref');
@@ -672,12 +649,12 @@
 
     if (idField) {
       idField.classList.add('kardo-field-id');
-      if (setFieldValueIfEmpty(idField, info.customerId)) markAutofilled(idField);
+      setFieldValueIfEmpty(idField, info.customerId);
     }
 
     if (refField) {
       refField.classList.add('kardo-field-name');
-      if (setFieldValueIfEmpty(refField, info.customerName)) markAutofilled(refField);
+      setFieldValueIfEmpty(refField, info.customerName);
     }
 
     // Only done when both fields were found; retries keep looking for a
@@ -842,25 +819,10 @@
     window.addEventListener('pcm-org-copy-route-change', handlePotentialRouteChange, true);
   }
 
-  function installSaveClickListener() {
-    document.addEventListener('click', (event) => {
-      if (!event.isTrusted) return;
-      const btn = event.target && event.target.closest
-        ? event.target.closest('button, input[type="submit"], a.btn')
-        : null;
-      if (!btn) return;
-      if (!/\bsave\b/i.test(clean(btn.textContent || btn.value || ''))) return;
-      // Save pressed: the current values are being stored, so drop the
-      // "unsaved autofill" marks.
-      qa('.kardo-autofilled').forEach((el) => el.classList.remove('kardo-autofilled'));
-    }, true);
-  }
-
   function init() {
     addStyle();
     state.routeKey = getRouteKey();
     installRouteHooks();
-    installSaveClickListener();
 
     document.addEventListener('pcm-ticket-info-ready', () => {
       if (state.completedRouteKey === getRouteKey() && state.done.attributes && state.done.forms && state.done.autofill) return;
