@@ -1,12 +1,12 @@
 // @file_name = PCC_Agent_Highlighter.user.js
 // @author = Kardo Rostam
-// @version = 4.4_2026-08-27
+// @version = 4.5_2026-08-27
 // @created = 2026-02-10 (v2.9)
 
 // ==UserScript==
 // @name         Puzzel Agent Highlighter
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.4_2026-08-27
+// @version      4.5_2026-08-27
 // @description  Highlights Puzzel Agent rows and badges names. Battery friendly: pauses all processing while the tab is hidden and resyncs once on return.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
@@ -175,14 +175,17 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   // MATCHING LOGIC (HIGHLIGHTS) - LAST MATCH WINS
   // ============================================================================
   function matchRule(statusText, profileText) {
-    const s = safeLower(statusText);
+    const s = safeLower(statusText).replace(/\s+/g, ' ').trim();
     const p = safeLower(profileText);
 
     let matched = null;
     for (const node of HIGHLIGHT_TREE) {
       const statuses = getNodeStatuses(node).map(safeLower);
-      // Exact match: substring matching would let "Not ready" match "Ready".
-      if (!statuses.some(st => s === st)) continue;
+      // Anchored prefix match: the cell text must equal the status or start
+      // with it followed by a space, so "Ready 00:12" matches "Ready" while
+      // "Not ready" cannot match it. Plain exact matching (v4.2) broke
+      // highlighting because the real status cell carries extra text.
+      if (!statuses.some(st => s === st || s.startsWith(st + ' '))) continue;
 
       if (!node.profiles || node.profiles.length === 0) {
         matched = node;
