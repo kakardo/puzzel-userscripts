@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 2.8_2026-08-27
+// @version = 2.9_2026-08-27
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.8_2026-08-27
+// @version      2.9_2026-08-27
 // @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -24,13 +24,13 @@
   'use strict';
 
   const D = window.PCM_DOM;
-  if (!D) {
-    console.warn('PCM Organisation Copy Buttons: PCM_DOM is missing.');
+  if (!D || !D.createVisibilityGate) {
+    console.warn('PCM Organisation Copy Buttons: PCM_DOM (1.8 or newer) is missing.');
     return;
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '2.8_2026-08-27';
+  const SCRIPT_VERSION = '2.9_2026-08-27';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -168,6 +168,20 @@
     #${ATTRIBUTES_INJECT_ID} .kardo-copy-status.kardo-visible,
     #${FORMS_INJECT_ID} .kardo-copy-status.kardo-visible {
       opacity: 1;
+    }
+
+    /* Shown inside a button when the matching form field holds a DIFFERENT
+       value than the button (or is empty). */
+    #${FORMS_INJECT_ID} .kardo-mismatch {
+      display: none;
+      color: #d9480f;
+      font-weight: 700;
+      font-size: 13px;
+      margin-left: 6px;
+    }
+
+    #${FORMS_INJECT_ID} .kardo-mismatch.kardo-visible {
+      display: inline;
     }
 
     #${ATTRIBUTES_INJECT_ID}.kardo-fading .kardo-copy-status,
@@ -511,8 +525,16 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'kardo-copy-btn kardo-kind-' + (entry.kind || 'id');
-      btn.textContent = value;
       btn.title = `Copy ${value}`;
+
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = value;
+      btn.appendChild(labelSpan);
+
+      const mismatch = document.createElement('span');
+      mismatch.className = 'kardo-mismatch';
+      mismatch.textContent = '(differs)';
+      btn.appendChild(mismatch);
       btn.addEventListener('click', async (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -662,6 +684,42 @@
     return !!(idField && refField);
   }
 
+  // Shows "(differs)" inside a Forms copy button whenever the matching form
+  // field holds a different value than the button, or is empty. Exact
+  // comparison for the ID, case-insensitive for the name.
+  function updateMismatchIndicators() {
+    const info = readTicketInfo();
+
+    const pairs = [
+      { kind: 'id', label: 'Customer ID', value: info.customerId, exact: true },
+      { kind: 'name', label: 'Customer Ref', value: info.customerName, exact: false }
+    ];
+
+    for (const pair of pairs) {
+      const buttons = qa(`#${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-${pair.kind}`);
+      if (!buttons.length) continue;
+
+      let mismatch = false;
+      const target = clean(pair.value);
+      if (target) {
+        const field = findFormField(pair.label);
+        if (field) {
+          const current = clean(field.value);
+          mismatch = pair.exact
+            ? current !== target
+            : current.toLowerCase() !== target.toLowerCase();
+        }
+      }
+
+      buttons.forEach((btn) => {
+        const tag = q('.kardo-mismatch', btn);
+        if (tag) tag.classList.toggle('kardo-visible', mismatch);
+      });
+    }
+  }
+
+  const mismatchGate = D.createVisibilityGate(updateMismatchIndicators, 150);
+
   // Puzzel re-renders #form-fields-wrapper when the form answers arrive from
   // the server, replacing the inputs and wiping our colours and autofill.
   // A scoped observer on the form's fieldset reapplies after each re-render.
@@ -710,6 +768,7 @@
 
     ensureFormAutofill(info);
     ensureFormsObserver();
+    mismatchGate.schedule();
   }
 
   function ensureFormsObserver() {
@@ -772,6 +831,8 @@
       if (state.done.forms || state.done.autofill) {
         ensureFormsObserver();
       }
+
+      mismatchGate.schedule();
     } else {
       clearAllCaches();
     }
@@ -823,6 +884,15 @@
     addStyle();
     state.routeKey = getRouteKey();
     installRouteHooks();
+
+    // Typing in the fields must update the "(differs)" tags live.
+    const onFieldEvent = (event) => {
+      const target = event.target;
+      if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && target.tagName !== 'SELECT')) return;
+      mismatchGate.schedule();
+    };
+    document.addEventListener('input', onFieldEvent, true);
+    document.addEventListener('change', onFieldEvent, true);
 
     document.addEventListener('pcm-ticket-info-ready', () => {
       if (state.completedRouteKey === getRouteKey() && state.done.attributes && state.done.forms && state.done.autofill) return;
