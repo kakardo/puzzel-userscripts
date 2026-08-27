@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 3.0_2026-08-27
+// @version = 3.1_2026-08-27
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.0_2026-08-27
+// @version      3.1_2026-08-27
 // @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -30,7 +30,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '3.0_2026-08-27';
+  const SCRIPT_VERSION = '3.1_2026-08-27';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -664,19 +664,19 @@
     return true;
   }
 
-  function ensureFormAutofill(info) {
+  function ensureFormAutofill(info, allowFill) {
     const idField = findFormField('Customer ID');
     const refField = findFormField('Customer Ref');
     if (!idField && !refField) return false;
 
     if (idField) {
       idField.classList.add('kardo-field-id');
-      setFieldValueIfEmpty(idField, info.customerId);
+      if (allowFill) setFieldValueIfEmpty(idField, info.customerId);
     }
 
     if (refField) {
       refField.classList.add('kardo-field-name');
-      setFieldValueIfEmpty(refField, info.customerName);
+      if (allowFill) setFieldValueIfEmpty(refField, info.customerName);
     }
 
     // Only done when both fields were found; retries keep looking for a
@@ -684,10 +684,64 @@
     return !!(idField && refField);
   }
 
+  // During page load PCM renders the form fields several times. Touching the
+  // fields between renders caused staged flashes, so all field decoration
+  // waits for the form to settle and then lands in one atomic pass.
+  // Settling is detected DYNAMICALLY: PCM loads the answers over jQuery
+  // ajax, so once jQuery.active reaches zero and the fields have been quiet
+  // for a short beat, loading is genuinely done. Fast network means a fast
+  // appearance; the max wait is only a safety net.
+  const SETTLE_QUIET_MS = 250;
+  const SETTLE_MAX_WAIT_MS = 5000;
+  let lastFieldSwapAt = Date.now();
+  let settleTimer = 0;
+  let settleStartedAt = 0;
+  let settledApplied = false;
+  let echoRefillUsed = false;
+
+  function fieldsLocated() {
+    return !!(findFormField('Customer ID') && findFormField('Customer Ref'));
+  }
+
+  function ajaxIdle() {
+    const jq = window.jQuery || window.$;
+    if (!jq || typeof jq.active !== 'number') return true;
+    return jq.active === 0;
+  }
+
+  function scheduleSettledAutofill() {
+    if (!settleStartedAt) settleStartedAt = Date.now();
+    settleTimer = D.clearTimer(settleTimer);
+
+    const quietFor = Date.now() - lastFieldSwapAt;
+    const waitedTotal = Date.now() - settleStartedAt;
+    const ready = (ajaxIdle() && quietFor >= SETTLE_QUIET_MS) || waitedTotal >= SETTLE_MAX_WAIT_MS;
+
+    if (!ready) {
+      settleTimer = window.setTimeout(scheduleSettledAutofill, Math.max(SETTLE_QUIET_MS - quietFor, 100));
+      return;
+    }
+
+    settleStartedAt = 0;
+    const info = readTicketInfo();
+    if (hasUsableTicketInfo(info)) {
+      // One atomic pass: colours, fill, and mismatch state land together,
+      // so the fields never change appearance in stages while loading.
+      settledApplied = true;
+      echoRefillUsed = false;
+      ensureFormAutofill(info, true);
+      updateMismatchIndicators();
+    }
+  }
+
   // Shows "(differs)" inside a Forms copy button whenever the matching form
   // field holds a different value than the button, or is empty. Exact
   // comparison for the ID, case-insensitive for the name.
   function updateMismatchIndicators() {
+    // Nothing field-related is shown before the settled pass; this keeps the
+    // "(differs)" tags from bloating the button row mid-load.
+    if (!settledApplied) return;
+
     const info = readTicketInfo();
 
     const pairs = [
@@ -709,9 +763,12 @@
       const target = clean(pair.value);
       if (target && field) {
         const current = clean(field.value);
-        mismatch = pair.exact
+        // A blank field is "not filled yet", never "differs": autofill and
+        // the unsaved warning own that case, and blank moments during
+        // re-renders must not blink the tag.
+        mismatch = current !== '' && (pair.exact
           ? current !== target
-          : current.toLowerCase() !== target.toLowerCase();
+          : current.toLowerCase() !== target.toLowerCase());
       }
 
       buttons.forEach((btn) => {
@@ -745,6 +802,11 @@
     formsObserverRoot = null;
     reapplyTimer = D.clearTimer(reapplyTimer);
     reapplyCount = 0;
+    settleTimer = D.clearTimer(settleTimer);
+    settleStartedAt = 0;
+    lastFieldSwapAt = Date.now();
+    settledApplied = false;
+    echoRefillUsed = false;
   }
 
   function scheduleReapply() {
@@ -774,9 +836,20 @@
       state.done.attributes = ensureAttributesButtons(info) || state.done.attributes;
     }
 
-    ensureFormAutofill(info);
+    // The app re-renders once as an echo of our own fill. That single echo
+    // is refilled instantly (the form is proven stable by then), so the
+    // text only vanishes for a frame. The one-shot guard prevents any
+    // ping-pong with the app; later swaps take the settled path again.
+    if (settledApplied && !echoRefillUsed) {
+      echoRefillUsed = true;
+      ensureFormAutofill(info, true);
+      updateMismatchIndicators();
+      ensureFormsObserver();
+      return;
+    }
+
+    scheduleSettledAutofill();
     ensureFormsObserver();
-    mismatchGate.schedule();
   }
 
   function ensureFormsObserver() {
@@ -789,7 +862,10 @@
     if (!root || !root.isConnected || formsObserverRoot === root) return;
 
     if (!formsObserver) {
-      formsObserver = new MutationObserver(scheduleReapply);
+      formsObserver = new MutationObserver(() => {
+        lastFieldSwapAt = Date.now();
+        scheduleReapply();
+      });
     }
 
     formsObserver.disconnect();
@@ -837,7 +913,8 @@
       }
 
       if (!state.done.autofill) {
-        state.done.autofill = ensureFormAutofill(info) || state.done.autofill;
+        state.done.autofill = fieldsLocated() || state.done.autofill;
+        scheduleSettledAutofill();
       }
 
       if (state.done.forms || state.done.autofill) {
