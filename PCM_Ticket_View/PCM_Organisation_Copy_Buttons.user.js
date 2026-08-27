@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 2.3_2026-08-27
+// @version = 2.4_2026-08-27
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,8 +9,8 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.3_2026-08-27
-// @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Uses the shared PCM DOM library for general DOM work. Optimized as a bounded retry injector per ticket route.
+// @version      2.4_2026-08-27
+// @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Uses the shared PCM DOM library for general DOM work. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -30,7 +30,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '2.0_2026-04-02';
+  const SCRIPT_VERSION = '2.4_2026-08-27';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -88,6 +88,46 @@
     #${FORMS_INJECT_ID} .kardo-copy-btn:hover {
       border-color: #94add1;
       background-color: #e8f1ff;
+    }
+
+    /* Colour coding: blue = CustomerId, yellow = Customer Name.
+       The matching form fields get the same colours below. */
+    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-kind-id,
+    #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-id {
+      background-color: #dbe9ff;
+      border-color: #7fa8e0;
+      color: #16365c;
+    }
+
+    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-kind-id:hover,
+    #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-id:hover {
+      background-color: #cfe2ff;
+      border-color: #5c8fd6;
+    }
+
+    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-kind-name,
+    #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-name {
+      background-color: #fff3c4;
+      border-color: #e0c76a;
+      color: #5c4a16;
+    }
+
+    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-kind-name:hover,
+    #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-name:hover {
+      background-color: #ffeda8;
+      border-color: #d1b449;
+    }
+
+    input.kardo-field-id,
+    textarea.kardo-field-id {
+      background-color: #dbe9ff !important;
+      border-color: #7fa8e0 !important;
+    }
+
+    input.kardo-field-name,
+    textarea.kardo-field-name {
+      background-color: #fff3c4 !important;
+      border-color: #e0c76a !important;
     }
 
     #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-copied,
@@ -152,7 +192,8 @@
     retries: 0,
     done: {
       attributes: false,
-      forms: false
+      forms: false,
+      autofill: false
     },
     cache: {
       extractorRoot: null,
@@ -220,6 +261,7 @@
     state.retries = 0;
     state.done.attributes = false;
     state.done.forms = false;
+    state.done.autofill = false;
     clearAllCaches();
     cleanupInjectedUi();
   }
@@ -447,16 +489,27 @@
     }, 1000);
   }
 
-  function buildCopyUi(containerId, values) {
+  function dedupeEntries(entries) {
+    const seen = new Set();
+    return (entries || []).filter((entry) => {
+      const key = clean(entry && entry.value);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function buildCopyUi(containerId, entries) {
     const wrap = document.createElement('span');
     wrap.id = containerId;
     wrap.dataset.version = SCRIPT_VERSION;
-    wrap.dataset.values = values.join('\n');
+    wrap.dataset.values = entries.map((entry) => entry.value).join('\n');
 
-    values.forEach((value, index) => {
+    entries.forEach((entry, index) => {
+      const value = entry.value;
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'kardo-copy-btn';
+      btn.className = 'kardo-copy-btn kardo-kind-' + (entry.kind || 'id');
       btn.textContent = value;
       btn.title = `Copy ${value}`;
       btn.addEventListener('click', async (event) => {
@@ -467,7 +520,7 @@
       });
       wrap.appendChild(btn);
 
-      if (index < values.length - 1) {
+      if (index < entries.length - 1) {
         const sep = document.createElement('span');
         sep.className = 'kardo-copy-sep';
         sep.textContent = '/';
@@ -484,13 +537,13 @@
   }
 
   function ensureAttributesButtons(info) {
-    const values = dedupe([info.customerId]);
-    if (!values.length) return false;
+    const entries = dedupeEntries([{ value: info.customerId, kind: 'id' }]);
+    if (!entries.length) return false;
 
     const label = getOrganisationLabel();
     if (!label) return false;
 
-    const key = values.join('\n');
+    const key = entries.map((entry) => entry.value).join('\n');
     const existing = q(`#${ATTRIBUTES_INJECT_ID}`);
     if (existing && existing.isConnected) {
       if (existing.parentElement === label && existing.dataset.values === key) return true;
@@ -501,26 +554,82 @@
     label.style.alignItems = 'center';
     label.style.whiteSpace = 'nowrap';
     label.style.gap = '0';
-    label.appendChild(buildCopyUi(ATTRIBUTES_INJECT_ID, values));
+    label.appendChild(buildCopyUi(ATTRIBUTES_INJECT_ID, entries));
     return true;
   }
 
   function ensureFormsButtons(info) {
-    const values = dedupe([info.customerId, info.customerName]);
+    const entries = dedupeEntries([
+      { value: info.customerId, kind: 'id' },
+      { value: info.customerName, kind: 'name' }
+    ]);
     const formBlock = getFormBlock();
     const formParent = state.cache.formParent;
 
-    if (!values.length || !formBlock || !formParent) return false;
+    if (!entries.length || !formBlock || !formParent) return false;
 
-    const key = values.join('\n');
+    const key = entries.map((entry) => entry.value).join('\n');
     const existing = q(`#${FORMS_INJECT_ID}`);
     if (existing && existing.isConnected) {
       if (existing.parentElement === formParent && existing.nextSibling === formBlock && existing.dataset.values === key) return true;
       existing.remove();
     }
 
-    formParent.insertBefore(buildCopyUi(FORMS_INJECT_ID, values), formBlock);
+    formParent.insertBefore(buildCopyUi(FORMS_INJECT_ID, entries), formBlock);
     return true;
+  }
+
+  function findFormField(labelText) {
+    const label = qa('label, div, span, strong, b')
+      .filter(visible)
+      .find((el) => clean(text(el)) === labelText);
+    if (!label) return null;
+
+    const forId = label.getAttribute ? label.getAttribute('for') : '';
+    if (forId) {
+      const direct = document.getElementById(forId);
+      if (direct) return direct;
+    }
+
+    const block = label.closest('.form-group, .field, .control-group, [class*="field"], [class*="group"], [class*="col"]') || label.parentElement;
+    return block ? q('input, textarea', block) : null;
+  }
+
+  function setFieldValueIfEmpty(input, value) {
+    if (!input || !clean(value)) return;
+    if (clean(input.value)) return; // never overwrite anything the agent typed
+
+    // Use the native setter so framework-bound inputs register the change too.
+    const proto = input.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+    if (descriptor && descriptor.set) {
+      descriptor.set.call(input, value);
+    } else {
+      input.value = value;
+    }
+
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function ensureFormAutofill(info) {
+    const idField = findFormField('Customer ID');
+    const refField = findFormField('Customer Ref');
+    if (!idField && !refField) return false;
+
+    if (idField) {
+      idField.classList.add('kardo-field-id');
+      setFieldValueIfEmpty(idField, info.customerId);
+    }
+
+    if (refField) {
+      refField.classList.add('kardo-field-name');
+      setFieldValueIfEmpty(refField, info.customerName);
+    }
+
+    // Only done when both fields were found; retries keep looking for a
+    // late-rendered one, bounded by ROUTE_MAX_RETRIES as usual.
+    return !!(idField && refField);
   }
 
   function routeIsCurrent(routeKey) {
@@ -561,11 +670,15 @@
         state.done.forms = ensureFormsButtons(info) || state.done.forms;
         if (!state.done.forms) clearFormsCache();
       }
+
+      if (!state.done.autofill) {
+        state.done.autofill = ensureFormAutofill(info) || state.done.autofill;
+      }
     } else {
       clearAllCaches();
     }
 
-    if (state.done.attributes && state.done.forms) {
+    if (state.done.attributes && state.done.forms && state.done.autofill) {
       markRouteComplete(routeKey);
       return;
     }
@@ -614,7 +727,7 @@
     installRouteHooks();
 
     document.addEventListener('pcm-ticket-info-ready', () => {
-      if (state.completedRouteKey === getRouteKey() && state.done.attributes && state.done.forms) return;
+      if (state.completedRouteKey === getRouteKey() && state.done.attributes && state.done.forms && state.done.autofill) return;
       clearAllCaches();
       scheduleRetry(0);
     }, false);
