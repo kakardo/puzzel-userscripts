@@ -1,12 +1,12 @@
 // @file_name = PCM_Compact_View.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-08-28
+// @version = 1.2_2026-08-28
 // @created = 2026-08-28 09:04
 
 // ==UserScript==
 // @name         PCM Compact View
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-08-28
+// @version      1.2_2026-08-28
 // @description  Compact settings menu for the tickets list, left of Hide Columns. Tightens cell padding and status badges, releases column widths so empty columns collapse, clamps Subject to a configurable MAX line count, and shortens times: minutes to m, hours to h, days to d. All settings live in the menu and persist in localStorage; reapplies on every DataTables draw.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -30,6 +30,8 @@
     var BADGE_PADDING_DEFAULT = 1;       // OWN vertical padding for Assigned/Status/Priority cells
     var AVATAR_ROWS_DEFAULT = 2;         // portrait height in text-row heights (settings menu)
     var ROUND_AVATARS_DEFAULT = true;    // round the assigned avatar instead of square
+    var STATUS_IN_SUBJECT_DEFAULT = true; // mirror Status as a mini pill while the Status column is hidden
+    var PILL_PLACEMENT_DEFAULT = 'subject'; // 'subject' | 'select' | 'both'
 	
     // Headers whose cells get time shortening (minutes to m, hours to h, days to d)
     var TIME_COLUMNS = ['Response Target', 'Resolve Target', 'Last Inbound Activity', 'Last Activity', 'Date Created'];
@@ -57,6 +59,13 @@
     var BADGE_PAD_KEY = 'pcm-compact-badge-padding';
     var ROUND_KEY = 'pcm-compact-round-avatars';
     var AVATAR_ROWS_KEY = 'pcm-compact-avatar-rows';
+    var STATUS_IN_SUBJECT_KEY = 'pcm-compact-status-in-subject';
+    var STATUS_OWNED_KEY = 'pcm-compact-status-hidden-by-me';
+    var PILL_PLACEMENT_KEY = 'pcm-compact-pill-placement';
+    // Soft protocol: same storage list PCM_Hide_Columns reads, so both
+    // scripts agree on hidden columns without depending on each other.
+    var HIDDEN_COLUMNS_LIST_KEY = 'pcm-hidden-columns';
+    var MINI_STATUS_CLASS = 'pcm-mini-status';
     var ROUND_CLASS = 'pcm-round-avatars';
     var TIGHT_CELL_CLASS = 'pcm-tight-cell';
     var BUTTON_ID = 'pcm-compact-view-btn';
@@ -123,6 +132,22 @@
         'html.' + ROOT_CLASS + ':not(.' + ROUND_CLASS + ') .dataTables_wrapper table.dataTable td .avatar-container img {',
         '  border-radius: 3px !important;',
         '}',
+        // Mini status pill mirrored into the Subject link while the real
+        // Status column is hidden: keeps Puzzel colour classes, downsized.
+        'html.' + ROOT_CLASS + ' .' + MINI_STATUS_CLASS + ' {',
+        '  font-size: 10px !important;',
+        '  padding: 1px 5px !important;',
+        '  line-height: 1.3 !important;',
+        '  margin-right: 6px !important;',
+        '  vertical-align: baseline !important;',
+        '  display: inline-block;',
+        '}',
+        // Pill placed in the Select column: centred block under the circle.
+        'html.' + ROOT_CLASS + ' .' + MINI_STATUS_CLASS + '.pcm-pill-block {',
+        '  display: block;',
+        '  margin: 3px auto 0 !important;',
+        '  width: max-content;',
+        '}',
         // Settings menu, styled like the Hide Columns panel.
         '#' + PANEL_ID + ' {',
         '  position:absolute; z-index:99999; background:rgb(35,43,61);',
@@ -168,6 +193,16 @@
         return storedInt(AVATAR_ROWS_KEY, AVATAR_ROWS_DEFAULT, 1, 10);
     }
 
+    function statusInSubject() {
+        var stored = localStorage.getItem(STATUS_IN_SUBJECT_KEY);
+        return stored === null ? STATUS_IN_SUBJECT_DEFAULT : stored === 'on';
+    }
+
+    function pillPlacement() {
+        var stored = localStorage.getItem(PILL_PLACEMENT_KEY);
+        return (stored === 'subject' || stored === 'select' || stored === 'both') ? stored : PILL_PLACEMENT_DEFAULT;
+    }
+
     function getApi() {
         var $ = window.jQuery;
         if (!$ || !$.fn || !$.fn.dataTable) return null;
@@ -190,6 +225,7 @@
         var visPos = 0;
 
         var squeezes = [];
+        var selectCol = -1;
 
         api.columns().every(function () {
             if (!this.visible()) return;
@@ -199,10 +235,11 @@
             if (TIME_COLUMNS.indexOf(label) !== -1) times.push(visPos);
             if (TIGHT_COLUMNS.indexOf(label) !== -1) tights.push(visPos);
             if (SQUEEZE_COLUMNS.indexOf(label) !== -1) squeezes.push(visPos);
+            if (header && (header.className || '').indexOf('select-control') !== -1) selectCol = visPos;
             visPos += 1;
         });
 
-        return { subject: subject, times: times, tights: tights, squeezes: squeezes };
+        return { subject: subject, times: times, tights: tights, squeezes: squeezes, selectCol: selectCol };
     }
 
     function shorten(value) {
@@ -253,6 +290,128 @@
     // widths every draw, ratcheting the table narrower and desyncing the
     // header. Column widths belong to DataTables' engine alone; the sWidth
     // config nudge above is the only safe influence.
+    function findRealColumnIndex(api, title) {
+        var found = -1;
+        api.columns().every(function () {
+            if (found !== -1) return;
+            var header = this.header();
+            if (D.cleanText(header ? header.textContent : '') === title) found = this.index();
+        });
+        return found;
+    }
+
+    var parseHost = document.createElement('div'); // reused, never attached
+
+    function setSharedHiddenListEntry(add) {
+        try {
+            var raw = JSON.parse(localStorage.getItem(HIDDEN_COLUMNS_LIST_KEY));
+            var list = Array.isArray(raw) ? raw : [];
+            var pos = list.indexOf('Status');
+            if (add && pos === -1) list.push('Status');
+            if (!add && pos !== -1) list.splice(pos, 1);
+            localStorage.setItem(HIDDEN_COLUMNS_LIST_KEY, JSON.stringify(list));
+        } catch (e) { /* the shared list is a courtesy, never critical */ }
+    }
+
+    // The mirror manages the hiding itself: no manual step, no dependency on
+    // the Hide Columns script. Ownership rule: only a hide performed by THIS
+    // feature is undone when it is turned off, so a Status column the user
+    // hid deliberately beforehand stays hidden.
+    function ensureStatusVisibility(api, realIdx, wantHidden) {
+        if (realIdx === -1) return;
+        var column = api.column(realIdx);
+
+        if (wantHidden) {
+            if (column.visible()) {
+                localStorage.setItem(STATUS_OWNED_KEY, 'on');
+                setSharedHiddenListEntry(true);
+                column.visible(false);
+            }
+        } else if (localStorage.getItem(STATUS_OWNED_KEY) === 'on') {
+            localStorage.removeItem(STATUS_OWNED_KEY);
+            setSharedHiddenListEntry(false);
+            if (!column.visible()) column.visible(true);
+        }
+    }
+
+    function removeMiniStatuses() {
+        var pills = document.querySelectorAll('.' + MINI_STATUS_CLASS);
+        for (var i = 0; i < pills.length; i++) pills[i].remove();
+    }
+
+    // Your idea made safe: instead of forcing the Status COLUMN narrow (a
+    // fight DataTables always wins), the column is hidden via Hide Columns
+    // and its live data is mirrored as a mini pill inside the Subject link.
+    // Hidden columns keep their data in the DataTables model, so the pill
+    // stays correct through refreshes. Active only while Status is hidden,
+    // so it can never show twice.
+    function mirrorStatusIntoSubject(api, idx) {
+        var realIdx = findRealColumnIndex(api, 'Status');
+        var enabled = statusInSubject() && idx.subject >= 0 && realIdx !== -1;
+
+        // Self-managed: hide the column when the mirror is on, restore an
+        // owned hide when it is off.
+        ensureStatusVisibility(api, realIdx, enabled);
+
+        var active = enabled && !api.column(realIdx).visible();
+
+        if (!active) {
+            removeMiniStatuses();
+            return;
+        }
+
+        var placement = pillPlacement();
+        var useSubject = placement === 'subject' || placement === 'both';
+        var useSelect = (placement === 'select' || placement === 'both') && idx.selectCol >= 0;
+
+        var rows = api.table().body().rows;
+        for (var r = 0; r < rows.length; r++) {
+            var raw = String(api.cell(api.row(rows[r]).index(), realIdx).data() || '');
+
+            if (useSubject) {
+                var subjectCell = rows[r].cells[idx.subject];
+                var anchor = subjectCell ? subjectCell.querySelector('a') : null;
+                if (anchor) upsertPill(anchor, raw, false);
+            }
+
+            if (useSelect) {
+                var selectCell = rows[r].cells[idx.selectCol];
+                if (selectCell) upsertPill(selectCell, raw, true);
+            }
+        }
+    }
+
+    function upsertPill(container, raw, blockMode) {
+        var existing = container.querySelector('.' + MINI_STATUS_CLASS);
+        if (existing && existing.dataset.pcmRaw === raw) return; // write-on-change
+        if (existing) existing.remove();
+        if (!raw) return;
+
+        var pill;
+        if (raw.indexOf('<') !== -1) {
+            // Server-rendered badge: clone it so Puzzel colour classes apply.
+            parseHost.innerHTML = raw;
+            var badge = parseHost.querySelector('.label, .badge, span');
+            pill = badge ? badge.cloneNode(true) : document.createElement('span');
+            if (!badge) pill.textContent = D.cleanText(parseHost.textContent);
+            parseHost.textContent = '';
+        } else {
+            pill = document.createElement('span');
+            pill.className = 'label';
+            pill.textContent = D.cleanText(raw);
+        }
+
+        pill.classList.add(MINI_STATUS_CLASS);
+        if (blockMode) pill.classList.add('pcm-pill-block');
+        pill.dataset.pcmRaw = raw;
+
+        if (blockMode) {
+            container.appendChild(pill);
+        } else {
+            container.insertBefore(pill, container.firstChild);
+        }
+    }
+
     function eachBodyRow(api, fn) {
         var body = api.table().body();
         if (!body) return;
@@ -303,10 +462,16 @@
             }
         });
 
+        mirrorStatusIntoSubject(api, idx);
         api.columns.adjust();
     }
 
     function restoreCells() {
+        removeMiniStatuses();
+        var apiForStatus = getApi();
+        if (apiForStatus) {
+            ensureStatusVisibility(apiForStatus, findRealColumnIndex(apiForStatus, 'Status'), false);
+        }
         var cells = document.querySelectorAll('td[data-pcm-orig]');
         for (var i = 0; i < cells.length; i++) {
             cells[i].textContent = cells[i].dataset.pcmOrig;
@@ -413,6 +578,42 @@
         panel.appendChild(numberRow('Portrait height (rows)', avatarRows(), 1, 10, function (value) {
             localStorage.setItem(AVATAR_ROWS_KEY, String(value));
         }));
+
+        var mirrorRow = document.createElement('label');
+        var mirrorText = document.createElement('span');
+        mirrorText.textContent = 'Status in Subject';
+        var mirrorToggle = document.createElement('input');
+        mirrorToggle.type = 'checkbox';
+        mirrorToggle.checked = statusInSubject();
+        mirrorToggle.addEventListener('change', function () {
+            localStorage.setItem(STATUS_IN_SUBJECT_KEY, mirrorToggle.checked ? 'on' : 'off');
+            applyGate.schedule(0);
+        });
+        mirrorRow.appendChild(mirrorText);
+        mirrorRow.appendChild(mirrorToggle);
+        panel.appendChild(mirrorRow);
+
+        var placementRow = document.createElement('label');
+        var placementText = document.createElement('span');
+        placementText.textContent = 'Status pill placement';
+        var placementSelect = document.createElement('select');
+        [['subject', 'Subject'], ['select', 'Select'], ['both', 'Both']].forEach(function (entry) {
+            var option = document.createElement('option');
+            option.value = entry[0];
+            option.textContent = entry[1];
+            placementSelect.appendChild(option);
+        });
+        placementSelect.value = pillPlacement();
+        placementSelect.style.cssText = 'background:rgba(255,255,255,0.08); color:inherit;' +
+            ' border:1px solid rgba(255,255,255,0.25); border-radius:3px; padding:2px 4px;';
+        placementSelect.addEventListener('change', function () {
+            localStorage.setItem(PILL_PLACEMENT_KEY, placementSelect.value);
+            removeMiniStatuses(); // placement moved: rebuild cleanly
+            applyGate.schedule(0);
+        });
+        placementRow.appendChild(placementText);
+        placementRow.appendChild(placementSelect);
+        panel.appendChild(placementRow);
 
         var roundRow = document.createElement('label');
         var roundText = document.createElement('span');
