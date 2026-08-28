@@ -13,12 +13,13 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCM_Ticket_Info_Extractor`: surfaces CustomerID, Customer Name, and Company Name from Customer Intelligence. Uses the shared DOM library.
   - `PCM_Name_Field_Placeholder`: adds a placeholder name link in Customer Intelligence when no name is set.
   - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
-  - `PCM_New_Ticket_Notifier`: alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
   - `PCM_Organisation_Copy_Buttons`: copy buttons for CustomerId/Name, reading the Extractor's published outputs, plus autofill of empty Customer ID / Customer Ref fields. Uses the shared DOM library.
   - `PCM_Unsaved_Form_Warning`: snapshot-based unsaved change detection for the Forms widget; highlights changed fields and shows a warning next to Save. Colour, mode, and text are settings at the top. Uses the shared DOM library.
   - `PCM_Team_Quick_Select`: one-click buttons under the Team dropdown that select configured teams in the Chosen widget. Teams are a config array at the top. Uses the shared DOM library.
 - `PCM_Ticket_List/`: scripts for the ticket list page (`/tickets`) and dashboard (`/`):
   - `PCM_Auto_Refresh`: auto-reloads the page on an interval with a countdown ring UI. Standalone.
+  - `PCM_New_Ticket_Notifier`: alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
+  - `PCM_Hide_Columns`: Hide Columns button with a checkbox panel per column; localStorage persistence with a FORCE_HIDDEN override at the top. Standalone, drives the DataTables API.
   - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). Only the Attributes script uses the shared DOM library.
 - `PCC_Agent_View/`: scripts for the agent application (app.puzzel.com/agent), a different app from PCM:
   - `PCC_Agent_Highlighter`: highlights agent rows by status/profile and badges names in the ARIA agents grid. SPA-safe (grid rebinding, navigation hooks). Standalone.
@@ -50,6 +51,7 @@ Current status:
 | PCM Dark Mode (Ticket List) | No | Mostly CSS plus a small toggle; marginal benefit |
 | PCM Dark Mode (Ticket, Org, Customer Background) | No | Pure CSS |
 | PCM_Auto_Refresh | No | Timer core, reloads the page every interval; must stay dependency-free |
+| PCM_Hide_Columns | No | Drives the DataTables API, event-driven via init.dt; no DOM watching to share |
 | PCC_Agent_Highlighter | No | Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines |
 | PCC_Softphone_Status_Highlight | No | Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection |
 
@@ -72,7 +74,7 @@ A GitHub Actions workflow (`.github/workflows/build_script_bundle.yml`) rebuilds
 Open the raw GitHub URL of any script in a browser with Tampermonkey installed, for example:
 
 ```
-https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_New_Ticket_Notifier.user.js
+https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_New_Ticket_Notifier.user.js
 ```
 
 Tampermonkey detects the `.user.js` extension and offers to install it directly. Do this once per script.
