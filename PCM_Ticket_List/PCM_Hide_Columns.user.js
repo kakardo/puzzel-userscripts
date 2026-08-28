@@ -1,12 +1,12 @@
 // @file_name = PCM_Hide_Columns.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-08-28
+// @version = 1.2_2026-08-28
 // @created = 2026-08-28 08:30
 
 // ==UserScript==
 // @name         PCM Hide Columns
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-08-28
+// @version      1.2_2026-08-28
 // @description  Adds a Hide Columns button beside Reset Column Sorting with a checkbox panel per column. Hidden columns persist in localStorage; FORCE_HIDDEN at the top overrides both and shows as locked in the panel. The panel can copy the current hidden set as a ready-to-paste FORCE_HIDDEN line. Event-driven: reapplies on DataTables re-init, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -29,7 +29,7 @@
      * (grey circle).
      * Example: var FORCE_HIDDEN = ['Tags', 'Issue Key'];
      ******************************************************************/
-    var FORCE_HIDDEN = [];
+    var FORCE_HIDDEN = ['Details', '#', 'Issue Key', 'Channel', 'Tags', 'IT-Support Options', 'Expired Tasks SLA'];
 
     /******************************************************************
      * INTERNAL SETTINGS
