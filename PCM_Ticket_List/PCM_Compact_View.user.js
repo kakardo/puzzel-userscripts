@@ -1,12 +1,12 @@
 // @file_name = PCM_Compact_View.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-08-28
+// @version = 1.1_2026-08-28
 // @created = 2026-08-28 09:04
 
 // ==UserScript==
 // @name         PCM Compact View
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-08-28
+// @version      1.1_2026-08-28
 // @description  Compact settings menu for the tickets list, left of Hide Columns. Tightens cell padding and status badges, releases column widths so empty columns collapse, clamps Subject to a configurable MAX line count, and shortens times: minutes to m, hours to h, days to d. All settings live in the menu and persist in localStorage; reapplies on every DataTables draw.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -27,12 +27,20 @@
      ******************************************************************/
     var SUBJECT_MAX_ROWS_DEFAULT = 3;    // MAX subject lines; shorter subjects use fewer
     var ROW_PADDING_DEFAULT = 6;         // vertical cell padding in px (space between tickets)
+    var BADGE_PADDING_DEFAULT = 1;       // OWN vertical padding for Assigned/Status/Priority cells
+    var AVATAR_ROWS_DEFAULT = 2;         // portrait height in text-row heights (settings menu)
+    var ROUND_AVATARS_DEFAULT = true;    // round the assigned avatar instead of square
+	
     // Headers whose cells get time shortening (minutes to m, hours to h, days to d)
     var TIME_COLUMNS = ['Response Target', 'Resolve Target', 'Last Inbound Activity', 'Last Activity', 'Date Created'];
     var SUBJECT_COLUMN = 'Subject';
+	
     // Columns squeezed to content width in compact mode (sync-safe: done
     // through the DataTables column config, not CSS on the header table).
     var SQUEEZE_COLUMNS = TIME_COLUMNS.concat(['Status', 'Priority']);
+    // Columns whose cells use their OWN vertical padding so badges and
+    // avatars can occupy the row height without inflating it.
+    var TIGHT_COLUMNS = ['Assigned', 'Status', 'Priority'];
 
     /******************************************************************
      * INTERNAL SETTINGS
@@ -46,6 +54,11 @@
     var ON_KEY = 'pcm-compact-view-on';
     var LINES_KEY = 'pcm-compact-subject-lines';
     var PAD_KEY = 'pcm-compact-row-padding';
+    var BADGE_PAD_KEY = 'pcm-compact-badge-padding';
+    var ROUND_KEY = 'pcm-compact-round-avatars';
+    var AVATAR_ROWS_KEY = 'pcm-compact-avatar-rows';
+    var ROUND_CLASS = 'pcm-round-avatars';
+    var TIGHT_CELL_CLASS = 'pcm-tight-cell';
     var BUTTON_ID = 'pcm-compact-view-btn';
     var PANEL_ID = 'pcm-compact-view-panel';
     var ROOT_CLASS = 'pcm-compact-on';
@@ -81,16 +94,34 @@
         '}',
         // Shortened times: one line, centred.
         'html.' + ROOT_CLASS + ' td[data-pcm-orig] { white-space: nowrap; text-align: center; }',
-        // Media must not drive row height; the clamped Subject should be the
-        // tallest cell, so avatars shrink in compact mode.
-        'html.' + ROOT_CLASS + ' .dataTables_wrapper table.dataTable td img {',
-        '  max-height: 22px !important;',
-        '  max-width: 22px !important;',
+        // The avatar fills the height its cell has (the row height set by the
+        // Subject clamp, minus the badge cell padding), computed from the same
+        // variables so all settings stay consistent. Square, kept in aspect.
+        'html.' + ROOT_CLASS + ' .dataTables_wrapper table.dataTable td .avatar-container img {',
+        '  height: calc(var(--pcm-avatar-rows, ' + AVATAR_ROWS_DEFAULT + ') * 1.25em) !important;',
+        '  width: auto !important;',
+        '  aspect-ratio: 1 / 1;',
+        '  object-fit: cover !important;',
         '}',
         // The online-status dot covers the whole shrunken avatar, so it is
         // hidden in compact mode (static CSS, zero runtime cost).
         'html.' + ROOT_CLASS + ' .dataTables_wrapper table.dataTable td .avatar-container .work-status-badge {',
         '  display: none !important;',
+        '}',
+        // Assigned/Status/Priority: own vertical padding, so their content
+        // fills the row height set by the Subject instead of adding to it.
+        'html.' + ROOT_CLASS + ' .dataTables_wrapper table.dataTable td.' + TIGHT_CELL_CLASS + ' {',
+        '  padding-top: var(--pcm-pad-badge, ' + BADGE_PADDING_DEFAULT + 'px) !important;',
+        '  padding-bottom: var(--pcm-pad-badge, ' + BADGE_PADDING_DEFAULT + 'px) !important;',
+        '  vertical-align: middle;',
+        '}',
+        // Avatar shape (settings menu). PCM itself rounds avatars, so the
+        // square state must actively override that, not just do nothing.
+        'html.' + ROOT_CLASS + '.' + ROUND_CLASS + ' .dataTables_wrapper table.dataTable td .avatar-container img {',
+        '  border-radius: 50% !important;',
+        '}',
+        'html.' + ROOT_CLASS + ':not(.' + ROUND_CLASS + ') .dataTables_wrapper table.dataTable td .avatar-container img {',
+        '  border-radius: 3px !important;',
         '}',
         // Settings menu, styled like the Hide Columns panel.
         '#' + PANEL_ID + ' {',
@@ -124,6 +155,19 @@
         return storedInt(PAD_KEY, ROW_PADDING_DEFAULT, 0, 16);
     }
 
+    function badgePadding() {
+        return storedInt(BADGE_PAD_KEY, BADGE_PADDING_DEFAULT, 0, 16);
+    }
+
+    function roundAvatars() {
+        var stored = localStorage.getItem(ROUND_KEY);
+        return stored === null ? ROUND_AVATARS_DEFAULT : stored === 'on';
+    }
+
+    function avatarRows() {
+        return storedInt(AVATAR_ROWS_KEY, AVATAR_ROWS_DEFAULT, 1, 10);
+    }
+
     function getApi() {
         var $ = window.jQuery;
         if (!$ || !$.fn || !$.fn.dataTable) return null;
@@ -142,7 +186,10 @@
     function visibleIndexes(api) {
         var subject = -1;
         var times = [];
+        var tights = [];
         var visPos = 0;
+
+        var squeezes = [];
 
         api.columns().every(function () {
             if (!this.visible()) return;
@@ -150,10 +197,12 @@
             var label = D.cleanText(header ? header.textContent : '');
             if (label === SUBJECT_COLUMN) subject = visPos;
             if (TIME_COLUMNS.indexOf(label) !== -1) times.push(visPos);
+            if (TIGHT_COLUMNS.indexOf(label) !== -1) tights.push(visPos);
+            if (SQUEEZE_COLUMNS.indexOf(label) !== -1) squeezes.push(visPos);
             visPos += 1;
         });
 
-        return { subject: subject, times: times };
+        return { subject: subject, times: times, tights: tights, squeezes: squeezes };
     }
 
     function shorten(value) {
@@ -199,6 +248,11 @@
         });
     }
 
+    // NOTE: an earlier revision manually overrode the squeezed columns'
+    // widths after adjust. DataTables re-measured against the tampered
+    // widths every draw, ratcheting the table narrower and desyncing the
+    // header. Column widths belong to DataTables' engine alone; the sWidth
+    // config nudge above is the only safe influence.
     function eachBodyRow(api, fn) {
         var body = api.table().body();
         if (!body) return;
@@ -213,6 +267,9 @@
         var rootStyle = document.documentElement.style;
         rootStyle.setProperty('--pcm-subject-lines', String(subjectLines()));
         rootStyle.setProperty('--pcm-pad-v', rowPadding() + 'px');
+        rootStyle.setProperty('--pcm-pad-badge', badgePadding() + 'px');
+        rootStyle.setProperty('--pcm-avatar-rows', String(avatarRows()));
+        document.documentElement.classList.toggle(ROUND_CLASS, roundAvatars());
 
         var idx = visibleIndexes(api);
         setColumnWidths(api, true);
@@ -222,6 +279,13 @@
 
             if (idx.subject >= 0 && cells[idx.subject] && !cells[idx.subject].classList.contains(SUBJECT_CELL_CLASS)) {
                 cells[idx.subject].classList.add(SUBJECT_CELL_CLASS);
+            }
+
+            for (var g = 0; g < idx.tights.length; g++) {
+                var tightCell = cells[idx.tights[g]];
+                if (tightCell && !tightCell.classList.contains(TIGHT_CELL_CLASS)) {
+                    tightCell.classList.add(TIGHT_CELL_CLASS);
+                }
             }
 
             for (var t = 0; t < idx.times.length; t++) {
@@ -341,6 +405,28 @@
         panel.appendChild(numberRow('Row spacing (px)', rowPadding(), 0, 16, function (value) {
             localStorage.setItem(PAD_KEY, String(value));
         }));
+
+        panel.appendChild(numberRow('Badge cell spacing (px)', badgePadding(), 0, 16, function (value) {
+            localStorage.setItem(BADGE_PAD_KEY, String(value));
+        }));
+
+        panel.appendChild(numberRow('Portrait height (rows)', avatarRows(), 1, 10, function (value) {
+            localStorage.setItem(AVATAR_ROWS_KEY, String(value));
+        }));
+
+        var roundRow = document.createElement('label');
+        var roundText = document.createElement('span');
+        roundText.textContent = 'Round avatars';
+        var roundToggle = document.createElement('input');
+        roundToggle.type = 'checkbox';
+        roundToggle.checked = roundAvatars();
+        roundToggle.addEventListener('change', function () {
+            localStorage.setItem(ROUND_KEY, roundToggle.checked ? 'on' : 'off');
+            applyGate.schedule(0);
+        });
+        roundRow.appendChild(roundText);
+        roundRow.appendChild(roundToggle);
+        panel.appendChild(roundRow);
 
         document.body.appendChild(panel);
         var rect = btn.getBoundingClientRect();
