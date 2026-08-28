@@ -1,13 +1,13 @@
 // @file_name = PCM_Hide_Columns.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-08-28
+// @version = 1.1_2026-08-28
 // @created = 2026-08-28 08:30
 
 // ==UserScript==
 // @name         PCM Hide Columns
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-08-28
-// @description  Adds a Hide Columns button beside Reset Column Sorting with a checkbox panel per column. Hidden columns persist in localStorage; FORCE_HIDDEN at the top overrides both and shows as locked in the panel. Event-driven: reapplies on DataTables re-init, no polling.
+// @version      1.1_2026-08-28
+// @description  Adds a Hide Columns button beside Reset Column Sorting with a checkbox panel per column. Hidden columns persist in localStorage; FORCE_HIDDEN at the top overrides both and shows as locked in the panel. The panel can copy the current hidden set as a ready-to-paste FORCE_HIDDEN line. Event-driven: reapplies on DataTables re-init, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -161,6 +161,8 @@
             panel.appendChild(row);
         });
 
+        addCopyConfigFooter(panel, api);
+
         document.body.appendChild(panel);
         var rect = btn.getBoundingClientRect();
         panel.style.left = (rect.left + window.scrollX) + 'px';
@@ -169,6 +171,65 @@
         setTimeout(function () {
             document.addEventListener('mousedown', outsideClose);
         }, 0);
+    }
+
+    function copyText(value) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(value).catch(function () { copyFallback(value); });
+        }
+        copyFallback(value);
+        return Promise.resolve();
+    }
+
+    function copyFallback(value) {
+        var area = document.createElement('textarea');
+        area.value = value;
+        area.style.cssText = 'position:fixed; left:-9999px;';
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        area.remove();
+    }
+
+    // Builds the ready-to-paste config line from everything currently
+    // hidden (user-hidden and already forced alike), in column order.
+    function buildForceHiddenLine(api) {
+        var set = hiddenSet();
+        var labels = [];
+        api.columns().indexes().each(function (idx) {
+            var label = columnLabel(api, idx);
+            if (set[label]) labels.push("'" + label.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'");
+        });
+        return 'var FORCE_HIDDEN = [' + labels.join(', ') + '];';
+    }
+
+    function addCopyConfigFooter(panel, api) {
+        var footer = document.createElement('div');
+        footer.style.cssText = 'margin-top:8px; padding-top:8px;' +
+            ' border-top:1px solid rgba(255,255,255,0.15); display:flex;' +
+            ' align-items:center; gap:8px;';
+
+        var copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.textContent = 'Copy as FORCE_HIDDEN config';
+        copyBtn.title = 'Copies a FORCE_HIDDEN line with the currently hidden columns, ready to paste into the script';
+        copyBtn.style.cssText = 'appearance:none; background:rgba(255,255,255,0.1);' +
+            ' border:1px solid rgba(255,255,255,0.25); border-radius:4px;' +
+            ' color:inherit; font-size:11px; padding:3px 8px; cursor:pointer;';
+
+        var status = document.createElement('span');
+        status.style.cssText = 'font-size:11px; color:rgb(127,201,127); opacity:0; transition:opacity 0.3s;';
+        status.textContent = 'Copied!';
+
+        copyBtn.addEventListener('click', function () {
+            copyText(buildForceHiddenLine(api));
+            status.style.opacity = '1';
+            setTimeout(function () { status.style.opacity = '0'; }, 1500);
+        });
+
+        footer.appendChild(copyBtn);
+        footer.appendChild(status);
+        panel.appendChild(footer);
     }
 
     function togglePanel(btn) {
