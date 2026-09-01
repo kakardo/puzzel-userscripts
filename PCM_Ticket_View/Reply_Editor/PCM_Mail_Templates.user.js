@@ -1,20 +1,20 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-09-01
+// @version = 1.2_2026-09-01
 // @created = 2026-09-01 10:04
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-09-01
+// @version      1.2_2026-09-01
 // @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in the TEMPLATES array at the top and support {name} (customer name from the ticket, via the PCM Ticket Info Extractor outputs when present) and {ticket} (ticket number) placeholders; unresolved placeholders stay visible so they are easy to spot. PCM_TEMPLATE_BUTTONS adds one-press shortcuts to PCM's own Insert Template entries: fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
-// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Mail_Templates.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Mail_Templates.user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Mail_Templates.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Mail_Templates.user.js
 // ==/UserScript==
 
 (function () {
