@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 3.2_2026-08-27
+// @version = 3.3_2026-08-28
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.2_2026-08-27
+// @version      3.3_2026-08-28
 // @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -30,7 +30,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '3.2_2026-08-27';
+  const SCRIPT_VERSION = '3.3_2026-08-28';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -648,6 +648,7 @@
   function setFieldValueIfEmpty(input, value) {
     if (!input || !clean(value)) return false;
     if (clean(input.value)) return false; // never overwrite anything the agent typed
+    if (input.dataset.kardoUserCleared) return false; // the agent emptied it on purpose
 
     // Use the native setter so framework-bound inputs register the change too.
     const proto = input.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -768,6 +769,12 @@
         mismatch = current !== '' && (pair.exact
           ? current !== target
           : current.toLowerCase() !== target.toLowerCase());
+
+        // Safety net: an empty field with an available value means an
+        // autofill is due (e.g. fields appeared via a Form change that the
+        // observer missed). The settled scheduler is debounced and only
+        // fills empty fields, so this can never overwrite or loop.
+        if (current === '') scheduleSettledAutofill();
       }
 
       buttons.forEach((btn) => {
@@ -856,8 +863,15 @@
     // Puzzel Service changes cause. A detached root re-arms on next call.
     if (formsObserverRoot && !formsObserverRoot.isConnected) formsObserverRoot = null;
 
+    // The FORM element exists even while Form is Unassigned and no fields
+    // are rendered yet, so rooting there catches the moment the app inserts
+    // #form-fields-wrapper. Rooting on the wrapper's parent section missed
+    // exactly that insertion (fields appeared, observer never fired).
     const wrapper = q('#form-fields-wrapper');
-    const root = (wrapper && (wrapper.closest('form') || wrapper.closest('fieldset') || wrapper.parentElement)) || state.cache.formParent;
+    const root = (wrapper && wrapper.closest('form')) ||
+      (state.cache.formBlock && state.cache.formBlock.closest && state.cache.formBlock.closest('form')) ||
+      (wrapper && (wrapper.closest('fieldset') || wrapper.parentElement)) ||
+      state.cache.formParent;
     if (!root || !root.isConnected || formsObserverRoot === root) return;
 
     if (!formsObserver) {
@@ -950,10 +964,20 @@
     state.routeKey = getRouteKey();
     D.installNavigationHooks(handlePotentialRouteChange);
 
-    // Typing in the fields must update the "(differs)" tags live.
+    // Typing in the fields must update the "(differs)" tags live. A REAL
+    // keystroke that empties a field marks it as deliberately cleared, so
+    // the autofill safety net never types into it again (synthetic events
+    // cannot set the mark).
     const onFieldEvent = (event) => {
       const target = event.target;
       if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && target.tagName !== 'SELECT')) return;
+      if (event.isTrusted && target.tagName !== 'SELECT') {
+        if (clean(target.value) === '') {
+          target.dataset.kardoUserCleared = '1';
+        } else {
+          delete target.dataset.kardoUserCleared;
+        }
+      }
       mismatchGate.schedule();
     };
     document.addEventListener('input', onFieldEvent, true);
