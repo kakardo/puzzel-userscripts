@@ -1,13 +1,13 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-09-01
+// @version = 1.1_2026-09-01
 // @created = 2026-09-01 10:04
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-09-01
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in the TEMPLATES array at the top and support {name} (customer name from the ticket, via the PCM Ticket Info Extractor outputs when present) and {ticket} (ticket number) placeholders; unresolved placeholders stay visible so they are easy to spot. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      1.1_2026-09-01
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in the TEMPLATES array at the top and support {name} (customer name from the ticket, via the PCM Ticket Info Extractor outputs when present) and {ticket} (ticket number) placeholders; unresolved placeholders stay visible so they are easy to spot. PCM_TEMPLATE_BUTTONS adds one-press shortcuts to PCM's own Insert Template entries: fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -55,6 +55,18 @@
             label: 'IF',
             text: 'Hello,\n\nThank you for contacting Puzzel Customer Care.\n\nI have reviewed your ticket and identified that this incident will require further investigation by our second line engineers.\n\nWe will contact you as soon as we have an update.'
         }
+    ];
+
+    /******************************************************************
+     * Shortcuts to PCM's own "Insert Template" entries.
+     * templateId is the option value in the Insert Template modal's
+     * dropdown (probe it once via the modal's select). The button
+     * fetches the rendered body from the same endpoint the modal uses,
+     * so PCM fills its own variables (ticket number, assignee, ...)
+     * server-side and the template text stays maintained in PCM.
+     ******************************************************************/
+    var PCM_TEMPLATE_BUTTONS = [
+        { label: 'Assign (Triage ENG)', templateId: 37718 }
     ];
 
     // {name}: use only the first word of the ticket's customer name
@@ -244,6 +256,60 @@
         appendToEditor(container, toHtml(resolvePlaceholders(templateText, container)));
     }
 
+    // PCM template shortcut: replicates the Insert Template modal's own
+    // request. The reply form carries both required ids as data
+    // attributes (data-ticket-id, data-email-id); the response is JSON
+    // with the server-rendered body in template.body.
+    function insertPcmTemplate(container, templateId, btn) {
+        var form = container.closest('form.draft-email-form') || container.closest('form');
+        var ticketId = form ? form.dataset.ticketId : '';
+        var draftId = form ? form.dataset.emailId : '';
+        var token = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+        if (!ticketId || !draftId) {
+            console.error('[PCM Mail Templates] draft form ids not found, cannot fetch PCM template.');
+            flashLabel(btn, 'No draft ids');
+            return;
+        }
+
+        btn.disabled = true;
+        fetch('/templates/' + templateId + '/use', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-CSRF-Token': token,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            },
+            body: 'draft_type=email' +
+                '&draft_id=' + encodeURIComponent(draftId) +
+                '&ticket_id=' + encodeURIComponent(ticketId)
+        }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
+        }).then(function (data) {
+            var body = data && data.template && data.template.body;
+            if (!body) throw new Error('empty template body');
+            appendToEditor(container, body);
+        }).catch(function (err) {
+            console.error('[PCM Mail Templates] PCM template fetch failed:', err);
+            flashLabel(btn, 'Failed');
+        }).finally(function () {
+            btn.disabled = false;
+        });
+    }
+
+    function flashLabel(btn, message) {
+        if (btn.dataset.pcmFlashing) return;
+        btn.dataset.pcmFlashing = '1';
+        var original = btn.textContent;
+        btn.textContent = message;
+        window.setTimeout(function () {
+            btn.textContent = original;
+            delete btn.dataset.pcmFlashing;
+        }, 1500);
+    }
+
     function makeButton(entry, container) {
         var btn = document.createElement('button');
         btn.type = 'button';
@@ -281,6 +347,18 @@
         return select;
     }
 
+    function makePcmButton(entry, container) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-default btn-xs pcm-tpl-btn';
+        btn.textContent = entry.label;
+        btn.title = 'Append the PCM template "' + entry.label + '" to the mail body';
+        btn.addEventListener('click', function () {
+            insertPcmTemplate(container, entry.templateId, btn);
+        });
+        return btn;
+    }
+
     function buildBar(container) {
         var bar = document.createElement('div');
         bar.className = BAR_CLASS;
@@ -290,6 +368,9 @@
             } else if (entry.text) {
                 bar.appendChild(makeButton(entry, container));
             }
+        });
+        PCM_TEMPLATE_BUTTONS.forEach(function (entry) {
+            if (entry.templateId) bar.appendChild(makePcmButton(entry, container));
         });
         container.parentNode.insertBefore(bar, container);
     }
