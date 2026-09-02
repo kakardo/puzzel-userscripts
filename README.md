@@ -12,10 +12,15 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
 - `PCM_Ticket_View/`: scripts for the ticket detail page (`/tickets/*`):
   - `PCM_Ticket_Info_Extractor`: surfaces CustomerID, Customer Name, and Company Name from Customer Intelligence. Uses the shared DOM library.
   - `PCM_Name_Field_Placeholder`: adds a placeholder name link in Customer Intelligence when no name is set.
-  - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
-  - `PCM_Organisation_Copy_Buttons`: copy buttons for CustomerId/Name, reading the Extractor's published outputs, plus autofill of empty Customer ID / Customer Ref fields. Uses the shared DOM library.
-  - `PCM_Unsaved_Form_Warning`: snapshot-based unsaved change detection for the Forms widget; highlights changed fields and shows a warning next to Save. Colour, mode, and text are settings at the top. Uses the shared DOM library.
-  - `PCM_Team_Quick_Select`: one-click buttons under the Team dropdown that select configured teams in the Chosen widget. Teams are a config array at the top. Uses the shared DOM library.
+  - `Attributes/`: scripts scoped to the Attributes widget (Organisation, Team, Assigned To, Status, Priority, Tags):
+    - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
+    - `PCM_Team_Quick_Select`: one-click buttons under the Team dropdown that select configured teams in the Chosen widget. Teams are a config array at the top. Uses the shared DOM library.
+  - `Forms/`: scripts scoped to the Forms widget:
+    - `PCM_Form_Buttons`: copy buttons for CustomerId/Name above `Form:`, reading the Extractor's published outputs, plus autofill of empty Customer ID / Customer Ref fields. Uses the shared DOM library. Renamed from `PCM_Organisation_Copy_Buttons` in 3.6, when the Attributes > Organisation button was dropped.
+    - `PCM_Unsaved_Form_Warning`: snapshot-based unsaved change detection for the Forms widget; highlights changed fields and shows a warning next to Save. Colour, mode, and text are settings at the top. Uses the shared DOM library.
+  - `Reply_Editor/`: scripts scoped to the Summernote reply editor:
+    - `PCM_Mail_Templates`: template buttons and dropdowns above the reply editor, with `{name}`/`{ticket}` placeholders and one-press shortcuts to PCM's own Insert Template entries. Uses the shared DOM library.
+    - `PCM_Template_ID_Viewer`: shows and copies the numeric template id of the selected entry in PCM's Insert Template modal. Standalone, purely event-driven.
 - `PCM_Ticket_List/`: scripts for the ticket list page (`/tickets`) and dashboard (`/`):
   - `PCM_Auto_Refresh`: auto-reloads the page on an interval with a countdown ring UI. Standalone.
   - `PCM_New_Ticket_Notifier`: alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
@@ -44,7 +49,7 @@ Current status:
 | PCM_Ticket_Info_Extractor | Yes | Reads CI widget, accordion rows, tables; helpers aliased to the lib since 6.1 |
 | PCM_New_Ticket_Notifier | Yes | Table reading, observers, dedupe and JSON storage from the lib |
 | Puzzel_Styler_(Ticket_Field) | Yes | Entirely built on `createFieldRuntime` |
-| PCM_Organisation_Copy_Buttons | Yes | General DOM work via `PCM_DOM`; GitHub `@require` since 2.3 |
+| PCM_Form_Buttons | Yes | General DOM work via `PCM_DOM`; GitHub `@require` since 2.3 |
 | PCM_Unsaved_Form_Warning | Yes | `bootUntil`, `ensureStyleTag`, `createVisibilityGate`, snapshot diffing over form fields |
 | PCM_Team_Quick_Select | Yes | `bootUntil`, `ensureStyleTag`, `cleanText`; drives the Chosen team widget |
 | PCM_Name_Field_Placeholder | No (since 1.8) | Calls no lib functions; bounded one-shot retries, so it stays dependency-free |

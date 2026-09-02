@@ -1,23 +1,24 @@
-// @file_name = PCM_Organisation_Copy_Buttons.user.js
+// @file_name = PCM_Form_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 3.5_2026-09-01
+// @version = 3.6_2026-09-02
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
 // @note = Reads customer data only from the extractor outputs published by the PCM Ticket Info Extractor script.
+// @note = Renamed from PCM Organisation Copy Buttons in v3.6, when the Attributes > Organisation button was dropped and the script became Forms only.
 
 // ==UserScript==
-// @name         PCM Organisation Copy Buttons
+// @name         PCM Form Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.5_2026-09-01
-// @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
+// @version      3.6_2026-09-02
+// @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        GM_setClipboard
-// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Organisation_Copy_Buttons.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Organisation_Copy_Buttons.user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Form_Buttons.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Form_Buttons.user.js
 // ==/UserScript==
 
 (function () {
@@ -25,17 +26,16 @@
 
   const D = window.PCM_DOM;
   if (!D || !D.createVisibilityGate || !D.installNavigationHooks) {
-    console.warn('PCM Organisation Copy Buttons: PCM_DOM (1.9 or newer) is missing.');
+    console.warn('PCM Form Buttons: PCM_DOM (1.9 or newer) is missing.');
     return;
   }
 
-  const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '3.5_2026-09-01';
+  const SCRIPT_NAME = 'PCM Form Buttons';
+  const SCRIPT_VERSION = '3.6_2026-09-02';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
-  const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
   const FORMS_INJECT_ID = 'kardo-forms-customer-copy';
-  const STYLE_ID = 'kardo-attributes-org-copy-style';
+  const STYLE_ID = 'kardo-forms-customer-copy-style';
 
   const BOOT_CONFIG = {
     BOOT_MAX_TRIES: 40,
@@ -46,26 +46,17 @@
   const ROUTE_MAX_RETRIES = 28;
 
   const CSS_TEXT = `
-    #${ATTRIBUTES_INJECT_ID},
     #${FORMS_INJECT_ID} {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       vertical-align: middle;
       white-space: nowrap;
-    }
-
-    #${ATTRIBUTES_INJECT_ID} {
-      margin-left: 10px;
-    }
-
-    #${FORMS_INJECT_ID} {
       width: 100%;
       margin: 0 0 16px 0;
       flex-wrap: wrap;
     }
 
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn,
     #${FORMS_INJECT_ID} .kardo-copy-btn {
       appearance: none;
       border: 1px solid #bcc7d8;
@@ -84,7 +75,6 @@
       transition: none;
     }
 
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn:hover,
     #${FORMS_INJECT_ID} .kardo-copy-btn:hover {
       border-color: #94add1;
       background-color: #e8f1ff;
@@ -92,27 +82,23 @@
 
     /* Colour coding: blue = CustomerId, yellow = Customer Name.
        The matching form fields get the same colours below. */
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-kind-id,
     #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-id {
       background-color: #dbe9ff;
       border-color: #7fa8e0;
       color: #16365c;
     }
 
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-kind-id:hover,
     #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-id:hover {
       background-color: #cfe2ff;
       border-color: #5c8fd6;
     }
 
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-kind-name,
     #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-name {
       background-color: #fff3c4;
       border-color: #e0c76a;
       color: #5c4a16;
     }
 
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-kind-name:hover,
     #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-name:hover {
       background-color: #ffeda8;
       border-color: #d1b449;
@@ -130,14 +116,12 @@
       border-color: #e0c76a !important;
     }
 
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-btn.kardo-copied,
     #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-copied {
       background-color: #bfe8bf;
       border-color: #7fc97f;
       color: #22364d;
     }
 
-    #${ATTRIBUTES_INJECT_ID}.kardo-fading .kardo-copy-btn,
     #${FORMS_INJECT_ID}.kardo-fading .kardo-copy-btn {
       transition:
         background-color 3s ease,
@@ -146,7 +130,6 @@
         box-shadow 3s ease;
     }
 
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-sep,
     #${FORMS_INJECT_ID} .kardo-copy-sep {
       font-size: 19px;
       line-height: 1;
@@ -154,7 +137,6 @@
       font-weight: 600;
     }
 
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-status,
     #${FORMS_INJECT_ID} .kardo-copy-status {
       color: #1f6f2a;
       font-size: 15px;
@@ -165,7 +147,6 @@
       transition: none;
     }
 
-    #${ATTRIBUTES_INJECT_ID} .kardo-copy-status.kardo-visible,
     #${FORMS_INJECT_ID} .kardo-copy-status.kardo-visible {
       opacity: 1;
     }
@@ -184,7 +165,6 @@
       display: inline;
     }
 
-    #${ATTRIBUTES_INJECT_ID}.kardo-fading .kardo-copy-status,
     #${FORMS_INJECT_ID}.kardo-fading .kardo-copy-status {
       transition:
         opacity 3s ease,
@@ -204,14 +184,11 @@
     retryTimer: 0,
     retries: 0,
     done: {
-      attributes: false,
       forms: false,
       autofill: false
     },
     cache: {
       extractorRoot: null,
-      attributesContainer: null,
-      organisationLabel: null,
       formBlock: null,
       formParent: null
     }
@@ -240,16 +217,8 @@
   }
 
   function cleanupInjectedUi() {
-    const attributesUi = q(`#${ATTRIBUTES_INJECT_ID}`);
-    if (attributesUi) attributesUi.remove();
-
     const formsUi = q(`#${FORMS_INJECT_ID}`);
     if (formsUi) formsUi.remove();
-  }
-
-  function clearAttributesCache() {
-    state.cache.attributesContainer = null;
-    state.cache.organisationLabel = null;
   }
 
   function clearFormsCache() {
@@ -259,7 +228,6 @@
 
   function clearAllCaches() {
     state.cache.extractorRoot = null;
-    clearAttributesCache();
     clearFormsCache();
   }
 
@@ -272,7 +240,6 @@
     state.routeKey = routeKey;
     state.completedRouteKey = '';
     state.retries = 0;
-    state.done.attributes = false;
     state.done.forms = false;
     state.done.autofill = false;
     stopFormsObserver();
@@ -336,85 +303,6 @@
       (info && info.customerId) ||
       (info && info.customerName)
     );
-  }
-
-  function findWidget(titleValue) {
-    const wanted = clean(titleValue).toLowerCase();
-    if (!wanted) return null;
-
-    for (const el of qa('.jarviswidget header strong, header h2 strong, h2 strong')) {
-      if (clean(text(el)).toLowerCase() !== wanted) continue;
-      return el.closest('.jarviswidget') || el.closest('section') || el.closest('div') || null;
-    }
-
-    return null;
-  }
-
-  function findScoredContainer(rules, minScore) {
-    const all = qa('div, section, form, .panel, .box, .well, .widget, .card').filter(visible);
-
-    let best = null;
-    for (const el of all) {
-      const value = clean(el.innerText || el.textContent || '');
-      let score = 0;
-
-      for (const rule of rules) {
-        if (rule.test.test(value)) score += rule.weight;
-      }
-
-      if (score < minScore) continue;
-      if (!best || score > best.score || (score === best.score && value.length < best.value.length)) {
-        best = { el, value, score };
-      }
-    }
-
-    return best ? best.el : null;
-  }
-
-  function getAttributesContainer() {
-    if (isConnected(state.cache.attributesContainer)) return state.cache.attributesContainer;
-
-    const widget = findWidget('Attributes');
-    state.cache.attributesContainer = widget
-      ? (D.findWidgetBody(widget) || widget)
-      : findScoredContainer([
-          { test: /\bAttributes\b/i, weight: 3 },
-          { test: /\bOrganisation\s*:/i, weight: 3 },
-          { test: /\bTeam\b/i, weight: 2 },
-          { test: /\bPriority\b/i, weight: 2 },
-          { test: /\bStatus\b/i, weight: 2 }
-        ], 8);
-
-    return state.cache.attributesContainer;
-  }
-
-  function getOrganisationLabel() {
-    if (isConnected(state.cache.organisationLabel)) return state.cache.organisationLabel;
-
-    const container = getAttributesContainer();
-    if (!container) {
-      state.cache.organisationLabel = null;
-      return null;
-    }
-
-    const direct = qa('label, span, div, strong, td, th', container)
-      .filter(visible)
-      .find((el) => {
-        const value = clean(text(el));
-        return value === 'Organisation' || value === 'Organisation:';
-      });
-
-    if (direct) {
-      state.cache.organisationLabel = direct;
-      return direct;
-    }
-
-    const fallback = qa('*', container)
-      .filter(visible)
-      .find((el) => /^Organisation\s*:?$/i.test(clean(text(el))));
-
-    state.cache.organisationLabel = fallback || null;
-    return state.cache.organisationLabel;
   }
 
   function getFormBlock() {
@@ -558,28 +446,6 @@
     return wrap;
   }
 
-  function ensureAttributesButtons(info) {
-    const entries = dedupeEntries([{ value: info.customerId, kind: 'id' }]);
-    if (!entries.length) return false;
-
-    const label = getOrganisationLabel();
-    if (!label) return false;
-
-    const key = entries.map((entry) => entry.value).join('\n');
-    const existing = q(`#${ATTRIBUTES_INJECT_ID}`);
-    if (existing && existing.isConnected) {
-      if (existing.parentElement === label && existing.dataset.values === key) return true;
-      existing.remove();
-    }
-
-    label.style.display = 'inline-flex';
-    label.style.alignItems = 'center';
-    label.style.whiteSpace = 'nowrap';
-    label.style.gap = '0';
-    label.appendChild(buildCopyUi(ATTRIBUTES_INJECT_ID, entries));
-    return true;
-  }
-
   function ensureFormsButtons(info) {
     const entries = dedupeEntries([
       { value: info.customerId, kind: 'id' },
@@ -605,7 +471,7 @@
     const wanted = clean(labelText).toLowerCase();
 
     const label = qa('label, legend, div, span, strong, b, p, h1, h2, h3, h4, h5, h6, td, th')
-      .filter((el) => !el.closest(`#${FORMS_INJECT_ID}`) && !el.closest(`#${ATTRIBUTES_INJECT_ID}`))
+      .filter((el) => !el.closest(`#${FORMS_INJECT_ID}`))
       .filter(visible)
       .find((el) => {
         const value = clean(text(el)).toLowerCase();
@@ -625,8 +491,7 @@
     const isCandidate = (el) =>
       el.type !== 'hidden' &&
       !el.disabled &&
-      !el.closest(`#${FORMS_INJECT_ID}`) &&
-      !el.closest(`#${ATTRIBUTES_INJECT_ID}`);
+      !el.closest(`#${FORMS_INJECT_ID}`);
 
     let scope = label;
     for (let i = 0; i < 6 && scope; i += 1) {
@@ -860,12 +725,6 @@
       state.done.forms = ensureFormsButtons(info) || state.done.forms;
     }
 
-    const attributesUi = q(`#${ATTRIBUTES_INJECT_ID}`);
-    if (!attributesUi || !attributesUi.isConnected) {
-      clearAttributesCache();
-      state.done.attributes = ensureAttributesButtons(info) || state.done.attributes;
-    }
-
     // The app re-renders once as an echo of our own fill. That single echo
     // is refilled instantly (the form is proven stable by then), so the
     // text only vanishes for a frame. The one-shot guard prevents any
@@ -945,11 +804,6 @@
 
     const info = readTicketInfo();
     if (hasUsableTicketInfo(info)) {
-      if (!state.done.attributes) {
-        state.done.attributes = ensureAttributesButtons(info) || state.done.attributes;
-        if (!state.done.attributes) clearAttributesCache();
-      }
-
       if (!state.done.forms) {
         state.done.forms = ensureFormsButtons(info) || state.done.forms;
         if (!state.done.forms) clearFormsCache();
@@ -969,7 +823,7 @@
       clearAllCaches();
     }
 
-    if (state.done.attributes && state.done.forms && state.done.autofill) {
+    if (state.done.forms && state.done.autofill) {
       markRouteComplete(routeKey);
       return;
     }
@@ -1025,7 +879,7 @@
     document.addEventListener('change', onFieldEvent, true);
 
     document.addEventListener('pcm-ticket-info-ready', () => {
-      if (state.completedRouteKey === getRouteKey() && state.done.attributes && state.done.forms && state.done.autofill) return;
+      if (state.completedRouteKey === getRouteKey() && state.done.forms && state.done.autofill) return;
       clearAllCaches();
       scheduleRetry(0);
     }, false);

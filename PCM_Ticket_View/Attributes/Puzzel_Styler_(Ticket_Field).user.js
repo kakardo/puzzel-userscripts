@@ -1,20 +1,20 @@
 // @file_name = Puzzel_Styler_(Ticket_Field).user.js
 // @author = Kardo Rostam
-// @version = 3.7_2026-08-27
+// @version = 3.8_2026-09-02
 // @created = 2026-03-31 00:00
 
 // ==UserScript==
 // @name         Puzzel Styler (Ticket Field)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.7_2026-08-27
+// @version      3.8_2026-09-02
 // @description  Highlights Assigned-To and Status fields with safer refresh after programmatic updates and scroll return.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
-// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Puzzel_Styler_(Ticket_Field).user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Puzzel_Styler_(Ticket_Field).user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/Puzzel_Styler_(Ticket_Field).user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/Puzzel_Styler_(Ticket_Field).user.js
 // ==/UserScript==
 
 (function() {
