@@ -70,7 +70,8 @@
      * server-side and the template text stays maintained in PCM.
      ******************************************************************/
     var PCM_TEMPLATE_BUTTONS = [
-        { label: 'Assign (Triage ENG)', templateId: 37718 }
+        { label: 'Assign (Triage ENG)', templateId: 37718 },
+        { label: 'Partner (ENG)', templateId: 8584 }
     ];
 
     // {name}: use only the first word of the ticket's customer name
