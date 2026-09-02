@@ -54,6 +54,10 @@
         {
             label: 'IF',
             text: 'Hello,\n\nThank you for contacting Puzzel Customer Care.\n\nI have reviewed your ticket and identified that this incident will require further investigation by our second line engineers.\n\nWe will contact you as soon as we have an update.'
+        },
+		{
+            label: 'IF(PSI)',
+            text: 'Hello IF,\n\nUser xxFIRSTxLASTxx (xxUSERxIDxx) has received a new telephony subscription.\nDirect number = xxPHONExNUMBERxx\n\nHave a great day!'
         }
     ];
 
