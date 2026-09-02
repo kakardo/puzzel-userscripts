@@ -1,13 +1,13 @@
 // @file_name = PCM_Subscription_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-09-02
+// @version = 1.1_2026-09-02
 // @created = 2026-09-02 14:17
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The partner name lives in localStorage (pcm-partner-name), never in code.
 
 // ==UserScript==
 // @name         PCM Subscription Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-09-02
+// @version      1.1_2026-09-02
 // @description  One-press handling of partner telephony subscription (PSI) tickets. A separately coloured PSI button in the mail template row fills the five Change form fields (invoiceable hours, soundfiles, out of hours, to be invoiced, and Invoice Information = the ticket title) and appends the confirmation mail to the reply, with xxFIRSTxLASTxx and xxUSERxIDxx resolved from the User line in the ticket body. xxPHONExNUMBERxx stays visible for the agent to fill after configuring. The partner greeting name is read from localStorage, keeping this file free of customer details. Event-driven injection behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -37,12 +37,17 @@
     // whatever is in the field (the press is an explicit action).
     // '{title}' becomes the ticket title, e.g.
     // '[2026-09-05] New Telephony Subscription for user First Last / S2'.
+    // type declares what element the value belongs in. A found field of
+    // the wrong type is NEVER written to, only reported: this is what
+    // guarantees fields outside this list (like Change Completed, a text
+    // box that must never be touched by this script) cannot receive a
+    // stray value through a lookup mismatch.
     var FORM_VALUES = [
-        { label: 'Additional Invoiceable Hours', value: '0' },
-        { label: 'Number of Soundfiles', value: '0' },
-        { label: 'Extra invoicing for activation out of hours', value: '0' },
-        { label: 'To be invoiced', value: 'yes' },
-        { label: 'Invoice Information', value: '{title}' }
+        { label: 'Additional Invoiceable Hours', value: '0', type: 'select' },
+        { label: 'Number of Soundfiles', value: '0', type: 'select' },
+        { label: 'Extra invoicing for activation out of hours', value: '0', type: 'select' },
+        { label: 'To be invoiced', value: 'yes', type: 'select' },
+        { label: 'Invoice Information', value: '{title}', type: 'text' }
     ];
 
     // Mail appended to the open reply. xxFIRSTxLASTxx and xxUSERxIDxx
@@ -65,7 +70,7 @@
     // First 'User: Name (CAPSID, email)' line wins: that is the
     // Parameters block. 'Opened by:' and the Work notes lines do not
     // match this shape.
-    var USER_LINE_RE = /User:\s*([A-Za-zÀ-ɏ' .-]+?)\s*\(([A-Z0-9]{4,}),/;
+    var USER_LINE_RE = /User:\s*([A-Za-zÀ-ɏ' .-]+?)\s*\(([A-Z0-9]{3,}),/;
 
     var D = window.PCM_DOM;
     if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate) {
@@ -91,22 +96,35 @@
     /******************************************************************
      * Ticket data extraction (click time only)
      ******************************************************************/
-    function timelineText() {
-        var root = document.querySelector('.timeline') || document.body;
-        return root.innerText || '';
-    }
-
     function ticketTitle(block) {
         // Preferred: the reply subject 'Re: Puzzel - [180543] TITLE'.
         var m = ((block && block.innerText) || '').match(/Re:\s*Puzzel\s*-\s*\[\d+\]\s*([^\n]+)/);
         if (m) return D.cleanText(m[1]);
-        // Fallback: the first '[YYYY-MM-DD] ...' line in the timeline.
-        m = timelineText().match(/\[\d{4}-\d{2}-\d{2}\][^\n]*/);
+        // Fallback: the first '[YYYY-MM-DD] ...' line on the page.
+        m = (document.body.innerText || '').match(/\[\d{4}-\d{2}-\d{2}\][^\n]*/);
         return m ? D.cleanText(m[0]) : null;
     }
 
+    // PCM renders received mail bodies inside iframes (probed: the User
+    // line exists in NO main-document text). Search the main document
+    // first, then every same-origin iframe.
+    function searchAllDocuments(re) {
+        var m = (document.body.textContent || '').match(re);
+        if (m) return m;
+        var frames = document.querySelectorAll('iframe');
+        for (var i = 0; i < frames.length; i++) {
+            try {
+                var doc = frames[i].contentDocument;
+                var text = doc && doc.body ? (doc.body.textContent || '') : '';
+                m = text.match(re);
+                if (m) return m;
+            } catch (_) { /* cross-origin frame, skip */ }
+        }
+        return null;
+    }
+
     function ticketUser() {
-        var m = timelineText().match(USER_LINE_RE);
+        var m = searchAllDocuments(USER_LINE_RE);
         return m ? { name: D.cleanText(m[1]), id: m[2] } : null;
     }
 
@@ -130,7 +148,11 @@
         for (var i = 0; i < 6 && scope; i += 1) {
             scope = scope.parentElement;
             if (!scope || scope === document.body) break;
-            var fields = D.queryAll('input, textarea', scope).filter(function (el) {
+            // Selects included: the Unassigned fields are dropdowns.
+            // Leaving them out made the walk-up grab the NEXT text
+            // input in document order, which wrote 'yes' into the
+            // Change Completed box.
+            var fields = D.queryAll('input, textarea, select', scope).filter(function (el) {
                 return el.type !== 'hidden' && !el.disabled;
             });
             if (!fields.length) continue;
@@ -142,7 +164,21 @@
         return null;
     }
 
+    // Returns false when a select has no option matching the value, so
+    // the caller can report it instead of silently leaving the default.
     function setFieldValue(field, value) {
+        if (field.tagName === 'SELECT') {
+            var wanted = D.cleanText(value).toLowerCase();
+            var option = Array.prototype.find.call(field.options, function (o) {
+                return D.cleanText(o.textContent).toLowerCase() === wanted ||
+                    D.cleanText(o.value).toLowerCase() === wanted;
+            });
+            if (!option) return false;
+            field.value = option.value;
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        }
+
         var proto = field.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
         var descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
         if (descriptor && descriptor.set) {
@@ -152,6 +188,7 @@
         }
         field.dispatchEvent(new Event('input', { bubbles: true }));
         field.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
     }
 
     // Returns the number of fields that could not be found.
@@ -164,13 +201,22 @@
                 console.warn('[PCM Subscription Buttons] form field not found:', entry.label);
                 return;
             }
+            var isSelect = field.tagName === 'SELECT';
+            if ((entry.type === 'select') !== isSelect) {
+                missing += 1;
+                console.warn('[PCM Subscription Buttons] wrong field type found for %o, not touching it.', entry.label);
+                return;
+            }
             var value = entry.value === '{title}' ? (title || '') : entry.value;
             if (entry.value === '{title}' && !title) {
                 missing += 1;
                 console.warn('[PCM Subscription Buttons] ticket title not found, Invoice Information left as-is.');
                 return;
             }
-            setFieldValue(field, value);
+            if (!setFieldValue(field, value)) {
+                missing += 1;
+                console.warn('[PCM Subscription Buttons] no option %o in the %o dropdown.', value, entry.label);
+            }
         });
         return missing;
     }
