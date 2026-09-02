@@ -1,20 +1,20 @@
 // @file_name = PCM_Unsaved_Form_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-08-27
+// @version = 1.4_2026-09-02
 // @created = 2026-08-27 09:37
 
 // ==UserScript==
 // @name         PCM Unsaved Form Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-08-27
+// @version      1.4_2026-09-02
 // @description  Snapshot-based unsaved change detection for the ticket Forms widget. Highlights every field whose value differs from the loaded state (including values typed by the Copy Buttons autofill) and shows a warning text next to the Save button. Highlight colour/mode and warning text are settings at the top.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
-// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Unsaved_Form_Warning.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Unsaved_Form_Warning.user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Unsaved_Form_Warning.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Unsaved_Form_Warning.user.js
 // ==/UserScript==
 
 (function () {
