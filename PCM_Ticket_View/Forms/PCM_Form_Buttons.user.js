@@ -1,6 +1,6 @@
 // @file_name = PCM_Form_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 3.6_2026-09-02
+// @version = 3.7_2026-09-02
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -10,13 +10,13 @@
 // ==UserScript==
 // @name         PCM Form Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.6_2026-09-02
+// @version      3.7_2026-09-02
 // @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
-// @grant        GM_setClipboard
+// @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Form_Buttons.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Form_Buttons.user.js
 // ==/UserScript==
@@ -31,7 +31,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Form Buttons';
-  const SCRIPT_VERSION = '3.6_2026-09-02';
+  const SCRIPT_VERSION = '3.7_2026-09-02';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const FORMS_INJECT_ID = 'kardo-forms-customer-copy';
@@ -349,14 +349,11 @@
     area.remove();
   }
 
+  // @grant none keeps the script in the page context, which the reads of
+  // window.PCM_TICKET_INFO and window.jQuery depend on identically across
+  // all four browsers. GM_setClipboard needed a sandbox grant, and Firefox
+  // handles page globals differently inside the sandbox, so it went.
   function copyToClipboard(value) {
-    try {
-      if (typeof GM_setClipboard === 'function') {
-        GM_setClipboard(value);
-        return Promise.resolve();
-      }
-    } catch (_) {}
-
     if (navigator.clipboard && navigator.clipboard.writeText) {
       return navigator.clipboard.writeText(value).catch(() => copyFallback(value));
     }
@@ -467,22 +464,39 @@
     return true;
   }
 
+  // Re-renders replace the nodes, so a cached field is valid exactly as
+  // long as it is still connected. This turns the frequent callers (the
+  // mismatch gate runs on every debounced keystroke) into a Map lookup.
+  const fieldCache = new Map();
+
   function findFormField(labelText) {
+    const cached = fieldCache.get(labelText);
+    if (cached && cached.isConnected) return cached;
+    fieldCache.delete(labelText);
+
     const wanted = clean(labelText).toLowerCase();
 
-    const label = qa('label, legend, div, span, strong, b, p, h1, h2, h3, h4, h5, h6, td, th')
-      .filter((el) => !el.closest(`#${FORMS_INJECT_ID}`))
-      .filter(visible)
-      .find((el) => {
+    // Scope to the fields wrapper when it exists (document as fallback),
+    // and match on text BEFORE checking visibility: visible() forces a
+    // style read, so it must only run on the handful of text matches,
+    // not on every label-ish element of the page.
+    const searchRoot = q('#form-fields-wrapper') || document;
+    const label = qa('label, legend, div, span, strong, b, p, h1, h2, h3, h4, h5, h6, td, th', searchRoot)
+      .filter((el) => {
         const value = clean(text(el)).toLowerCase();
         return value === wanted || value === wanted + ':';
-      });
+      })
+      .filter((el) => !el.closest(`#${FORMS_INJECT_ID}`))
+      .find(visible);
     if (!label) return null;
 
     const forId = label.getAttribute ? label.getAttribute('for') : '';
     if (forId) {
       const direct = document.getElementById(forId);
-      if (direct) return direct;
+      if (direct) {
+        fieldCache.set(labelText, direct);
+        return direct;
+      }
     }
 
     // Walk up from the label and prefer the first field that FOLLOWS it in
@@ -504,7 +518,9 @@
       const following = fields.find((el) =>
         label.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING
       );
-      return following || fields[0];
+      const found = following || fields[0];
+      fieldCache.set(labelText, found);
+      return found;
     }
 
     return null;
