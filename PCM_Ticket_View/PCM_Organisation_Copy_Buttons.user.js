@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 3.4_2026-09-01
+// @version = 3.5_2026-09-01
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.4_2026-09-01
+// @version      3.5_2026-09-01
 // @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -30,7 +30,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '3.4_2026-09-01';
+  const SCRIPT_VERSION = '3.5_2026-09-01';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -736,12 +736,25 @@
       return;
     }
 
-    settleStartedAt = 0;
     // One atomic pass: colours, fill, and mismatch state land together,
     // so the fields never change appearance in stages while loading.
+    // The pass only counts as applied when the fields actually existed:
+    // an early pass on a not-yet-rendered form used to consume the
+    // settled state decorating nothing, leaving bare fields after a
+    // reload whenever the observer missed the later render too.
+    const located = ensureFormAutofill(info, true);
+    if (!located) {
+      if (waitedTotal < SETTLE_MAX_WAIT_MS) {
+        settleTimer = window.setTimeout(scheduleSettledAutofill, 300);
+      } else {
+        settleStartedAt = 0;
+      }
+      return;
+    }
+
+    settleStartedAt = 0;
     settledApplied = true;
     echoRefillUsed = false;
-    ensureFormAutofill(info, true);
     updateMismatchIndicators();
   }
 
@@ -874,12 +887,18 @@
     // Puzzel Service changes cause. A detached root re-arms on next call.
     if (formsObserverRoot && !formsObserverRoot.isConnected) formsObserverRoot = null;
 
-    // The FORM element exists even while Form is Unassigned and no fields
-    // are rendered yet, so rooting there catches the moment the app inserts
-    // #form-fields-wrapper. Rooting on the wrapper's parent section missed
-    // exactly that insertion (fields appeared, observer never fired).
+    // Root on the Forms WIDGET when one is found: it contains both the
+    // Form select and #form-fields-wrapper even when PCM renders them in
+    // different (or classless) <form> elements, and it survives every
+    // fieldset swap. The <form>-based roots remain as fallbacks; they
+    // exist even while Form is Unassigned and no fields are rendered.
     const wrapper = q('#form-fields-wrapper');
-    const root = (wrapper && wrapper.closest('form')) ||
+    const widget =
+      (wrapper && (wrapper.closest('.jarviswidget') || wrapper.closest('section'))) ||
+      (state.cache.formBlock && state.cache.formBlock.closest &&
+        (state.cache.formBlock.closest('.jarviswidget') || state.cache.formBlock.closest('section')));
+    const root = widget ||
+      (wrapper && wrapper.closest('form')) ||
       (state.cache.formBlock && state.cache.formBlock.closest && state.cache.formBlock.closest('form')) ||
       (wrapper && (wrapper.closest('fieldset') || wrapper.parentElement)) ||
       state.cache.formParent;
