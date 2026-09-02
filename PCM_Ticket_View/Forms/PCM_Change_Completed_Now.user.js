@@ -1,13 +1,13 @@
 // @file_name = PCM_Change_Completed_Now.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-09-02
+// @version = 1.1_2026-09-02
 // @created = 2026-09-02 13:43
 
 // ==UserScript==
 // @name         PCM Change Completed Now
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-09-02
-// @description  Adds a small Now button beside the Change Completed label in the Forms widget (rendered when Form is Change). Pressing it fills the field with the current date and time (2026-09-02 14:42), optionally with the timezone. Field and label texts are settings at the top. Event-driven: a widget-scoped MutationObserver behind the shared visibility gate re-adds the button after re-renders, no polling.
+// @version      1.1_2026-09-02
+// @description  Adds a small Now button beside the Change Completed label in the Forms widget (rendered when Form is Change). Pressing it fills the field with the current date and time in the agent's local time with the timezone visible (2026-09-02 15:47 BST), or in GMT for everyone via the TIMESTAMP_MODE setting. Field and label texts are settings at the top. Event-driven: a widget-scoped MutationObserver behind the shared visibility gate re-adds the button after re-renders, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -29,9 +29,14 @@
     // Text on the injected button.
     var BUTTON_TEXT = 'Now';
 
-    // Append the local timezone to the timestamp, giving for example
-    // '2026-09-02 14:42 CEST'. Set to false for a plain date and time.
-    var INCLUDE_TIMEZONE = true;
+    // 'local' fills the agent's own clock time with the timezone name
+    // visible, e.g. '2026-09-02 15:47 BST' in the UK summer or
+    // '2026-09-02 16:47 CEST' in Oslo at the same moment. Readable at a
+    // glance, and the zone makes it unambiguous across offices.
+    // 'gmt' fills the same instant for everyone, e.g.
+    // '2026-09-02 14:47 GMT', for entries that must sort and compare
+    // identically no matter who pressed the button.
+    var TIMESTAMP_MODE = 'local';
 
     // Overwrite an existing value when pressed. The button is an explicit
     // action, so overwriting is the useful default.
@@ -74,18 +79,28 @@
         return (n < 10 ? '0' : '') + n;
     }
 
+    // The timezone is always part of the value: a bare local time would
+    // be ambiguous the moment another office reads the ticket.
+    function localZoneName(d) {
+        try {
+            var parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(d);
+            var tz = (parts.find(function (p) { return p.type === 'timeZoneName'; }) || {}).value;
+            if (tz) return tz;
+        } catch (_) { /* fall through to the numeric offset */ }
+        var offset = -d.getTimezoneOffset();
+        var sign = offset < 0 ? '-' : '+';
+        var abs = Math.abs(offset);
+        return 'GMT' + sign + pad(Math.floor(abs / 60)) + ':' + pad(abs % 60);
+    }
+
     function timestamp() {
         var d = new Date();
-        var s = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
-            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-        if (INCLUDE_TIMEZONE) {
-            try {
-                var parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(d);
-                var tz = (parts.find(function (p) { return p.type === 'timeZoneName'; }) || {}).value;
-                if (tz) s += ' ' + tz;
-            } catch (_) { /* timezone stays off if Intl fails */ }
+        if (TIMESTAMP_MODE === 'gmt') {
+            return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
+                ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ' GMT';
         }
-        return s;
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ' ' + localZoneName(d);
     }
 
     // Label with the configured text inside the fields wrapper, then the
