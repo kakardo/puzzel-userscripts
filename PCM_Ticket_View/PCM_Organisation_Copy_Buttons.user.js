@@ -1,6 +1,6 @@
 // @file_name = PCM_Organisation_Copy_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 3.3_2026-08-28
+// @version = 3.4_2026-09-01
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         PCM Organisation Copy Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.3_2026-08-28
+// @version      3.4_2026-09-01
 // @description  Adds a primary CustomerId copy button beside Attributes > Organisation in Puzzel Ticketing and adds a Forms row above Form: with CustomerId / Name from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -30,7 +30,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Organisation Copy Buttons';
-  const SCRIPT_VERSION = '3.3_2026-08-28';
+  const SCRIPT_VERSION = '3.4_2026-09-01';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const ATTRIBUTES_INJECT_ID = 'kardo-attributes-org-copy';
@@ -722,16 +722,27 @@
       return;
     }
 
-    settleStartedAt = 0;
     const info = readTicketInfo();
-    if (hasUsableTicketInfo(info)) {
-      // One atomic pass: colours, fill, and mismatch state land together,
-      // so the fields never change appearance in stages while loading.
-      settledApplied = true;
-      echoRefillUsed = false;
-      ensureFormAutofill(info, true);
-      updateMismatchIndicators();
+    if (!hasUsableTicketInfo(info)) {
+      // The extractor can lag the form by a beat. Giving up here was a
+      // silent dead end (nothing re-triggered the fill, and the route can
+      // complete meanwhile because done.autofill only means the fields
+      // were located). Keep retrying inside the same bounded window.
+      if (waitedTotal < SETTLE_MAX_WAIT_MS) {
+        settleTimer = window.setTimeout(scheduleSettledAutofill, 300);
+      } else {
+        settleStartedAt = 0;
+      }
+      return;
     }
+
+    settleStartedAt = 0;
+    // One atomic pass: colours, fill, and mismatch state land together,
+    // so the fields never change appearance in stages while loading.
+    settledApplied = true;
+    echoRefillUsed = false;
+    ensureFormAutofill(info, true);
+    updateMismatchIndicators();
   }
 
   // Shows "(differs)" inside a Forms copy button whenever the matching form
@@ -977,6 +988,17 @@
         } else {
           delete target.dataset.kardoUserCleared;
         }
+      }
+      if (target.tagName === 'SELECT') {
+        // A select change (Form, Puzzel Service, ...) is PCM's cue to
+        // re-render the form fields. Announce it directly instead of
+        // relying on the mutation observer alone: the user's own action
+        // re-arms a detached observer root and queues a settled autofill.
+        // Safe for unrelated selects too, since the settled pass only
+        // ever fills empty Customer ID / Customer Ref fields.
+        lastFieldSwapAt = Date.now();
+        ensureFormsObserver();
+        scheduleSettledAutofill();
       }
       mismatchGate.schedule();
     };
