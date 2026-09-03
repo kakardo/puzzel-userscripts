@@ -1,12 +1,12 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-09-02
+// @version = 1.3_2026-09-02
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-09-02
+// @version      1.3_2026-09-02
 // @description  Adds one-click buttons under the Team dropdown that select a configured team in the Chosen widget. Teams are a config array at the top. The button for the currently selected team is marked active.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -27,12 +27,13 @@
    * is the short text shown in the bubble, "color" its fill.
    ******************************************************************/
   const TEAM_BUTTONS = [
-    { label: 'Admin',   team: 'Admin Support',           color: '#3f6fd6' },
-    { label: 'Agent',   team: 'Agent Support',           color: '#b8860b' },
-    { label: 'Case',    team: 'Case Management Support', color: '#7b2cbf' },
-    { label: 'Spam',    team: 'Spam/Virus Quarantine',   color: '#d32f2f' },
-    { label: 'Triage',  team: 'Triage Support',          color: '#2f7d2f' },
-    { label: 'Virtual', team: 'Virtual Agents Support',  color: '#0b7285' }
+    { label: 'Admin',   team: 'Admin Support',              color: '#3f6fd6' },
+    { label: 'Agent',   team: 'Agent Support',              color: '#b8860b' },
+    { label: 'Case',    team: 'Case Management Support',    color: '#7b2cbf' },
+    { label: 'PSI',     team: 'Sales Intelligence Support', color: '#b5179e' },
+    { label: 'Spam',    team: 'Spam/Virus Quarantine',      color: '#d32f2f' },
+    { label: 'Triage',  team: 'Triage Support',             color: '#2f7d2f' },
+    { label: 'Virtual', team: 'Virtual Agents Support',     color: '#0b7285' }
   ];
 
   /******************************************************************
