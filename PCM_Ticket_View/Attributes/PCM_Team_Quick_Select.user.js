@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-09-02
+// @version = 1.4_2026-09-02
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-09-02
-// @description  Adds one-click buttons under the Team dropdown that select a configured team in the Chosen widget. Teams are a config array at the top. The button for the currently selected team is marked active.
+// @version      1.4_2026-09-02
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -37,6 +37,16 @@
   ];
 
   /******************************************************************
+   * Where the bubbles sit relative to the Team dropdown.
+   *   'below'  - on their own row under the dropdown (default)
+   *   'inline' - to the right of the "Team:" label text, above the
+   *              dropdown
+   * If the preferred spot cannot be found the other one is used, so a
+   * layout change in PCM can never leave the bubbles unplaced.
+   ******************************************************************/
+  const BUTTON_PLACEMENT = 'below';
+
+  /******************************************************************
    * INTERNAL SETTINGS
    ******************************************************************/
   const D = window.PCM_DOM;
@@ -49,6 +59,7 @@
   const WRAP_ID = 'pcm-team-quick-select';
   const STYLE_ID = 'pcm-team-quick-select-style';
   const ACTIVE_CLASS = 'pcm-team-active';
+  const BELOW_CLASS = 'pcm-team-below';
 
   D.ensureStyleTag(STYLE_ID, `
     #${WRAP_ID} {
@@ -57,6 +68,13 @@
       gap: 4px;
       margin-left: 8px;
       vertical-align: middle;
+    }
+
+    /* Own row under the dropdown: no inline left margin, small top gap. */
+    #${WRAP_ID}.${BELOW_CLASS} {
+      display: flex;
+      margin-left: 0;
+      margin-top: 5px;
     }
 
     #${WRAP_ID} .pcm-team-btn {
@@ -148,6 +166,32 @@
     ) || null;
   }
 
+  // Inline: to the RIGHT of the "Team:" label text. The label is made
+  // inline-flex so the pills sit on the same line and wrap without
+  // disturbing the column layout.
+  function placeInline(select, wrap) {
+    const teamLabel = getTeamLabel(select);
+    if (!teamLabel) return false;
+
+    teamLabel.style.display = 'inline-flex';
+    teamLabel.style.alignItems = 'center';
+    teamLabel.style.flexWrap = 'wrap';
+    teamLabel.appendChild(wrap);
+    wrap.classList.remove(BELOW_CLASS);
+    return true;
+  }
+
+  // Below: its own row under the dropdown. The class drops the inline
+  // left margin and adds the top gap.
+  function placeBelow(select, wrap) {
+    const host = select.closest('label.select') || select.parentElement;
+    if (!host || !host.parentElement) return false;
+
+    host.insertAdjacentElement('afterend', wrap);
+    wrap.classList.add(BELOW_CLASS);
+    return true;
+  }
+
   function buildButtons() {
     const select = getSelect();
     if (!select) return false;
@@ -185,20 +229,12 @@
       wrap.appendChild(btn);
     });
 
-    // Preferred spot: inline to the RIGHT of the "Team:" label text, made
-    // inline-flex so the pills sit on the same line and wrap without
-    // disturbing the column layout. Fallback: below the dropdown.
-    const teamLabel = getTeamLabel(select);
-    if (teamLabel) {
-      teamLabel.style.display = 'inline-flex';
-      teamLabel.style.alignItems = 'center';
-      teamLabel.style.flexWrap = 'wrap';
-      teamLabel.appendChild(wrap);
-    } else {
-      const host = select.closest('label.select') || select.parentElement;
-      if (!host || !host.parentElement) return false;
-      host.insertAdjacentElement('afterend', wrap);
-    }
+    // BUTTON_PLACEMENT decides which spot is tried first. Whichever one
+    // is chosen, the other stays available as a fallback so a layout
+    // change in PCM cannot leave the bubbles unplaced.
+    const placeFirst = BUTTON_PLACEMENT === 'inline' ? placeInline : placeBelow;
+    const placeSecond = BUTTON_PLACEMENT === 'inline' ? placeBelow : placeInline;
+    if (!placeFirst(select, wrap) && !placeSecond(select, wrap)) return false;
 
     // Keep the active mark in sync when the team is changed by hand.
     const jq = window.jQuery || window.$;
