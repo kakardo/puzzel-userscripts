@@ -1,12 +1,12 @@
 // @file_name = PCM_Change_Completed_Now.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-09-02
+// @version = 1.2_2026-09-03
 // @created = 2026-09-02 13:43
 
 // ==UserScript==
 // @name         PCM Change Completed Now
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-09-02
+// @version      1.2_2026-09-03
 // @description  Adds a small Now button beside the Change Completed label in the Forms widget (rendered when Form is Change). Pressing it fills the field with the current date and time in the agent's local time with the timezone visible (2026-09-02 15:47 BST), or in GMT for everyone via the TIMESTAMP_MODE setting. Field and label texts are settings at the top. Event-driven: a widget-scoped MutationObserver behind the shared visibility gate re-adds the button after re-renders, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -50,8 +50,8 @@
     var OBSERVER_DELAY_MS = 150;
 
     var D = window.PCM_DOM;
-    if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate) {
-        console.error('[PCM Change Completed Now] PCM_DOM shared library missing or stale, aborting.');
+    if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate || !D.createFieldFinder || !D.setNativeFieldValue) {
+        console.error('[PCM Change Completed Now] PCM_DOM shared library missing or stale (lib 2.0 or newer required), aborting.');
         return;
     }
 
@@ -103,50 +103,17 @@
             ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ' ' + localZoneName(d);
     }
 
-    // Label with the configured text inside the fields wrapper, then the
-    // first visible field that follows it, same walk-up as Form Buttons.
+    // Shared label-based lookup (lib 2.0). parts() also returns the
+    // label element, which is where the button is injected.
+    var fieldFinder = D.createFieldFinder({ fieldSelector: 'input, textarea' });
+
     function findParts() {
-        var wrapper = document.getElementById('form-fields-wrapper');
-        if (!wrapper) return null;
-
-        var wanted = D.cleanText(LABEL_TEXT).toLowerCase();
-        var label = D.queryAll('label, legend, div, span, strong, b, p, td, th', wrapper)
-            .filter(function (el) {
-                var value = D.cleanText(D.text(el)).toLowerCase();
-                return value === wanted || value === wanted + ':';
-            })
-            .find(D.visible);
-        if (!label) return null;
-
-        var scope = label;
-        for (var i = 0; i < 6 && scope; i += 1) {
-            scope = scope.parentElement;
-            if (!scope || scope === document.body) break;
-            var fields = D.queryAll('input, textarea', scope).filter(function (el) {
-                return el.type !== 'hidden' && !el.disabled;
-            });
-            if (!fields.length) continue;
-            var following = fields.find(function (el) {
-                return label.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING;
-            });
-            return { label: label, field: following || fields[0] };
-        }
-        return null;
+        return fieldFinder.parts(LABEL_TEXT);
     }
 
     function fillField(field) {
         if (!OVERWRITE_EXISTING && D.cleanText(field.value)) return;
-
-        // Native setter so PCM's own binding registers the change too.
-        var proto = field.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        var descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
-        if (descriptor && descriptor.set) {
-            descriptor.set.call(field, timestamp());
-        } else {
-            field.value = timestamp();
-        }
-        field.dispatchEvent(new Event('input', { bubbles: true }));
-        field.dispatchEvent(new Event('change', { bubbles: true }));
+        D.setNativeFieldValue(field, timestamp());
     }
 
     function ensureButton() {

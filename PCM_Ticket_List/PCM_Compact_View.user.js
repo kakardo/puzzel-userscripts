@@ -1,12 +1,12 @@
 // @file_name = PCM_Compact_View.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-08-28
+// @version = 1.3_2026-09-03
 // @created = 2026-08-28 09:04
 
 // ==UserScript==
 // @name         PCM Compact View
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-08-28
+// @version      1.3_2026-09-03
 // @description  Compact settings menu for the tickets list, left of Hide Columns. Tightens cell padding and status badges, releases column widths so empty columns collapse, clamps Subject to a configurable MAX line count, and shortens times: minutes to m, hours to h, days to d. All settings live in the menu and persist in localStorage; reapplies on every DataTables draw.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/

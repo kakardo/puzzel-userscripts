@@ -1,6 +1,6 @@
 // @file_name = PCM_Form_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 3.8_2026-09-03
+// @version = 3.9_2026-09-03
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -10,7 +10,7 @@
 // ==UserScript==
 // @name         PCM Form Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.8_2026-09-03
+// @version      3.9_2026-09-03
 // @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -25,13 +25,13 @@
   'use strict';
 
   const D = window.PCM_DOM;
-  if (!D || !D.createVisibilityGate || !D.installNavigationHooks) {
-    console.warn('PCM Form Buttons: PCM_DOM (1.9 or newer) is missing.');
+  if (!D || !D.createVisibilityGate || !D.installNavigationHooks || !D.createFieldFinder || !D.setNativeFieldValue) {
+    console.warn('PCM Form Buttons: PCM_DOM (2.0 or newer) is missing.');
     return;
   }
 
   const SCRIPT_NAME = 'PCM Form Buttons';
-  const SCRIPT_VERSION = '3.8_2026-09-03';
+  const SCRIPT_VERSION = '3.9_2026-09-03';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const FORMS_INJECT_ID = 'kardo-forms-customer-copy';
@@ -469,85 +469,21 @@
     return true;
   }
 
-  // Re-renders replace the nodes, so a cached field is valid exactly as
-  // long as it is still connected. This turns the frequent callers (the
-  // mismatch gate runs on every debounced keystroke) into a Map lookup.
-  const fieldCache = new Map();
+  // Shared cached label-based lookup (lib 2.0): scoped to the fields
+  // wrapper, text matched before the visibility style read, and cached
+  // per label while the node stays connected, so the mismatch gate's
+  // per-keystroke calls stay a Map lookup.
+  const fieldFinder = D.createFieldFinder({ excludeSelector: `#${FORMS_INJECT_ID}` });
 
   function findFormField(labelText) {
-    const cached = fieldCache.get(labelText);
-    if (cached && cached.isConnected) return cached;
-    fieldCache.delete(labelText);
-
-    const wanted = clean(labelText).toLowerCase();
-
-    // Scope to the fields wrapper when it exists (document as fallback),
-    // and match on text BEFORE checking visibility: visible() forces a
-    // style read, so it must only run on the handful of text matches,
-    // not on every label-ish element of the page.
-    const searchRoot = q('#form-fields-wrapper') || document;
-    const label = qa('label, legend, div, span, strong, b, p, h1, h2, h3, h4, h5, h6, td, th', searchRoot)
-      .filter((el) => {
-        const value = clean(text(el)).toLowerCase();
-        return value === wanted || value === wanted + ':';
-      })
-      .filter((el) => !el.closest(`#${FORMS_INJECT_ID}`))
-      .find(visible);
-    if (!label) return null;
-
-    const forId = label.getAttribute ? label.getAttribute('for') : '';
-    if (forId) {
-      const direct = document.getElementById(forId);
-      if (direct) {
-        fieldCache.set(labelText, direct);
-        return direct;
-      }
-    }
-
-    // Walk up from the label and prefer the first field that FOLLOWS it in
-    // document order: in a vertical form that is the box under the label,
-    // not an earlier field that happens to share an ancestor.
-    const isCandidate = (el) =>
-      el.type !== 'hidden' &&
-      !el.disabled &&
-      !el.closest(`#${FORMS_INJECT_ID}`);
-
-    let scope = label;
-    for (let i = 0; i < 6 && scope; i += 1) {
-      scope = scope.parentElement;
-      if (!scope || scope === document.body) break;
-
-      const fields = qa('input, textarea, select', scope).filter(isCandidate);
-      if (!fields.length) continue;
-
-      const following = fields.find((el) =>
-        label.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING
-      );
-      const found = following || fields[0];
-      fieldCache.set(labelText, found);
-      return found;
-    }
-
-    return null;
+    return fieldFinder.field(labelText);
   }
 
   function setFieldValueIfEmpty(input, value) {
     if (!input || !clean(value)) return false;
     if (clean(input.value)) return false; // never overwrite anything the agent typed
     if (input.dataset.kardoUserCleared) return false; // the agent emptied it on purpose
-
-    // Use the native setter so framework-bound inputs register the change too.
-    const proto = input.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
-    if (descriptor && descriptor.set) {
-      descriptor.set.call(input, value);
-    } else {
-      input.value = value;
-    }
-
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
+    return D.setNativeFieldValue(input, value);
   }
 
   function ensureFormAutofill(info, allowFill) {
