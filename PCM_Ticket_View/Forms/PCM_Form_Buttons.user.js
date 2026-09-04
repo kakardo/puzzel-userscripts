@@ -1,6 +1,6 @@
 // @file_name = PCM_Form_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 3.9_2026-09-03
+// @version = 4.0_2026-09-04
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -10,7 +10,7 @@
 // ==UserScript==
 // @name         PCM Form Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.9_2026-09-03
+// @version      4.0_2026-09-04
 // @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -31,7 +31,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Form Buttons';
-  const SCRIPT_VERSION = '3.9_2026-09-03';
+  const SCRIPT_VERSION = '4.0_2026-09-04';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const FORMS_INJECT_ID = 'kardo-forms-customer-copy';
