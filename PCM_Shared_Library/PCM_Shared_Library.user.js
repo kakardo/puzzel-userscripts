@@ -1,6 +1,6 @@
 // @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 2.0_2026-09-03
+// @version = 2.1_2026-09-04
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -1089,6 +1089,13 @@
             document.addEventListener('input', onFieldEvent, true);
             document.addEventListener('change', onFieldEvent, true);
 
+            // Chosen-style widgets announce changes with jQuery's
+            // synthetic .trigger('change'), which native listeners never
+            // receive. A jQuery-level binding catches those too; real
+            // events arrive twice, which the debounced gate absorbs.
+            const jq = window.jQuery;
+            if (jq) jq(document).on('input change', onFieldEvent);
+
             document.addEventListener('click', function(event) {
                 if (!isSaveClick(event)) return;
                 // Saving stores the current values: new baseline for
@@ -1134,6 +1141,7 @@
     }
 
     global.PCM_DOM = {
+        LIB_VERSION: '2.1_2026-09-04',
         DEFAULT_CONFIG: assignDefined({}, DEFAULT_CONFIG),
         mergeConfig: mergeConfig,
         clearTimer: clearTimer,

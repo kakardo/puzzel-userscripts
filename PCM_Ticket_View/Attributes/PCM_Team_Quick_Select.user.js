@@ -1,12 +1,12 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 1.5_2026-09-03
+// @version = 1.6_2026-09-04
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.5_2026-09-03
+// @version      1.6_2026-09-04
 // @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
