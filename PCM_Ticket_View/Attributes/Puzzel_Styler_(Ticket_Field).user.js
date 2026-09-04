@@ -1,12 +1,12 @@
 // @file_name = Puzzel_Styler_(Ticket_Field).user.js
 // @author = Kardo Rostam
-// @version = 3.8_2026-09-02
+// @version = 3.9_2026-09-03
 // @created = 2026-03-31 00:00
 
 // ==UserScript==
 // @name         Puzzel Styler (Ticket Field)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.8_2026-09-02
+// @version      3.9_2026-09-03
 // @description  Highlights Assigned-To and Status fields with safer refresh after programmatic updates and scroll return.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*

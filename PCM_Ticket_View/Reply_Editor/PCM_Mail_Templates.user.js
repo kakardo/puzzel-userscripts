@@ -1,13 +1,13 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 1.4_2026-09-02
+// @version = 1.5_2026-09-03
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). See LLM_prompt_instructions Section 2.8.
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-09-02
+// @version      1.5_2026-09-03
 // @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in the TEMPLATES array at the top and support {name} (customer name from the ticket, via the PCM Ticket Info Extractor outputs when present) and {ticket} (ticket number) placeholders; unresolved placeholders stay visible so they are easy to spot. PCM_TEMPLATE_BUTTONS adds one-press shortcuts to PCM's own Insert Template entries: fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -93,8 +93,8 @@
     var OBSERVER_DELAY_MS = 150;
 
     var D = window.PCM_DOM;
-    if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate) {
-        console.error('[PCM Mail Templates] PCM_DOM shared library missing or stale, aborting.');
+    if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate || !D.editorAppendHtml || !D.flashLabel) {
+        console.error('[PCM Mail Templates] PCM_DOM shared library missing or stale (lib 2.0 or newer required), aborting.');
         return;
     }
 
@@ -123,25 +123,6 @@
     ].join('\n');
 
     var EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
-
-    function escapeHtml(value) {
-        return String(value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-    }
-
-    // One <p> per line, exactly like pressing Enter in Summernote.
-    // Empty lines use PCM's own empty-paragraph markup, probed from a
-    // fresh editor (<p><span></span><br></p>), so they render as blank
-    // lines identically to manually typed ones.
-    function toHtml(text) {
-        return text.split('\n').map(function (line) {
-            return line
-                ? '<p>' + escapeHtml(line) + '</p>'
-                : '<p><span></span><br></p>';
-        }).join('');
-    }
 
     // The reply block: the container that holds From/To and the editor.
     function replyBlock(editorContainer) {
@@ -225,41 +206,10 @@
             });
     }
 
-    // Visually empty: no text and no image. Summernote's own isEmpty is
-    // useless here because PCM's fresh editor holds
-    // <p><span></span><br></p>, which isEmpty does not recognise, so the
-    // stale empty paragraph survived as a blank first line.
-    function editorIsEmpty(container) {
-        var editable = container.querySelector('.note-editable');
-        if (!editable) return true;
-        return !D.cleanText(editable.textContent) && !editable.querySelector('img');
-    }
-
-    // Append via the Summernote API when the original element is
-    // reachable (keeps Summernote's internal state and the underlying
-    // field in sync); fall back to direct DOM insertion plus an input
-    // event otherwise.
-    function appendToEditor(container, html) {
-        var jq = window.jQuery;
-        var empty = editorIsEmpty(container);
-        var orig = container.previousElementSibling;
-        if (jq && orig && jq(orig).data('summernote')) {
-            var current = empty ? '' : jq(orig).summernote('code');
-            jq(orig).summernote('code', current + html);
-            return;
-        }
-        var editable = container.querySelector('.note-editable');
-        if (!editable) return;
-        if (empty) {
-            editable.innerHTML = html;
-        } else {
-            editable.insertAdjacentHTML('beforeend', html);
-        }
-        editable.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-
+    // Text-to-HTML, emptiness, and the Summernote append path live in
+    // the shared library since lib 2.0.
     function insertTemplate(container, templateText) {
-        appendToEditor(container, toHtml(resolvePlaceholders(templateText, container)));
+        D.editorAppendHtml(container, D.editorTextToHtml(resolvePlaceholders(templateText, container)));
     }
 
     // PCM template shortcut: replicates the Insert Template modal's own
@@ -273,7 +223,7 @@
         var token = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
         if (!ticketId || !draftId) {
             console.error('[PCM Mail Templates] draft form ids not found, cannot fetch PCM template.');
-            flashLabel(btn, 'No draft ids');
+            D.flashLabel(btn, 'No draft ids');
             return;
         }
 
@@ -296,24 +246,13 @@
         }).then(function (data) {
             var body = data && data.template && data.template.body;
             if (!body) throw new Error('empty template body');
-            appendToEditor(container, body);
+            D.editorAppendHtml(container, body);
         }).catch(function (err) {
             console.error('[PCM Mail Templates] PCM template fetch failed:', err);
-            flashLabel(btn, 'Failed');
+            D.flashLabel(btn, 'Failed');
         }).finally(function () {
             btn.disabled = false;
         });
-    }
-
-    function flashLabel(btn, message) {
-        if (btn.dataset.pcmFlashing) return;
-        btn.dataset.pcmFlashing = '1';
-        var original = btn.textContent;
-        btn.textContent = message;
-        window.setTimeout(function () {
-            btn.textContent = original;
-            delete btn.dataset.pcmFlashing;
-        }, 1500);
     }
 
     function makeButton(entry, container) {

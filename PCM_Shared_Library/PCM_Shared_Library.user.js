@@ -1,6 +1,6 @@
 // @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 1.9_2026-08-27
+// @version = 2.0_2026-09-03
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -36,6 +36,12 @@
     - localStorage JSON read/write (v1.8)
     - visibility gate: skip work while the tab is hidden, catch up on return (v1.8)
     - SPA navigation hooks: one shared history wrap, per-script callbacks (v1.9)
+    - label-based form field finder with a connected-node cache (v2.0)
+    - select-aware native field value setter firing input/change (v2.0)
+    - Summernote editor helpers: text to HTML, emptiness, append (v2.0)
+    - transient button label flash (v2.0)
+    - unsaved-change watcher engine: snapshot baseline, label keying,
+      re-render handling, per-zone save clearing (v2.0)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -717,6 +723,416 @@
         return api;
     }
 
+    // ---- v2.0 helpers: shared by the Forms and Reply_Editor scripts ----
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    // One <p> per line, like pressing Enter in Summernote. Empty lines
+    // use PCM's own empty-paragraph markup so they render as blank
+    // lines. Leading tabs and spaces become non-breaking spaces so
+    // indented lines keep their indentation.
+    function editorTextToHtml(textValue) {
+        return String(textValue).split('\n').map(function(line) {
+            if (!line) return '<p><span></span><br></p>';
+            const indented = line.replace(/^[ \t]+/, function(ws) {
+                return ws.replace(/\t/g, '    ').replace(/ /g, ' ');
+            });
+            return '<p>' + escapeHtml(indented) + '</p>';
+        }).join('');
+    }
+
+    // Visually empty: no text and no image. Summernote's own isEmpty is
+    // unusable because PCM's fresh editor holds <p><span></span><br></p>.
+    function editorIsEmpty(container) {
+        const editable = container.querySelector('.note-editable');
+        if (!editable) return true;
+        return !cleanText(editable.textContent) && !editable.querySelector('img');
+    }
+
+    // Append via the Summernote API when the original element is
+    // reachable (walks back over injected bars between the original and
+    // the editor container); falls back to direct DOM insertion plus an
+    // input event.
+    function editorAppendHtml(container, html) {
+        const jq = window.jQuery;
+        let orig = container.previousElementSibling;
+        while (orig && !(jq && jq(orig).data && jq(orig).data('summernote'))) {
+            orig = orig.previousElementSibling;
+        }
+        const empty = editorIsEmpty(container);
+        if (jq && orig) {
+            const current = empty ? '' : jq(orig).summernote('code');
+            jq(orig).summernote('code', current + html);
+            return true;
+        }
+        const editable = container.querySelector('.note-editable');
+        if (!editable) return false;
+        if (empty) {
+            editable.innerHTML = html;
+        } else {
+            editable.insertAdjacentHTML('beforeend', html);
+        }
+        editable.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+    }
+
+    // Select-aware value setter. Selects pick the option matching value
+    // or visible text (false when none matches, so callers can report
+    // instead of silently keeping the default). Inputs and textareas go
+    // through the native setter so framework bindings register the
+    // change; input and change events fire either way.
+    function setNativeFieldValue(field, value) {
+        if (field.tagName === 'SELECT') {
+            const wanted = cleanText(value).toLowerCase();
+            const option = Array.prototype.find.call(field.options, function(opt) {
+                return cleanText(opt.textContent).toLowerCase() === wanted ||
+                    cleanText(opt.value).toLowerCase() === wanted;
+            });
+            if (!option) return false;
+            field.value = option.value;
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        }
+
+        const proto = field.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+        if (descriptor && descriptor.set) {
+            descriptor.set.call(field, value);
+        } else {
+            field.value = value;
+        }
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+    }
+
+    // Briefly swaps an element's text (e.g. a button label) and restores
+    // it. Re-entrant safe via a dataset guard.
+    function flashLabel(element, message, holdMs) {
+        if (!element || element.dataset.pcmDomFlashing) return;
+        element.dataset.pcmDomFlashing = '1';
+        const original = element.textContent;
+        element.textContent = message;
+        window.setTimeout(function() {
+            element.textContent = original;
+            delete element.dataset.pcmDomFlashing;
+        }, typeof holdMs === 'number' ? holdMs : 1500);
+    }
+
+    // Label-based form field lookup with a connected-node cache.
+    // Re-renders replace the nodes, so a cached field is valid exactly
+    // as long as it is still connected. Text is matched BEFORE the
+    // visibility check: visible() forces a style read and must only run
+    // on the handful of text matches.
+    function createFieldFinder(options) {
+        const config = options || {};
+        const rootSelector = config.rootSelector || '#form-fields-wrapper';
+        const fieldSelector = config.fieldSelector || 'input, textarea, select';
+        const excludeSelector = config.excludeSelector || null;
+        const cache = new Map();
+
+        function parts(labelText) {
+            const wanted = cleanText(labelText).toLowerCase();
+            const searchRoot = query(rootSelector) || document;
+            const label = queryAll('label, legend, div, span, strong, b, p, h1, h2, h3, h4, h5, h6, td, th', searchRoot)
+                .filter(function(el) {
+                    const value = cleanText(text(el)).toLowerCase();
+                    return value === wanted || value === wanted + ':';
+                })
+                .filter(function(el) {
+                    return !excludeSelector || !el.closest(excludeSelector);
+                })
+                .find(visible);
+            if (!label) return null;
+
+            const forId = label.getAttribute ? label.getAttribute('for') : '';
+            if (forId) {
+                const direct = document.getElementById(forId);
+                if (direct) return { label: label, field: direct };
+            }
+
+            // Walk up from the label and prefer the first field that
+            // FOLLOWS it in document order: in a vertical form that is
+            // the box under the label.
+            const isCandidate = function(el) {
+                return el.type !== 'hidden' && !el.disabled &&
+                    (!excludeSelector || !el.closest(excludeSelector));
+            };
+            let scope = label;
+            for (let i = 0; i < 6 && scope; i += 1) {
+                scope = scope.parentElement;
+                if (!scope || scope === document.body) break;
+                const fields = queryAll(fieldSelector, scope).filter(isCandidate);
+                if (!fields.length) continue;
+                const following = fields.find(function(el) {
+                    return label.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING;
+                });
+                return { label: label, field: following || fields[0] };
+            }
+            return null;
+        }
+
+        function field(labelText) {
+            const cached = cache.get(labelText);
+            if (cached && cached.isConnected) return cached;
+            cache.delete(labelText);
+            const found = parts(labelText);
+            if (found && found.field) {
+                cache.set(labelText, found.field);
+                return found.field;
+            }
+            return null;
+        }
+
+        return { field: field, parts: parts };
+    }
+
+    // Unsaved-change watcher engine, extracted from PCM Unsaved Form
+    // Warning so every widget zone (Forms, Attributes, ...) runs the
+    // same proven machinery with its own baseline, warning element, and
+    // save clearing. The feature script owns the CSS for fieldClass,
+    // fieldClass-wrap, and warningId; the engine only toggles classes.
+    function createUnsavedWatcher(options) {
+        const config = options || {};
+        if (typeof config.findRoot !== 'function') {
+            throw new Error('PCM_DOM.createUnsavedWatcher requires a findRoot function.');
+        }
+
+        const warningId = config.warningId || 'pcm-unsaved-warning';
+        const fieldClass = config.fieldClass || 'pcm-unsaved-field';
+        const warningText = config.warningText || 'Unsaved values exist';
+        const fieldSelector = config.fieldSelector || 'input:not([type="hidden"]), textarea, select';
+        const useWrapRing = config.useWrapRing !== false;
+        const warnOnLeave = !!config.warnOnLeave;
+        const evaluateDebounceMs = typeof config.evaluateDebounceMs === 'number' ? config.evaluateDebounceMs : 100;
+        const rebaseDebounceMs = typeof config.rebaseDebounceMs === 'number' ? config.rebaseDebounceMs : 60;
+        const userRerenderWindowMs = typeof config.userRerenderWindowMs === 'number' ? config.userRerenderWindowMs : 4000;
+
+        const findActions = config.findActions || function(root) {
+            return (root && query('.form-actions', root)) || null;
+        };
+        const getWrapper = config.getWrapper || function(fieldEl) {
+            return fieldEl.closest('label.select, label.input, label.textarea');
+        };
+        const excludeField = config.excludeField || function(fieldEl) {
+            return !!fieldEl.closest('.form-actions');
+        };
+        const saveInScope = config.saveInScope || function(btn, root) {
+            if (!root) return false;
+            if (root.contains(btn)) return true;
+            const widget = root.closest('.jarviswidget, section');
+            return !!(widget && widget.contains(btn));
+        };
+
+        let baseline = new Map();
+        let dirty = false;
+        let fieldsObserver = null;
+        let fieldsObserverRoot = null;
+        let lastFieldChangeAt = 0;
+
+        function getFields(root) {
+            return queryAll(fieldSelector, root).filter(function(el) { return !excludeField(el); });
+        }
+
+        function fieldValue(fieldEl) {
+            if (fieldEl.type === 'checkbox' || fieldEl.type === 'radio') {
+                return (fieldEl.checked ? '1:' : '0:') + String(fieldEl.value);
+            }
+            return String(fieldEl.value);
+        }
+
+        function hasMeaningfulValue(fieldEl) {
+            if (fieldEl.type === 'checkbox' || fieldEl.type === 'radio') return fieldEl.checked;
+            return cleanText(fieldEl.value) !== '';
+        }
+
+        function fieldLabel(fieldEl) {
+            const section = fieldEl.closest('section, .form-group, .col-md-5, [class*="col"]');
+            const label = section ? query('label.label, label', section) : null;
+            return cleanText(label ? label.textContent : '') || fieldEl.name || fieldEl.id || 'field';
+        }
+
+        // Keyed by visible LABEL, not DOM node, so the baseline survives
+        // re-renders that rebuild the inputs. Duplicates get a suffix.
+        function keyedFields(root) {
+            const counts = new Map();
+            return getFields(root).map(function(fieldEl) {
+                const base = cleanText(fieldLabel(fieldEl)).toLowerCase().replace(/:$/, '');
+                const occurrence = counts.get(base) || 0;
+                counts.set(base, occurrence + 1);
+                return { field: fieldEl, key: base + '#' + occurrence };
+            });
+        }
+
+        function captureBaseline() {
+            const root = config.findRoot();
+            baseline = new Map();
+            if (!root) return;
+            keyedFields(root).forEach(function(entry) {
+                baseline.set(entry.key, fieldValue(entry.field));
+            });
+        }
+
+        function ensureWarningElement() {
+            let el = query('#' + warningId);
+            if (el && el.isConnected) return el;
+
+            const root = config.findRoot();
+            const actions = findActions(root);
+            if (!actions) return null;
+
+            const saveButton = query('button[type="submit"], input[type="submit"], button, a.btn', actions);
+            el = document.createElement('span');
+            el.id = warningId;
+            el.textContent = warningText;
+            if (saveButton) {
+                actions.insertBefore(el, saveButton);
+            } else {
+                actions.appendChild(el);
+            }
+            return el;
+        }
+
+        function evaluate() {
+            const root = config.findRoot();
+            if (!root) return;
+
+            const changed = [];
+            keyedFields(root).forEach(function(entry) {
+                const isChanged = baseline.has(entry.key)
+                    ? baseline.get(entry.key) !== fieldValue(entry.field)
+                    : hasMeaningfulValue(entry.field);
+
+                entry.field.classList.toggle(fieldClass, isChanged);
+                const wrap = getWrapper(entry.field);
+                if (wrap) wrap.classList.toggle(fieldClass + '-wrap', isChanged && useWrapRing);
+                if (isChanged) changed.push(entry.field);
+            });
+
+            dirty = changed.length > 0;
+            const warning = ensureWarningElement();
+            if (warning) {
+                warning.classList.toggle('pcm-visible', dirty);
+                warning.title = dirty ? 'Changed: ' + changed.map(fieldLabel).join(', ') : '';
+            }
+        }
+
+        const evaluateGate = createVisibilityGate(evaluate, evaluateDebounceMs);
+
+        function rebase() {
+            captureBaseline();
+            evaluate();
+            ensureFieldsObserver();
+        }
+
+        const rebaseGate = createVisibilityGate(rebase, rebaseDebounceMs);
+
+        function mutationTouchesFields(mutations) {
+            for (const mutation of mutations) {
+                const nodes = [...mutation.addedNodes, ...mutation.removedNodes];
+                for (const node of nodes) {
+                    if (node.nodeType !== 1) continue;
+                    if (node.matches && node.matches('input, textarea, select')) return true;
+                    if (node.querySelector && node.querySelector('input, textarea, select')) return true;
+                }
+            }
+            return false;
+        }
+
+        function ensureFieldsObserver() {
+            if (fieldsObserverRoot && !fieldsObserverRoot.isConnected) fieldsObserverRoot = null;
+            const root = config.findRoot();
+            if (!root || !root.isConnected || fieldsObserverRoot === root) return;
+
+            if (!fieldsObserver) {
+                fieldsObserver = new MutationObserver(function(mutations) {
+                    if (!mutationTouchesFields(mutations)) return;
+                    // Swap caused by a recent change: keep the baseline,
+                    // re-evaluate. Swap with no recent change: app
+                    // refresh, rebase.
+                    if (Date.now() - lastFieldChangeAt < userRerenderWindowMs) {
+                        evaluateGate.schedule();
+                    } else {
+                        rebaseGate.schedule();
+                    }
+                });
+            }
+
+            fieldsObserver.disconnect();
+            fieldsObserver.observe(root, { childList: true, subtree: true });
+            fieldsObserverRoot = root;
+        }
+
+        function isSaveClick(event) {
+            if (!event.isTrusted) return false;
+            const btn = event.target && event.target.closest
+                ? event.target.closest('button, input[type="submit"], a.btn')
+                : null;
+            if (!btn) return false;
+            if (!/\bsave\b/i.test(cleanText(btn.textContent || btn.value || ''))) return false;
+            return saveInScope(btn, config.findRoot());
+        }
+
+        function installListeners() {
+            const onFieldEvent = function(event) {
+                const root = config.findRoot();
+                if (!root || !root.contains(event.target)) return;
+                lastFieldChangeAt = Date.now();
+                ensureFieldsObserver();
+                evaluateGate.schedule();
+            };
+            document.addEventListener('input', onFieldEvent, true);
+            document.addEventListener('change', onFieldEvent, true);
+
+            document.addEventListener('click', function(event) {
+                if (!isSaveClick(event)) return;
+                // Saving stores the current values: new baseline for
+                // THIS zone only.
+                rebaseGate.cancel();
+                rebase();
+            }, true);
+
+            if (warnOnLeave) {
+                window.addEventListener('beforeunload', function(event) {
+                    if (!dirty) return;
+                    event.preventDefault();
+                    event.returnValue = '';
+                });
+            }
+        }
+
+        function onRouteChange() {
+            dirty = false;
+            bootUntil(function() { return !!config.findRoot(); }, rebase, {
+                BOOT_MAX_TRIES: 40,
+                BOOT_INTERVAL_MS: 250
+            });
+        }
+
+        function start() {
+            bootUntil(function() { return !!(document.body && config.findRoot()); }, function() {
+                installListeners();
+                installNavigationHooks(onRouteChange);
+                rebase();
+            }, {
+                BOOT_MAX_TRIES: config.bootMaxTries || 60,
+                BOOT_INTERVAL_MS: config.bootIntervalMs || 250
+            });
+        }
+
+        return {
+            start: start,
+            rebase: rebase,
+            evaluate: evaluate,
+            isDirty: function() { return dirty; }
+        };
+    }
+
     global.PCM_DOM = {
         DEFAULT_CONFIG: assignDefined({}, DEFAULT_CONFIG),
         mergeConfig: mergeConfig,
@@ -750,6 +1166,14 @@
         findCommonAncestor: findCommonAncestor,
         findObserverRoot: findObserverRoot,
         bootUntil: bootUntil,
-        createFieldRuntime: createFieldRuntime
+        createFieldRuntime: createFieldRuntime,
+        escapeHtml: escapeHtml,
+        editorTextToHtml: editorTextToHtml,
+        editorIsEmpty: editorIsEmpty,
+        editorAppendHtml: editorAppendHtml,
+        setNativeFieldValue: setNativeFieldValue,
+        flashLabel: flashLabel,
+        createFieldFinder: createFieldFinder,
+        createUnsavedWatcher: createUnsavedWatcher
     };
 })(window);

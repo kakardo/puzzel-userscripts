@@ -1,12 +1,12 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 6.4_2026-08-27
+// @version = 6.5_2026-09-03
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.4_2026-08-27
+// @version      6.5_2026-09-03
 // @description  Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*

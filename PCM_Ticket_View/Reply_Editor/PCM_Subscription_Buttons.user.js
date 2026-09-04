@@ -1,13 +1,13 @@
 // @file_name = PCM_Subscription_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-09-03
+// @version = 1.3_2026-09-03
 // @created = 2026-09-02 14:17
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The partner name lives in localStorage (pcm-partner-name), never in code.
 
 // ==UserScript==
 // @name         PCM Subscription Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-09-03
+// @version      1.3_2026-09-03
 // @description  One-press handling of partner telephony subscription tickets, one button per product (PSI and PCC), each with its own colour and mail template. Both fill the five Change form fields (invoiceable hours, soundfiles, out of hours, to be invoiced, and Invoice Information = the ticket title) and append their confirmation mail to the reply, with the user's name, id, email, user group, and profile team resolved from the first mail in the ticket (iframes included). Values that only exist after configuration stay visible as placeholders. Partner details are read from localStorage, keeping this file free of customer information. Event-driven injection behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -92,8 +92,9 @@
     var PROFILE_TEAM_RE = /Divert Unanswered Calls to Queue:\s*([^\n]+)/;
 
     var D = window.PCM_DOM;
-    if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate) {
-        console.error('[PCM Subscription Buttons] PCM_DOM shared library missing or stale, aborting.');
+    if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate ||
+        !D.createFieldFinder || !D.setNativeFieldValue || !D.editorAppendHtml || !D.flashLabel) {
+        console.error('[PCM Subscription Buttons] PCM_DOM shared library missing or stale (lib 2.0 or newer required), aborting.');
         return;
     }
 
@@ -182,66 +183,16 @@
     }
 
     /******************************************************************
-     * Form filling
+     * Form filling (lib 2.0: cached label lookup, select-aware setter)
      ******************************************************************/
+    var fieldFinder = D.createFieldFinder();
+
     function findFormField(labelText) {
-        var wrapper = document.getElementById('form-fields-wrapper');
-        if (!wrapper) return null;
-
-        var wanted = D.cleanText(labelText).toLowerCase();
-        var label = D.queryAll('label, legend, div, span, strong, b, p, td, th', wrapper)
-            .filter(function (el) {
-                var value = D.cleanText(D.text(el)).toLowerCase();
-                return value === wanted || value === wanted + ':';
-            })
-            .find(D.visible);
-        if (!label) return null;
-
-        var scope = label;
-        for (var i = 0; i < 6 && scope; i += 1) {
-            scope = scope.parentElement;
-            if (!scope || scope === document.body) break;
-            // Selects included: the Unassigned fields are dropdowns.
-            // Leaving them out made the walk-up grab the NEXT text
-            // input in document order, which wrote 'yes' into the
-            // Change Completed box.
-            var fields = D.queryAll('input, textarea, select', scope).filter(function (el) {
-                return el.type !== 'hidden' && !el.disabled;
-            });
-            if (!fields.length) continue;
-            var following = fields.find(function (el) {
-                return label.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING;
-            });
-            return following || fields[0];
-        }
-        return null;
+        return fieldFinder.field(labelText);
     }
 
-    // Returns false when a select has no option matching the value, so
-    // the caller can report it instead of silently leaving the default.
     function setFieldValue(field, value) {
-        if (field.tagName === 'SELECT') {
-            var wanted = D.cleanText(value).toLowerCase();
-            var option = Array.prototype.find.call(field.options, function (o) {
-                return D.cleanText(o.textContent).toLowerCase() === wanted ||
-                    D.cleanText(o.value).toLowerCase() === wanted;
-            });
-            if (!option) return false;
-            field.value = option.value;
-            field.dispatchEvent(new Event('change', { bubbles: true }));
-            return true;
-        }
-
-        var proto = field.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        var descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
-        if (descriptor && descriptor.set) {
-            descriptor.set.call(field, value);
-        } else {
-            field.value = value;
-        }
-        field.dispatchEvent(new Event('input', { bubbles: true }));
-        field.dispatchEvent(new Event('change', { bubbles: true }));
-        return true;
+        return D.setNativeFieldValue(field, value);
     }
 
     // Returns the number of fields that could not be found.
@@ -275,55 +226,15 @@
     }
 
     /******************************************************************
-     * Mail insertion (same append path as PCM Mail Templates)
+     * Mail insertion (lib 2.0: text-to-HTML with indent preservation,
+     * Summernote append walking past injected bars)
      ******************************************************************/
-    function escapeHtml(value) {
-        return String(value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-    }
-
-    // Leading tabs and spaces become non-breaking spaces so indented
-    // checklist lines keep their indentation in the editor.
     function toHtml(text) {
-        return text.split('\n').map(function (line) {
-            if (!line) return '<p><span></span><br></p>';
-            var indented = line.replace(/^[ \t]+/, function (ws) {
-                return ws.replace(/\t/g, '    ').replace(/ /g, ' ');
-            });
-            return '<p>' + escapeHtml(indented) + '</p>';
-        }).join('');
-    }
-
-    function editorIsEmpty(container) {
-        var editable = container.querySelector('.note-editable');
-        if (!editable) return true;
-        return !D.cleanText(editable.textContent) && !editable.querySelector('img');
+        return D.editorTextToHtml(text);
     }
 
     function appendToEditor(container, html) {
-        var jq = window.jQuery;
-        var empty = editorIsEmpty(container);
-        var orig = container.previousElementSibling;
-        // The template bar sits between the original element and the
-        // editor container, so step past our own bar if needed.
-        while (orig && (orig.classList.contains('pcm-mail-templates') || orig.classList.contains(BAR_CLASS))) {
-            orig = orig.previousElementSibling;
-        }
-        if (jq && orig && jq(orig).data('summernote')) {
-            var current = empty ? '' : jq(orig).summernote('code');
-            jq(orig).summernote('code', current + html);
-            return;
-        }
-        var editable = container.querySelector('.note-editable');
-        if (!editable) return;
-        if (empty) {
-            editable.innerHTML = html;
-        } else {
-            editable.insertAdjacentHTML('beforeend', html);
-        }
-        editable.dispatchEvent(new Event('input', { bubbles: true }));
+        D.editorAppendHtml(container, html);
     }
 
     // Placeholders that SHOULD have resolved; whatever survives is
@@ -356,17 +267,10 @@
     }
 
     /******************************************************************
-     * Button
+     * Button (flashLabel lives in the shared library since lib 2.0)
      ******************************************************************/
     function flashLabel(btn, message) {
-        if (btn.dataset.pcmFlashing) return;
-        btn.dataset.pcmFlashing = '1';
-        var original = btn.textContent;
-        btn.textContent = message;
-        window.setTimeout(function () {
-            btn.textContent = original;
-            delete btn.dataset.pcmFlashing;
-        }, 1500);
+        D.flashLabel(btn, message);
     }
 
     function onPress(container, btn, entry) {
