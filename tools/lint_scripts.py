@@ -1,6 +1,6 @@
 # @file_name = lint_scripts.py
 # @author = Kardo Rostam
-# @version = 1.1_2026-08-27
+# @version = 1.2_2026-09-04
 # @created = 2026-08-27 06:20
 
 # Lints every userscript against the repo rules (LLM_prompt_instructions):
@@ -10,9 +10,10 @@
 #     both @version fields identical, @downloadURL/@updateURL matching the
 #     file's actual repo path (DOM library exempt: it has no block)
 #   - no em dashes or en dashes anywhere (also checked in .md and .yml)
-#   - with --check-bump (CI): changed scripts must have a bumped @version,
-#     and a changed DOM library must be accompanied by bumps in every
-#     script that requires it
+#   - with --check-bump (CI): changed scripts must have a bumped @version.
+#     (The library cascade check was removed in 1.2: per LLM doc 2.2,
+#     unchanged requiring scripts are refreshed manually in Tampermonkey
+#     instead of being version-bumped.)
 #
 # Usage: python3 tools/lint_scripts.py [--check-bump]
 
@@ -172,13 +173,6 @@ def check_bumps():
         new_version = meta_value(new.split("\n"), "version")
         if old_version == new_version:
             err(relpath, "changed without bumping @version (still %r)" % new_version)
-
-    if LIB_RELPATH in changed:
-        for relpath in repo_files([".user.js"]):
-            if relpath == LIB_RELPATH:
-                continue
-            if LIB_RELPATH in read(relpath) and relpath not in changed:
-                err(relpath, "requires the DOM library, which changed, but was not bumped in the same commit")
 
 
 def main():

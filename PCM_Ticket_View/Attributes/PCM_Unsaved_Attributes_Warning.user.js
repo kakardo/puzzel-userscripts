@@ -1,12 +1,12 @@
 // @file_name = PCM_Unsaved_Attributes_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-09-04
+// @version = 1.2_2026-09-04
 // @created = 2026-09-04 15:43
 
 // ==UserScript==
 // @name         PCM Unsaved Attributes Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-09-04
+// @version      1.2_2026-09-04
 // @description  Snapshot-based unsaved change detection for the ticket Attributes widget, built on the shared library's createUnsavedWatcher engine (lib 2.0). Highlights changed fields and dropdowns (including the Chosen-based Team select, where the ring lands on the visible container) and shows a warning next to the Attributes Save button. Saving in Attributes clears only this widget's warning. Colour, mode, and text are settings at the top.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -51,7 +51,10 @@
     : (fieldCss[HIGHLIGHT_MODE] || fieldCss.border);
 
   // The -wrap selectors are tagless on purpose: in this widget the ring
-  // must also land on Chosen containers (divs), not only label wrappers.
+  // must also land on Chosen and select2 containers (divs), not only
+  // label wrappers. The ring uses ::before, NOT ::after: the Styler
+  // already draws its ring with ::after on the same Status wrapper, and
+  // an element only has one of each pseudo, so ::after would collide.
   D.ensureStyleTag(STYLE_ID, `
     input.${FIELD_CLASS},
     textarea.${FIELD_CLASS},
@@ -63,7 +66,7 @@
       position: relative;
     }
 
-    .${FIELD_CLASS}-wrap::after {
+    .${FIELD_CLASS}-wrap::before {
       content: '';
       position: absolute;
       top: 0;
