@@ -27,6 +27,8 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCM_Hide_Columns`: Hide Columns button with a checkbox panel per column; localStorage persistence with a FORCE_HIDDEN override at the top. Standalone, drives the DataTables API.
   - `PCM_Compact_View`: Compact toggle left of Hide Columns; tight cell padding, table shrinks to content, Subject clamped to a configurable line count, times shortened (m/h/d). Uses the shared DOM library.
   - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). Only the Attributes script uses the shared DOM library.
+- `PCC_Admin_View/`: scripts for the Puzzel Admin console (app.puzzel.com/admin), a different app from PCM:
+  - `PCC_User_Group_Search`: search box that live-filters the User Group dropdown on the Add/Edit User pages. Standalone (server-rendered pages, no DOM watching to share).
 - `PCC_Agent_View/`: scripts for the agent application (app.puzzel.com/agent), a different app from PCM:
   - `PCC_Agent_Highlighter`: highlights agent rows by status/profile and badges names in the ARIA agents grid. SPA-safe (grid rebinding, navigation hooks). Standalone.
   - `PCC_Softphone_Status_Highlight`: colours the Softphone Online/Offline value in the header. Standalone.
