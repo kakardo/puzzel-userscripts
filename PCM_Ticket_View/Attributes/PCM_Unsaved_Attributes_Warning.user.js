@@ -1,13 +1,13 @@
 // @file_name = PCM_Unsaved_Attributes_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-09-04
+// @version = 1.3_2026-09-08
 // @created = 2026-09-04 15:43
 
 // ==UserScript==
 // @name         PCM Unsaved Attributes Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-09-04
-// @description  Snapshot-based unsaved change detection for the ticket Attributes widget, built on the shared library's createUnsavedWatcher engine (lib 2.0). Highlights changed fields and dropdowns (including the Chosen-based Team select, where the ring lands on the visible container) and shows a warning next to the Attributes Save button. Saving in Attributes clears only this widget's warning. Colour, mode, and text are settings at the top.
+// @version      1.3_2026-09-08
+// @description  Snapshot-based unsaved change detection for the ticket Attributes widget, built on the shared library's createUnsavedWatcher engine (lib 2.0). Highlights changed fields and dropdowns (including the Chosen-based Team select, where the ring lands on the visible container) and shows a warning next to the Attributes Save button. Saving in Attributes clears only this widget's warning. Colour, mode, and text are settings at the top. Since 1.3, SELF_SAVING_BUTTONS treats a real click on a header control that persists an Attributes value by itself (Assign To Me) as a save: the baseline is rebased once the new value lands, so the field is not left marked unsaved.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -28,6 +28,25 @@
   const HIGHLIGHT_BORDER_WIDTH_PX = 2;     // thickness of the unsaved border
   const WARNING_TEXT = 'Unsaved values exist';
   const WARN_ON_LEAVE = false;             // browser prompt when leaving with unsaved values
+
+  /******************************************************************
+   * SELF-SAVING BUTTONS
+   * Controls that live OUTSIDE the Attributes widget but persist an
+   * Attributes value on the server by themselves. "Assign To Me" in the
+   * ticket header is one: it writes Assigned To server-side, so the new
+   * value IS the saved state and nothing needs saving. Without this the
+   * watcher only sees the value drift from its baseline and marks the
+   * field unsaved.
+   *   text  - matched against the button's visible text
+   *   field - the field the button writes, watched to know when the
+   *           server round trip has landed
+   ******************************************************************/
+  const SELF_SAVING_BUTTONS = [
+    { text: /assign to me/i, field: '#user-select' }
+  ];
+  const SELF_SAVE_SETTLE_MS = 400;         // quiet period after the new value lands
+  const SELF_SAVE_POLL_MS = 150;           // how often to check for it
+  const SELF_SAVE_MAX_WAIT_MS = 8000;      // give up if the value never changes
 
   /******************************************************************
    * INTERNAL SETTINGS
@@ -130,5 +149,55 @@
     useWrapRing: HIGHLIGHT_MODE === 'border' || HIGHLIGHT_MODE === 'both'
   });
 
+  // A trusted click on a self-saving button is a save, not an edit. The
+  // write is a server round trip, so the baseline is rebased only once
+  // the new value has actually landed in the field: rebasing on the
+  // click itself would capture the OLD value and leave the field marked
+  // unsaved for exactly as long as before.
+  function watchSelfSavingButton(entry) {
+    const field = D.query(entry.field);
+    if (!field) return;
+
+    const before = field.value;
+    const startedAt = Date.now();
+
+    (function pollForValue() {
+      if (Date.now() - startedAt > SELF_SAVE_MAX_WAIT_MS) return;
+
+      const current = D.query(entry.field);
+      if (!current || current.value === before) {
+        window.setTimeout(pollForValue, SELF_SAVE_POLL_MS);
+        return;
+      }
+
+      window.setTimeout(function () {
+        watcher.rebase();
+      }, SELF_SAVE_SETTLE_MS);
+    })();
+  }
+
+  function installSelfSavingButtons() {
+    document.addEventListener('click', function (event) {
+      // Only real clicks: a programmatic click must never rebase, or a
+      // script could silently clear a genuine unsaved warning.
+      if (!event.isTrusted) return;
+
+      const target = event.target;
+      if (!target || !target.closest) return;
+
+      const btn = target.closest('button, input[type="submit"], a.btn, a');
+      if (!btn) return;
+
+      const label = D.cleanText(btn.textContent || btn.value || '');
+      if (!label) return;
+
+      const entry = SELF_SAVING_BUTTONS.find(function (candidate) {
+        return candidate.text.test(label);
+      });
+      if (entry) watchSelfSavingButton(entry);
+    }, true);
+  }
+
   watcher.start();
+  installSelfSavingButtons();
 })();
