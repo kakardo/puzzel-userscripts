@@ -1,12 +1,12 @@
 // @file_name = PCC_User_Group_Search.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-09-08
+// @version = 1.1_2026-09-08
 // @created = 2026-09-08 08:24
 
 // ==UserScript==
 // @name         PCC User Group Search
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-09-08
+// @version      1.1_2026-09-08
 // @description  Adds a search box above the User Group dropdown on the Puzzel Admin Add User and Edit User pages. Typing opens a panel listing EVERY matching group; click one or use arrow keys plus Enter to pick it (a change event fires so the page registers it). Escape closes and clears, no match shows a red edge, and the native dropdown itself is never modified. Standalone: the Admin console is server-rendered, so a bounded boot is all the machinery needed, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/admin/UsersUsers/NewUser*
@@ -88,6 +88,11 @@
         '#' + PANEL_ID + ' .pcc-ugs-item:hover,',
         '#' + PANEL_ID + ' .pcc-ugs-item.pcc-ugs-active {',
         '    background: #ede7fb;',
+        '}',
+        '#' + PANEL_ID + ' .pcc-ugs-mark {',
+        '    background: #ffe9a8;',
+        '    border-radius: 2px;',
+        '    font-weight: 700;',
         '}'
     ].join('\n');
 
@@ -129,6 +134,24 @@
 
         var matches = [];
         var activeIndex = -1;
+        var lastTerm = '';
+
+        // The typed term is marked inside every hit at the position it
+        // occurs. Built with text nodes and a span, never innerHTML.
+        function renderItemText(item, entryText) {
+            var lower = entryText.toLowerCase();
+            var at = lastTerm ? lower.indexOf(lastTerm) : -1;
+            if (at === -1) {
+                item.textContent = entryText;
+                return;
+            }
+            item.appendChild(document.createTextNode(entryText.slice(0, at)));
+            var mark = document.createElement('span');
+            mark.className = 'pcc-ugs-mark';
+            mark.textContent = entryText.slice(at, at + lastTerm.length);
+            item.appendChild(mark);
+            item.appendChild(document.createTextNode(entryText.slice(at + lastTerm.length)));
+        }
 
         function hidePanel() {
             panel.style.display = 'none';
@@ -150,7 +173,7 @@
             matches.forEach(function (entry, index) {
                 var item = document.createElement('div');
                 item.className = 'pcc-ugs-item' + (index === activeIndex ? ' pcc-ugs-active' : '');
-                item.textContent = entry.text;
+                renderItemText(item, entry.text);
                 // mousedown, not click: it fires before the input loses
                 // focus, so the panel is still open when the pick lands.
                 item.addEventListener('mousedown', function (event) {
@@ -164,6 +187,7 @@
 
         function applyFilter() {
             var term = input.value.trim().toLowerCase();
+            lastTerm = term;
             if (!term) {
                 input.classList.remove('pcc-ugs-nomatch');
                 matches = [];
