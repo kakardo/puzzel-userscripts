@@ -1,14 +1,14 @@
 // @file_name = PCM_Subscription_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.4_2026-09-04
+// @version = 1.5_2026-09-09
 // @created = 2026-09-02 14:17
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The partner name lives in localStorage (pcm-partner-name), never in code.
 
 // ==UserScript==
 // @name         PCM Subscription Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-09-04
-// @description  One-press handling of partner telephony subscription tickets, one button per product (PSI and PCC), each with its own colour and mail template. Both fill the five Change form fields (invoiceable hours, soundfiles, out of hours, to be invoiced, and Invoice Information = the ticket title) and append their confirmation mail to the reply, with the user's name, id, email, user group, and profile team resolved from the first mail in the ticket (iframes included). Values that only exist after configuration stay visible as placeholders. Partner details are read from localStorage, keeping this file free of customer information. Event-driven injection behind the shared visibility gate, no polling.
+// @version      1.5_2026-09-09
+// @description  One-press handling of partner telephony subscription tickets, one button per product (PSI and PCC), each with its own colour and mail template. Both fill the five Change form fields (invoiceable hours, soundfiles, out of hours, to be invoiced, and Invoice Information = the ticket title) and append their confirmation mail to the reply, with the user's name, id, email, user group, and profile team resolved from the first mail in the ticket (iframes included). Values that only exist after configuration stay visible as placeholders. Since 1.5 a label present but blank in the mail is reported as empty, by name, on the button and in the console, instead of silently taking the following line as its value. Partner details are read from localStorage, keeping this file free of customer information. Event-driven injection behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -88,8 +88,31 @@
     // Parameters block. 'Opened by:' and the Work notes lines do not
     // match this shape.
     var USER_LINE_RE = /User:\s*([A-Za-zÀ-ɏ' .-]+?)\s*\(([A-Z0-9]{2,}),\s*([^)\s]+)\s*\)/;
-    var USER_GROUP_RE = /Puzzel User Group:\s*([^\n]+)/;
-    var PROFILE_TEAM_RE = /Divert Unanswered Calls to Queue:\s*([^\n]+)/;
+    // The value MUST come from the same line as its label. [^\S\r\n] is
+    // "whitespace except line breaks", so a label with nothing after it
+    // captures an empty string and is reported as empty.
+    //
+    // The earlier /LABEL:\s*([^\n]+)/ shape was the bug: \s matches
+    // newlines, so a label left blank made the pattern skip the break
+    // and return the NEXT line as the value. The placeholder was then
+    // filled with an unrelated field, silently and wrongly, instead of
+    // staying visible for the agent. Never use \s directly after a
+    // label here.
+    //
+    // Add a field by adding a row: key is the ticketData property the
+    // template placeholder reads, label is what the console reports.
+    var MAIL_FIELDS = [
+        {
+            key: 'group',
+            label: 'Puzzel User Group',
+            re: /Puzzel User Group:[^\S\r\n]*([^\r\n]*)/
+        },
+        {
+            key: 'team',
+            label: 'Divert Unanswered Calls to Queue',
+            re: /Divert Unanswered Calls to Queue:[^\S\r\n]*([^\r\n]*)/
+        }
+    ];
 
     var D = window.PCM_DOM;
     if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate ||
@@ -169,15 +192,37 @@
             if (!text) continue;
             var m = text.match(USER_LINE_RE);
             if (!m) continue;
-            var group = text.match(USER_GROUP_RE);
-            var team = text.match(PROFILE_TEAM_RE);
-            return {
+
+            // A field is either resolved, present but EMPTY, or ABSENT.
+            // The last two both leave the placeholder in the reply, but
+            // they mean different things to whoever reads the ticket, so
+            // they are reported separately rather than merged into one
+            // "could not resolve" count.
+            var data = {
                 name: D.cleanText(m[1]),
                 id: m[2],
                 email: D.cleanText(m[3]),
-                group: group ? D.cleanText(group[1]) : null,
-                team: team ? D.cleanText(team[1]) : null
+                empty: [],
+                absent: []
             };
+
+            MAIL_FIELDS.forEach(function (field) {
+                var hit = text.match(field.re);
+                if (!hit) {
+                    data[field.key] = null;
+                    data.absent.push(field.label);
+                    return;
+                }
+                var value = D.cleanText(hit[1]);
+                if (!value) {
+                    data[field.key] = null;
+                    data.empty.push(field.label);
+                    return;
+                }
+                data[field.key] = value;
+            });
+
+            return data;
         }
         return null;
     }
@@ -250,6 +295,7 @@
         });
 
         var data = ticketData();
+        var empty = [];
         if (data) {
             text = text
                 .replace(/xxNAMExx|xxFIRSTxLASTxx/g, data.name)
@@ -257,13 +303,23 @@
                 .replace(/xxEMAILxx/g, data.email);
             if (data.group) text = text.replace(/xxUSER_GROUPxx/g, data.group);
             if (data.team) text = text.replace(/xxPROFILE_TEAMxx/g, data.team);
+
+            empty = data.empty;
+            data.empty.forEach(function (label) {
+                console.warn('[PCM Subscription Buttons] %o is in the mail but has NO value. Its placeholder is left in the reply, fill it in by hand.', label);
+            });
+            data.absent.forEach(function (label) {
+                console.warn('[PCM Subscription Buttons] %o line is not in the mail at all. Its placeholder is left in the reply.', label);
+            });
+        } else {
+            console.warn('[PCM Subscription Buttons] no Parameters block found in any mail iframe, every placeholder is left in the reply.');
         }
 
         var unresolved = (text.match(RESOLVABLE_RE) || []).length;
         if (unresolved) {
             console.warn('[PCM Subscription Buttons] %d mail placeholder(s) could not be resolved from the ticket.', unresolved);
         }
-        return { html: toHtml(text), unresolved: unresolved };
+        return { html: toHtml(text), unresolved: unresolved, empty: empty };
     }
 
     /******************************************************************
@@ -283,8 +339,15 @@
         var mail = buildMail(entry.template);
         appendToEditor(container, mail.html);
 
-        if (missing || mail.unresolved) {
-            flashLabel(btn, 'Check ' + (missing ? missing + ' field(s)' : mail.unresolved + ' mail var(s)'));
+        // An EMPTY expected field is called out by name on the button:
+        // it is the case an agent is most likely to miss, because the
+        // ticket looks complete until you notice the blank label.
+        if (missing) {
+            flashLabel(btn, 'Check ' + missing + ' field(s)');
+        } else if (mail.empty.length) {
+            flashLabel(btn, 'Empty in ticket: ' + mail.empty.join(', '));
+        } else if (mail.unresolved) {
+            flashLabel(btn, 'Check ' + mail.unresolved + ' mail var(s)');
         } else {
             flashLabel(btn, 'Done');
         }
