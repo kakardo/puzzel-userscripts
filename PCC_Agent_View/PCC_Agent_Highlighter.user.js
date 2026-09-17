@@ -1,12 +1,12 @@
 // @file_name = PCC_Agent_Highlighter.user.js
 // @author = Kardo Rostam
-// @version = 4.5_2026-08-27
+// @version = 4.6_2026-09-17
 // @created = 2026-02-10 (v2.9)
 
 // ==UserScript==
 // @name         Puzzel Agent Highlighter
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.5_2026-08-27
+// @version      4.6_2026-09-17
 // @description  Highlights Puzzel Agent rows and badges names. Battery friendly: pauses all processing while the tab is hidden and resyncs once on return.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
@@ -107,10 +107,10 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   // NAME BADGES (Your setup)
   // ============================================================================
   const NAME_BADGE_TREE = [
-    { names: ["Kardo Rostam"],		emoji: 128023 }, // (U+1F417) Boar
-    { names: ["Hannes Hartman"],	emoji: 129442 }, // (U+1F40B) Whale
-    { names: ["Willy Vesanto"],		emoji: 128039 }, // (U+1F427) Penguin
-    { names: ["Simon Batten"],		emoji: 128030 }, // (U+1F41E) Lady Bug
+    { names: ["Kardo Rostam"],		emoji: 128023 }, // (U+1F417) BOAR
+    { names: ["Hannes Hartman"],	emoji: 129442 }, // (U+1F40B) WHALE
+    { names: ["Willy Vesanto"],		emoji: 128039 }, // (U+1F427) PENGUIN
+    { names: ["Simon Batten"],		emoji: 129408 }, // (U+1F980) CRAB
     { names: ["Kim Federspiel"],	emoji: 129409 }, // (U+1F981) LION FACE
   ];
 
