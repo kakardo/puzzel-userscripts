@@ -1,12 +1,12 @@
 // @file_name = PCC_Agent_Highlighter.user.js
 // @author = Kardo Rostam
-// @version = 4.6_2026-09-17
+// @version = 4.7_2026-09-21
 // @created = 2026-02-10 (v2.9)
 
 // ==UserScript==
 // @name         Puzzel Agent Highlighter
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.6_2026-09-17
+// @version      4.7_2026-09-21
 // @description  Highlights Puzzel Agent rows and badges names. Battery friendly: pauses all processing while the tab is hidden and resyncs once on return.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
