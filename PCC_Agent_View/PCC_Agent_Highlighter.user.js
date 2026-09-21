@@ -15,52 +15,6 @@
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Agent_Highlighter.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Agent_Highlighter.user.js
 // ==/UserScript==
-/*
-v4.2 (2026-08-27)
-------------------
-Energy efficiency pass (battery laptops; tab is often hidden or the window covered):
-- All mutation processing is skipped while the tab is hidden; one full resync runs on return
-  (visibilitychange/focus hooks already existed and now carry the whole catch-up).
-- The 5s fallback tick exits immediately when hidden.
-- Removed the 200ms waitForAgentsGrid polling loop; boot scan + shell observer handle discovery.
-- Routine shell mutations no longer trigger a full findAgentsGrid scan while the current grid
-  is alive; nav/focus/visibility events still do, and a replaced grid is caught via isConnected.
-- Status matching is now EXACT (a hypothetical "Not ready" no longer matches the "Ready" rule).
-  Profile matching stays substring-based.
-- findNameWrapper caches descendant counts instead of recomputing them in the sort comparator.
-- Dropped the stale v4.0 from @name and the console log line.
-
-v4.0 (2026-05-27)
-------------------
-Bugfix: Puzzel changed/removed the old .aa-grid-cell-wrapper element.
-- Agent grid detection no longer depends on .aa-grid-cell-wrapper.
-- Name badges are appended to an inner/inline name container instead of the full rowheader cell.
-- Fallback creates a small inline name wrapper if Puzzel renders the name directly in the rowheader.
-- Removes stray old badge elements in the name cell before writing the current badge.
-
-v3.8 (2026-02-26)
-----------------
-Bugfix: internal tab switching (e.g., Queue overview <-> My Log / Settings) could replace/unmount the Agents grid.
-In v3.7 the MutationObserver was attached only to the first detected grid; when the grid got replaced, updates stopped and stale highlights could remain.
-
-What changed:
-1) Grid rebind (SPA-safe)
-   - Detects when the active Agents grid is replaced (isConnected=false or different node).
-   - Disconnects the old observer and re-attaches to the new grid automatically.
-2) App-shell observer
-   - Lightweight observer on document.body watches for grid mount/unmount and triggers rebind.
-3) Navigation hooks
-   - Hooks history.pushState/replaceState + listens to popstate/hashchange to force a rescan.
-
-Keeps:
-- Debounced processing, dirty-row tracking, throttled periodic full sync.
-- Page-visible-only full sync.
-- Name badges (ignores self-badge mutations).
-
-Badges:
-- Uses your NAME_BADGE_TREE:
-  Kardo=128023, Hannes=129442, Willy=128039, Simon=128030.
-*/
 
 // ============================================================================
 // CONFIGURABLE PERFORMANCE SETTINGS
@@ -112,6 +66,7 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     { names: ["Willy Vesanto"],		emoji: 128039 }, // (U+1F427) PENGUIN
     { names: ["Simon Batten"],		emoji: 129408 }, // (U+1F980) CRAB
     { names: ["Kim Federspiel"],	emoji: 129409 }, // (U+1F981) LION FACE
+    { names: ["Nikolay Kazandzhiev"],	emoji: 129680 }, // (U+1FA90) RINGED PLANET
   ];
 
   // Column indexes for the Agents grid
