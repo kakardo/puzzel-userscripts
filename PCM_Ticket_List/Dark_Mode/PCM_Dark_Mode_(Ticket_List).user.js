@@ -1,13 +1,13 @@
 // @file_name = PCM_Dark_Mode_(Ticket_List).user.js
 // @author = Kardo Rostam
-// @version = 5.8_2026-08-27
+// @version = 6.4_2026-10-01
 // @created = 2026-03-26 (v5.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket List)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      5.8_2026-08-27
-// @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the observer rescopes from body to the table wrapper once DataTables renders.
+// @version      6.4_2026-10-01
+// @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the observer rescopes from body to the table wrapper once DataTables renders. The on/off toggle sits in the top bar left of the profile picture (BUTTON_PLACEMENT), falling back to the bottom-right corner when the top bar is not found.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -33,12 +33,38 @@
   const ICON_LIGHT = "\u{1F31E}";
   const ICON_DARK  = "\u{1F31A}";
 
+  // Where the toggle sits.
+  //   'header' - in the top bar, left of the profile picture (default)
+  //   'corner' - floating in the bottom-right corner
+  // If the top bar cannot be found the corner is used, so the toggle is
+  // never lost.
+  const BUTTON_PLACEMENT = 'header';
+
   /******************************************************************
    * INTERNAL SETTINGS
    ******************************************************************/
   const STORAGE_KEY  = 'pzTicketsDarkModeOn';
   const SCOPE_CLASS  = 'pz-dark-scope-root';
   const BTN_ID       = 'pz-darkmode-toggle';
+  const DOCKED_CLASS = 'pz-darkmode-docked';
+  // The profile picture's own top bar item. The toggle goes right in
+  // front of it, after the bell, as one more floated .navbar-item.
+  const HEADER_ANCHOR_SELECTOR = '#one-agent-menu-lg .navbar-avatar > .dropdown.navbar-item, .navbar-avatar > .dropdown.navbar-item';
+  const HEADER_ICON_SELECTOR   = '#logo-group svg, #logo-group i';
+  const HEADER_ICON_FALLBACK_COLOR = '#c4bab6';
+  // Space between the toggle and the bell, and between the toggle and
+  // the profile picture.
+  const TOP_BAR_GAP = 12;
+  // Empty edge inside the toggle's 24px box around the 22px icon.
+  const TOGGLE_INSET = 2;
+
+  // Line icons for the top bar, drawn in the bell's colour so the toggle
+  // blends in. The corner button keeps the emoji above.
+  const SVG_OPEN = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+  const SVG_MOON = SVG_OPEN + '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  const SVG_SUN  = SVG_OPEN + '<circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2.5M12 20v2.5M4.6 4.6l1.8 1.8' +
+    'M17.6 17.6l1.8 1.8M1.5 12H4M20 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></svg>';
   const WIDGET_ID    = 'wid-tickets-index';
   const PAGE_BG_ATTR = 'data-pz-tickets-pagebg';
 
@@ -118,13 +144,120 @@
     if (!btn) return;
 
     const on = isOn();
-    btn.textContent = on ? ICON_DARK : ICON_LIGHT;
+    const docked = btn.classList.contains(DOCKED_CLASS);
+    // Rewritten only when something changed: an unconditional write is a
+    // DOM mutation on every apply, which the body observer would hear.
+    const state = (docked ? 'svg-' : 'emoji-') + (on ? 'on' : 'off');
+    if (btn.dataset.pzIcon !== state) {
+      btn.dataset.pzIcon = state;
+      if (docked) btn.innerHTML = on ? SVG_MOON : SVG_SUN;
+      else btn.textContent = on ? ICON_DARK : ICON_LIGHT;
+    }
     btn.setAttribute('aria-label', on ? 'Dark mode on. Click to turn off.' : 'Dark mode off. Click to turn on.');
     btn.title = on ? 'Dark mode is ON (click to turn off)' : 'Dark mode is OFF (click to turn on)';
   }
 
+  // PCM positions the bell and the picture with rules of their own
+  // (the bell icon is wider than its box and spills to the right), so
+  // the toggle is placed by measuring the drawn bell (drawnRect) instead
+  // of trusting .navbar-item spacing:
+  //   - vertical: its centre on the bell icon's centre
+  //   - horizontal: TOP_BAR_GAP px after the bell icon, and the same gap
+  //     before the picture (margin-right pulls or pushes the picture)
+  // Every write is guarded by a 1px tolerance, so repeated applies are
+  // free once it is in place.
+  function setPx(btn, prop, value) {
+    const next = Math.round(value) + 'px';
+    if (btn.style[prop] !== next) btn.style[prop] = next;
+  }
+
+  // The drawn part of an icon, not its box. An svg's box includes empty
+  // padding that differs per icon (the bell has more than the sun), so
+  // gaps measured box to box look uneven. The shapes inside report their
+  // tight outline, and their union is what the eye sees.
+  function drawnRect(el) {
+    const svg = el && (el.tagName.toLowerCase() === 'svg' ? el : el.querySelector('svg'));
+    if (svg) {
+      let box = null;
+      svg.querySelectorAll('path, circle, rect, line, polyline, polygon, ellipse').forEach((shape) => {
+        const r = shape.getBoundingClientRect();
+        if (!r.width && !r.height) return;
+        box = box
+          ? { left: Math.min(box.left, r.left), top: Math.min(box.top, r.top),
+              right: Math.max(box.right, r.right), bottom: Math.max(box.bottom, r.bottom) }
+          : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      });
+      if (box) return { left: box.left, top: box.top, right: box.right, height: box.bottom - box.top };
+    }
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, height: r.height };
+  }
+
+  function alignInBar(btn, icon, picture) {
+    if (!icon || !icon.getClientRects().length) return;
+    const bell = drawnRect(icon);
+
+    // The toggle itself is measured by its fixed 24px box, NOT by the
+    // drawn icon: sun and moon have different shapes, and spacing them by
+    // their drawing changed the row width on every click, which shifted
+    // all the buttons to the left of it. TOGGLE_INSET is the empty edge
+    // inside the box, so the visible gap still comes out at TOP_BAR_GAP.
+    const box = () => {
+      const r = btn.getBoundingClientRect();
+      return { left: r.left + TOGGLE_INSET, top: r.top, right: r.right - TOGGLE_INSET, height: r.height };
+    };
+    let own = box();
+    const top = parseFloat(btn.style.marginTop) || 0;
+    const dy = (bell.top + bell.height / 2) - (own.top + own.height / 2);
+    if (Math.abs(dy) > 1) setPx(btn, 'marginTop', top + dy);
+
+    const left = parseFloat(btn.style.marginLeft) || 0;
+    const dx = (bell.right + TOP_BAR_GAP) - own.left;
+    if (Math.abs(dx) > 1) setPx(btn, 'marginLeft', left + dx);
+
+    if (!picture || !picture.getClientRects().length) return;
+    own = box();
+    const right = parseFloat(btn.style.marginRight) || 0;
+    const gap = picture.getBoundingClientRect().left - own.right;
+    if (Math.abs(gap - TOP_BAR_GAP) > 1) setPx(btn, 'marginRight', right + (TOP_BAR_GAP - gap));
+  }
+
+  // Moves the toggle in front of the profile picture when wanted and
+  // possible, otherwise back to the floating corner spot. Only touches
+  // the DOM when the toggle is not already where it belongs.
+  function placeButton(btn) {
+    // The first visible match: the top bar has a large-screen copy that
+    // is hidden on narrow windows, where the corner spot is used instead.
+    const anchor = BUTTON_PLACEMENT === 'header'
+      ? Array.from(document.querySelectorAll(HEADER_ANCHOR_SELECTOR)).find((el) => el.getClientRects().length)
+      : null;
+    if (anchor && anchor.parentElement) {
+      if (btn.nextElementSibling !== anchor) anchor.parentElement.insertBefore(btn, anchor);
+      // navbar-item gives it the same float and spacing as the bell and
+      // the picture; the colour is read from the bell itself.
+      btn.classList.add(DOCKED_CLASS, 'navbar-item');
+      const icon = document.querySelector(HEADER_ICON_SELECTOR);
+      const color = icon ? getComputedStyle(icon).color : HEADER_ICON_FALLBACK_COLOR;
+      if (btn.style.color !== color) btn.style.color = color;
+      updateButtonLabel();
+      alignInBar(btn, icon, anchor.querySelector('.avatar-thumb') || anchor);
+      return;
+    }
+    btn.classList.remove(DOCKED_CLASS, 'navbar-item');
+    btn.style.color = '';
+    btn.style.marginTop = '';
+    btn.style.marginLeft = '';
+    btn.style.marginRight = '';
+    if (btn.parentElement !== document.body) document.body.appendChild(btn);
+    updateButtonLabel();
+  }
+
   function ensureButton() {
-    if (document.getElementById(BTN_ID)) return;
+    const existing = document.getElementById(BTN_ID);
+    if (existing) {
+      placeButton(existing);
+      return;
+    }
 
     const btn = document.createElement('button');
     btn.id = BTN_ID;
@@ -135,7 +268,7 @@
       apply();
     });
 
-    document.body.appendChild(btn);
+    placeButton(btn);
     updateButtonLabel();
   }
 
@@ -147,6 +280,8 @@
   function apply() {
     const on = isOn();
     applyPageCanvas(on);
+    // Cheap when already placed; covers a top bar that renders late.
+    ensureButton();
     updateButtonLabel();
 
     const root = findRoot();
@@ -597,6 +732,24 @@
       box-shadow:0 8px 22px rgba(0,0,0,.20);
       opacity:.94;
     }
+
+    /* In the top bar: part of the row, no floating shadow. */
+    /* In the top bar: a plain floated icon like the bell, no button
+       chrome. Hover brightens it the way the other icons react. */
+    #${BTN_ID}.${DOCKED_CLASS}{
+      position:relative;
+      float:left;
+      width:24px;
+      height:24px;
+      padding:0;
+      border:0;
+      border-radius:0;
+      background:transparent;
+      box-shadow:none;
+      opacity:.9;
+    }
+    #${BTN_ID}.${DOCKED_CLASS}:hover{ opacity:1; filter:brightness(1.35); }
+    #${BTN_ID}.${DOCKED_CLASS} svg{ display:block; }
 
     #${BTN_ID}:hover{ opacity:1; }
     #${BTN_ID}:active{ transform:translateY(1px); }
