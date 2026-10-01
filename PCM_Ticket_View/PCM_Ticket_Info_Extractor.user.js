@@ -1,13 +1,13 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 6.7_2026-10-01
+// @version = 6.8_2026-10-01
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.7_2026-10-01
-// @description  Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
+// @version      6.8_2026-10-01
+// @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -30,6 +30,8 @@
        console.log(info.customerIdsText);   // all IDs joined with " / "
        console.log(info.customerName);
        console.log(info.companyName);
+       console.log(info.partner);           // Partner attribute of the chosen organisation row
+       console.log(info.partners);          // Partner values from all available rows, as array
 
     2) Wrapper dataset
        const root = document.getElementById('pcm-ticket-info');
@@ -38,11 +40,13 @@
        console.log(root?.dataset.customerIdsText);  // display text with " / "
        console.log(root?.dataset.customerName);
        console.log(root?.dataset.companyName);
+       console.log(root?.dataset.partner);
 
     3) Fixed value elements
        console.log(document.getElementById('pcm-ticket-customer-id')?.textContent?.trim() || '');
        console.log(document.getElementById('pcm-ticket-customer-name')?.textContent?.trim() || '');
        console.log(document.getElementById('pcm-ticket-company-name')?.textContent?.trim() || '');
+       console.log(document.getElementById('pcm-ticket-partner')?.textContent?.trim() || '');
 
     4) Ready event
        document.addEventListener('pcm-ticket-info-ready', function(event) {
@@ -51,6 +55,7 @@
          console.log(event.detail.customerIdsText);
          console.log(event.detail.customerName);
          console.log(event.detail.companyName);
+         console.log(event.detail.partner);
        });
   */
 
@@ -60,6 +65,7 @@
   const CUSTOMER_ID_ID = 'pcm-ticket-customer-id';
   const CUSTOMER_NAME_ID = 'pcm-ticket-customer-name';
   const COMPANY_NAME_ID = 'pcm-ticket-company-name';
+  const PARTNER_ID = 'pcm-ticket-partner';
   const BLOCKED_NAME_VALUES = new Set(['customer intelligence', 'customer tickets', 'customer attributes', 'organisations', 'remove']);
   const REQUIRE_ERROR = 'PCM Ticket Info Extractor: PCM_DOM shared helpers are missing. Load PCM_Shared_Library.user.js first.';
 
@@ -274,6 +280,18 @@
     return match && clean(match[1]) ? clean(match[1]) : value;
   }
 
+  // Partner attribute, e.g. "Country: Norway Partner: Example AccountNumber:
+  // 12345" in the Attributes column. The cell text is one line, so the
+  // value runs until the next "Key:" (one capitalised word followed by a
+  // colon, or one of the known two-word keys) or the end of the cell, so
+  // partner names of several words stay whole.
+  function rowPartner(row) {
+    if (!Array.isArray(row)) return '';
+    const source = (row[2] || '') + ' ' + (row[1] || '');
+    const match = source.match(/\bPartner\s*:\s*(.+?)(?=\s+(?:Account\s+Number|Customer\s+ID|Company\s+ID|[A-Z][A-Za-z]*)\s*:|$)/);
+    return match ? clean(match[1]) : '';
+  }
+
   function rowCustomerIds(row) {
     if (!Array.isArray(row) || row.length === 0) return [];
 
@@ -294,7 +312,9 @@
       customerName: '',
       companyName: '',
       customerIdRaw: '',
-      companyNameRaw: ''
+      companyNameRaw: '',
+      partner: '',
+      partners: []
     };
     if (!box) return info;
 
@@ -315,6 +335,8 @@
     info.customerIdsText = allIds.join(' / ');
     info.companyNameRaw = clean(chosenRow[0] || '');
     info.companyName = normalizeCompanyName(info.companyNameRaw, primaryId);
+    info.partners = unique(allRows.map(rowPartner).filter(Boolean));
+    info.partner = rowPartner(chosenRow) || info.partners[0] || '';
     return info;
   }
 
@@ -331,6 +353,8 @@
       companyName: clean(info.companyName),
       customerIdRaw: clean(info.customerIdRaw),
       companyNameRaw: clean(info.companyNameRaw),
+      partner: clean(info.partner),
+      partners: unique(info.partners || []),
       found: !!(customerIdsText || info.customerName || info.companyName)
     };
 
@@ -339,18 +363,25 @@
     return payload;
   }
 
-  function appendRow(root, labelText, valueId, valueText) {
-    const label = document.createElement('div');
-    const strong = document.createElement('strong');
-    strong.textContent = labelText;
-    label.appendChild(strong);
+  // One "Label: value" pair. The pairs sit side by side and wrap, so the
+  // panel is one line on a normal screen instead of one row per value.
+  // The value keeps its fixed id, which other scripts read. An empty item
+  // is hidden to save space, but stays in the DOM for those scripts.
+  function appendItem(root, labelText, valueId, valueText) {
+    const item = document.createElement('span');
+    item.className = 'pcm-ti-item';
+    if (!clean(valueText)) item.hidden = true;
 
-    const value = document.createElement('div');
+    const label = document.createElement('strong');
+    label.textContent = labelText;
+
+    const value = document.createElement('span');
     value.id = valueId;
     value.dataset.source = 'ci';
     value.textContent = valueText;
 
-    root.append(label, value);
+    item.append(label, ' ', value);
+    root.appendChild(item);
   }
 
   function render(info) {
@@ -368,10 +399,12 @@
     root.dataset.companyName = payload.companyName;
     root.dataset.customerIdRaw = payload.customerIdRaw;
     root.dataset.companyNameRaw = payload.companyNameRaw;
+    root.dataset.partner = payload.partner;
 
-    appendRow(root, 'CustomerID:', CUSTOMER_ID_ID, payload.customerIdsText || payload.customerId);
-    appendRow(root, 'Customer Name:', CUSTOMER_NAME_ID, payload.customerName);
-    appendRow(root, 'Company Name:', COMPANY_NAME_ID, payload.companyName);
+    appendItem(root, 'CustomerID:', CUSTOMER_ID_ID, payload.customerIdsText || payload.customerId);
+    appendItem(root, 'Customer Name:', CUSTOMER_NAME_ID, payload.customerName);
+    appendItem(root, 'Company Name:', COMPANY_NAME_ID, payload.companyName);
+    appendItem(root, 'Partner:', PARTNER_ID, payload.partners.join(' / ') || payload.partner);
     panel.appendChild(root);
     return panel;
   }
@@ -391,10 +424,11 @@
   }
 
   window.PCM_DOM.ensureStyleTag(STYLE_ID, [
-    '#' + PANEL_ID + '{margin:6px 0 10px;border:1px solid #cfd6e4;border-radius:6px;background:#fff;padding:10px 12px;font:13px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;}',
-    '#' + ROOT_ID + '{display:grid;grid-template-columns:max-content 1fr;column-gap:12px;row-gap:6px;align-items:start;}',
-    '#' + ROOT_ID + ' > div{min-width:0;}',
-    '#' + CUSTOMER_ID_ID + ',#' + CUSTOMER_NAME_ID + ',#' + COMPANY_NAME_ID + '{word-break:break-word;}'
+    '#' + PANEL_ID + '{margin:4px 0 8px;border:1px solid #cfd6e4;border-radius:6px;background:#fff;padding:5px 10px;font:13px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;}',
+    '#' + ROOT_ID + '{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:22px;row-gap:2px;}',
+    '#' + ROOT_ID + ' .pcm-ti-item{min-width:0;}',
+    '#' + ROOT_ID + ' .pcm-ti-item[hidden]{display:none;}',
+    '#' + CUSTOMER_ID_ID + ',#' + CUSTOMER_NAME_ID + ',#' + COMPANY_NAME_ID + ',#' + PARTNER_ID + '{word-break:break-word;}'
   ].join(''));
 
   const config = window.PCM_DOM.mergeConfig ? window.PCM_DOM.mergeConfig({ BOOT_MAX_TRIES: 15, BOOT_INTERVAL_MS: 400 }) : { BOOT_MAX_TRIES: 15, BOOT_INTERVAL_MS: 400 };
