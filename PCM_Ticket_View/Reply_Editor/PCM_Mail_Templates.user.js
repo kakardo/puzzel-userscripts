@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 1.6_2026-09-04
+// @version = 1.7_2026-10-01
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.6_2026-09-04
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in the TEMPLATES array at the top and support {name} (customer name from the ticket, via the PCM Ticket Info Extractor outputs when present) and {ticket} (ticket number) placeholders; unresolved placeholders stay visible so they are easy to spot. PCM_TEMPLATE_BUTTONS adds one-press shortcuts to PCM's own Insert Template entries: fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      1.7_2026-10-01
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in the TEMPLATES array at the top and support {name} (customer name from the ticket, via the PCM Ticket Info Extractor outputs when present) and {ticket} (ticket number) placeholders; unresolved placeholders stay visible so they are easy to spot. PCM_TEMPLATE_BUTTONS adds one-press shortcuts to PCM's own Insert Template entries: fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -54,7 +54,25 @@
         },
         {
             label: 'IF',
-            text: 'Hello,\n\nThank you for contacting Puzzel Customer Care.\n\nI have reviewed your ticket and identified that this incident will require further investigation by our second line engineers.\n\nWe will contact you as soon as we have an update.'
+            text: 'Hello,\n\nThank you for contacting Puzzel Customer Care.\n\n' +
+            'I have reviewed your ticket and identified that this incident will require further investigation by our ' +
+            'second line engineers.\n\nWe will contact you as soon as we have an update.'
+        },
+        {
+            label: 'CallEx',
+            text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n' +
+            'To help you with the below, we need a call example: the caller\'s number plus the date and time of ' +
+            'the call.\nIf you can find the call in the archive in Puzzel Admin, that\'s even better – expand the call ' +
+            'details and send us the "Call ID" and "Session ID". That lets us look up the right log files quickly.\n\n' +
+            'See how to here:\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=498'
+        },
+        {
+            label: 'Logs',
+            text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n' +
+            'To help us investigate this issue, please provide browser console logs from a browser where the issue occurs.\n' +
+            'These logs can provide valuable information for our investigation.\n\n' +
+            'Instructions for capturing console logs:\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253903\n\n' +
+            'Once we have the console logs, we will continue our investigation.\n\nHave a great day!'
         },
         {
             label: 'Sub(PSI)',
@@ -71,8 +89,10 @@
      * server-side and the template text stays maintained in PCM.
      ******************************************************************/
     var PCM_TEMPLATE_BUTTONS = [
-        { label: 'Assign (Triage ENG)', templateId: 37718 },
-        { label: 'Partner (ENG)', templateId: 8584 }
+        { label: 'Assign', templateId: 37718 },
+        { label: 'PartnerSWE', templateId: 8584 },
+        { label: 'NoReplyENG', templateId: 8495 },
+        { label: 'NoReplySWE', templateId: 8448 }
     ];
 
     // {name}: use only the first word of the ticket's customer name
@@ -307,6 +327,7 @@
     function buildBar(container) {
         var bar = document.createElement('div');
         bar.className = BAR_CLASS;
+        blockTranslation(bar);
         TEMPLATES.forEach(function (entry) {
             if (Array.isArray(entry.items) && entry.items.length) {
                 bar.appendChild(makeDropdown(entry, container));
@@ -320,12 +341,25 @@
         container.parentNode.insertBefore(bar, container);
     }
 
+    // Page translation (Chrome/Edge) rewrites text nodes as they change.
+    // Inside the editor that means every keystroke is re-translated and
+    // the caret is thrown back to the start of the line, and inserted
+    // templates show up in the wrong language. translate="no" plus the
+    // notranslate class keep the editor and the bar out of it, so the
+    // rest of the ticket can still be translated.
+    function blockTranslation(el) {
+        if (!el || el.getAttribute('translate') === 'no') return;
+        el.setAttribute('translate', 'no');
+        el.classList.add('notranslate');
+    }
+
     // Idempotent: flags each editor container so re-renders that keep
     // the node are free, and containers replaced by PCM get a new bar.
     function scan() {
         var editors = document.querySelectorAll('.note-editor');
         for (var i = 0; i < editors.length; i++) {
             var container = editors[i];
+            blockTranslation(container);
             if (container.dataset[DONE_FLAG]) continue;
             container.dataset[DONE_FLAG] = '1';
             buildBar(container);
