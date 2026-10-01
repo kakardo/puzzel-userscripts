@@ -62,7 +62,7 @@
             label: 'CallEx',
             text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n' +
             'To help you with the below, we need a call example: the caller\'s number plus the date and time of ' +
-            'the call.\nIf you can find the call in the archive in Puzzel Admin, that\'s even better – expand the call ' +
+            'the call.\nIf you can find the call in the archive in Puzzel Admin, that\'s even better: expand the call ' +
             'details and send us the "Call ID" and "Session ID". That lets us look up the right log files quickly.\n\n' +
             'See how to here:\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=498'
         },
