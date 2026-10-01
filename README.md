@@ -1,6 +1,6 @@
 # Puzzel Userscripts
 
-Tampermonkey scripts for the Puzzel PCM web application.
+Tampermonkey scripts for the Puzzel web applications: PCM (ticketing), the Admin console, the agent application and Organisation Settings.
 
 [![Download all scripts (zip)](https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20Download%20all%20scripts-Puzzel__Userscripts.zip-2ea44f?style=for-the-badge)](https://github.com/kakardo/puzzel-userscripts/releases/download/latest/Puzzel_Userscripts.zip)
 
@@ -10,23 +10,32 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
 
 - `PCM_Shared_Library/`: shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scripts that read or watch the page's DOM. Keeps DOM/runtime logic (boot/retry, style injection, observers, widget lookup) in one place so feature scripts only handle their own state and styling.
 - `PCM_Ticket_View/`: scripts for the ticket detail page (`/tickets/*`):
-  - `PCM_Ticket_Info_Extractor`: surfaces CustomerID, Customer Name, and Company Name from Customer Intelligence. Uses the shared DOM library.
+  - `PCM_Ticket_Info_Extractor`: surfaces CustomerID, Customer Name, Company Name and Partner from Customer Intelligence on one compact line, and publishes them for the other scripts (`PCM_TICKET_INFO`, data attributes, fixed elements, `pcm-ticket-info-ready`). Reads the ID from both the `CustomerID` and the newer `AccountNumber` attribute. Uses the shared DOM library.
   - `PCM_Name_Field_Placeholder`: adds a placeholder name link in Customer Intelligence when no name is set.
+  - `PCM_Image_Viewer`: upgrades the attachment preview modal with an Open in tab button, zoom controls and drag to pan for images. Standalone, purely event-driven.
+  - `PCM_No_Access_Redirection_Button`: adds a large Go to ticket list button to the "Ticket reassigned" message shown after sending a ticket to a team you cannot access, skipping the leave-page prompt; PCM's Confirm is replaced by a "stay in this ticket" link. Uses the shared DOM library.
   - `Attributes/`: scripts scoped to the Attributes widget (Organisation, Team, Assigned To, Status, Priority, Tags):
     - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
-    - `PCM_Team_Quick_Select`: one-click buttons under the Team dropdown that select configured teams in the Chosen widget. Teams are a config array at the top. Uses the shared DOM library.
+    - `PCM_Team_Quick_Select`: one-click buttons under the Team dropdown that select configured teams in the Chosen widget, each team in its own colour. Teams are a config array at the top. Uses the shared DOM library.
+    - `PCM_Organisation_Quick_Search`: one-click search buttons under the Organisation dropdown for the Customer ID found on the ticket, the Customer ID entered in Forms (when it differs), and fixed search strings; a single matching organisation is picked automatically. Uses the shared DOM library.
+    - `PCM_Partner_Highlight`: shows the ticket's partner in large purple letters beside the Attributes heading, read from the Ticket Info Extractor; nothing is shown without a partner. Uses the shared DOM library.
+    - `PCM_Unsaved_Attributes_Warning`: snapshot-based unsaved change detection for the Attributes widget; highlights changed fields and dropdowns and shows a warning next to Save. Uses the shared DOM library.
   - `Forms/`: scripts scoped to the Forms widget:
     - `PCM_Form_Buttons`: copy buttons for CustomerId/Name above `Form:`, reading the Extractor's published outputs, plus autofill of empty Customer ID / Customer Ref fields. Uses the shared DOM library. Renamed from `PCM_Organisation_Copy_Buttons` in 3.6, when the Attributes > Organisation button was dropped.
     - `PCM_Unsaved_Form_Warning`: snapshot-based unsaved change detection for the Forms widget; highlights changed fields and shows a warning next to Save. Colour, mode, and text are settings at the top. Uses the shared DOM library.
+    - `PCM_Incident_Button`: one button that sets the Forms widget to the platform-incident preset (Form, Puzzel Service, Product Area, cause, Impact, Urgency), waiting for each re-render. Uses the shared DOM library.
+    - `PCM_Change_Completed_Now`: a Now button beside Change Completed that fills in the current date and time with the timezone visible. Uses the shared DOM library.
   - `Reply_Editor/`: scripts scoped to the Summernote reply editor:
-    - `PCM_Mail_Templates`: template buttons and dropdowns above the reply editor, with `{name}`/`{ticket}` placeholders and one-press shortcuts to PCM's own Insert Template entries. Uses the shared DOM library.
+    - `PCM_Mail_Templates`: template buttons and dropdowns above the reply editor, with `{name}`/`{ticket}` placeholders and one-press shortcuts to PCM's own Insert Template entries. The editor is kept out of browser page translation, so typing is never rewritten and the cursor stays put. Uses the shared DOM library.
+    - `PCM_Subscription_Buttons`: one-press handling of partner telephony subscription tickets (one button per product): fills the Change form fields and appends the confirmation mail, with user details read from the first mail in the ticket. Uses the shared DOM library.
     - `PCM_Template_ID_Viewer`: shows and copies the numeric template id of the selected entry in PCM's Insert Template modal. Standalone, purely event-driven.
 - `PCM_Ticket_List/`: scripts for the ticket list page (`/tickets`) and dashboard (`/`):
   - `PCM_Auto_Refresh`: auto-reloads the page on an interval with a countdown ring UI. Standalone.
   - `PCM_New_Ticket_Notifier`: alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
   - `PCM_Hide_Columns`: Hide Columns button with a checkbox panel per column; localStorage persistence with a FORCE_HIDDEN override at the top. Standalone, drives the DataTables API.
-  - `PCM_Compact_View`: Compact toggle left of Hide Columns; tight cell padding, table shrinks to content, Subject clamped to a configurable line count, times shortened (m/h/d). Uses the shared DOM library.
-  - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). Only the Attributes script uses the shared DOM library.
+  - `PCM_Compact_View`: Compact toggle left of Hide Columns; tight cell padding, table shrinks to content, Subject clamped to a configurable line count, times shortened (s/m/h/d/w/mo/y, "less than a minute" to <1m). Uses the shared DOM library.
+  - `PCM_Last_Activity_Sort`: makes the Last Activity column sortable (server-side, so the whole list is sorted) and keeps that sort across reloads. Standalone, drives the DataTables API.
+  - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). The Ticket List script puts its on/off toggle in the top bar between the bell and the profile picture and colours every SLA step, with overdue rows in red text. Only the Attributes script uses the shared DOM library.
 - `PCC_Admin_View/`: scripts for the Puzzel Admin console (app.puzzel.com/admin), a different app from PCM:
   - `PCC_User_Group_Search`: search box that live-filters the User Group dropdown on the Add/Edit User pages. Standalone (server-rendered pages, no DOM watching to share).
 - `Organisation_Settings/`: scripts for Puzzel Organisation Settings (app.puzzel.com/settings), a different app from PCM:
@@ -63,6 +72,19 @@ Current status:
 | PCM_Auto_Refresh | No | Timer core, reloads the page every interval; must stay dependency-free |
 | PCM_Hide_Columns | No | Drives the DataTables API, event-driven via init.dt; no DOM watching to share |
 | PCM_Compact_View | Yes | `bootUntil`, `ensureStyleTag`, `createVisibilityGate`; rewrites cells per draw so the visibility gate matters |
+| PCM_Last_Activity_Sort | No | Drives the DataTables API, event-driven via init.dt and order.dt; no DOM watching to share |
+| PCM_Unsaved_Attributes_Warning | Yes | Built on `createUnsavedWatcher` |
+| PCM_Organisation_Quick_Search | Yes | `createFieldFinder`, `createVisibilityGate`, `flashLabel`; drives the select2 Organisation widget |
+| PCM_Partner_Highlight | Yes | `createVisibilityGate`, `installNavigationHooks`; reads the Extractor's outputs |
+| PCM_Incident_Button | Yes | Field lookup and value setting over the re-rendering Forms widget |
+| PCM_Change_Completed_Now | Yes | Widget-scoped observer behind `createVisibilityGate` |
+| PCM_Mail_Templates | Yes | Summernote editor helpers, `createVisibilityGate`, `flashLabel` |
+| PCM_Subscription_Buttons | Yes | Field finder, native value setter and editor helpers |
+| PCM_Template_ID_Viewer | No | Purely event-driven inside one modal |
+| PCM_Image_Viewer | No | Purely event-driven via `shown.bs.modal` and the iframe load event |
+| PCM_No_Access_Redirection_Button | Yes | `bootUntil`, `ensureStyleTag`, `cleanText`; one observer on the direct children of body |
+| PCC_User_Group_Search | No | Different app (Admin console), server-rendered, bounded boot only |
+| POS_Access_Log_Filter | No | Different app (Organisation Settings), server-rendered, bounded boot plus one row observer |
 | PCC_Agent_Highlighter | No | Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines |
 | PCC_Softphone_Status_Highlight | No | Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection |
 
@@ -100,13 +122,13 @@ Scripts that use the shared library pull in `PCM_Shared_Library/PCM_Shared_Libra
 
 Since v1.8 the library also owns the small utilities the scripts used to duplicate: `cleanText`, `wait`, `escapeRegExp`, `uniqueTexts`, `uniqueElements`, `readJson`/`writeJson`, and `createVisibilityGate` (the battery pattern: skip work while the tab is hidden, one catch-up run on return). Since v1.9 it also owns `installNavigationHooks`: one shared history wrap for SPA navigation detection with per-script callbacks, replacing the per-script copies that stacked multiple wrappers on `history.pushState`. Since v2.0 it additionally owns the machinery the Forms and Reply_Editor scripts used to carry as private copies: `createFieldFinder` (label-based form field lookup with a connected-node cache), `setNativeFieldValue` (select-aware value setter firing input/change through the native setter), the Summernote editor helpers (`editorTextToHtml`, `editorIsEmpty`, `editorAppendHtml`), `flashLabel` (transient button label swap), and `createUnsavedWatcher` (the snapshot-based unsaved-change engine behind PCM_Unsaved_Form_Warning, configurable per widget zone with per-zone save clearing). New scripts should use these instead of writing their own. Scripts that depend on newer helpers must check for them in their startup guard so a stale cached library fails loudly.
 
-Important: Tampermonkey fetches `@require` content once and caches it. It only re-fetches when the parent script's own `@version` changes (or on a manual "Check for userscript updates"). So after editing the shared DOM library, bump the `@version` of every script that requires it, otherwise they keep running the cached copy.
+Important: Tampermonkey fetches `@require` content once and caches it. It only re-fetches when the parent script's own `@version` changes, when the script is re-saved in the Tampermonkey editor, or on the Externals update interval. Scripts without code changes are not version-bumped when the library changes; after a library change is pushed, refresh the requiring scripts in Tampermonkey (re-save, or Check for userscript updates). `PCM_DOM.LIB_VERSION` (since lib 2.1) shows the loaded library version in the console, and scripts that need newer helpers fail loudly in their startup guard.
 
 ## CI
 
 Two GitHub Actions workflows run automatically:
 
-- `lint_scripts.yml`: on every push and pull request, syntax-checks all userscripts and enforces the repo rules via `tools/lint_scripts.py`: uniform headers, matching `@version` fields, correct download/update URLs, version format, no em/en dashes, a bumped `@version` on every changed script, and the DOM library cascade (a library change must bump every requiring script in the same commit).
+- `lint_scripts.yml`: on every push and pull request, syntax-checks all userscripts and enforces the repo rules via `tools/lint_scripts.py`: uniform headers, matching `@version` fields, correct download/update URLs, version format, no em/en dashes, and a bumped `@version` on every changed script. (The library cascade check was removed in lint 1.2: requiring scripts are refreshed manually instead, see Shared DOM library.)
 - `build_script_bundle.yml`: rebuilds the download bundle on script changes (see Installing).
 
 ## Energy efficiency rules
