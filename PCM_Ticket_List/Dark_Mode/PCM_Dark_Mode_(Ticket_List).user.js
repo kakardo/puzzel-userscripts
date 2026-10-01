@@ -1,12 +1,12 @@
 // @file_name = PCM_Dark_Mode_(Ticket_List).user.js
 // @author = Kardo Rostam
-// @version = 6.4_2026-10-01
+// @version = 6.8_2026-10-01
 // @created = 2026-03-26 (v5.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket List)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.4_2026-10-01
+// @version      6.8_2026-10-01
 // @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the observer rescopes from body to the table wrapper once DataTables renders. The on/off toggle sits in the top bar left of the profile picture (BUTTON_PLACEMENT), falling back to the bottom-right corner when the top bar is not found.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -47,6 +47,8 @@
   const SCOPE_CLASS  = 'pz-dark-scope-root';
   const BTN_ID       = 'pz-darkmode-toggle';
   const DOCKED_CLASS = 'pz-darkmode-docked';
+  const OVERDUE_TIME_CLASS = 'pz-overdue-time';
+  const OVERDUE_TIME_COLUMNS = ['Response Target', 'Resolve Target'];
   // The profile picture's own top bar item. The toggle goes right in
   // front of it, after the bell, as one more floated .navbar-item.
   const HEADER_ANCHOR_SELECTOR = '#one-agent-menu-lg .navbar-avatar > .dropdown.navbar-item, .navbar-avatar > .dropdown.navbar-item';
@@ -300,9 +302,38 @@
     root.setAttribute('data-pz-dark', on ? 'on' : 'off');
     if (jw && jw !== root) jw.setAttribute('data-pz-dark', on ? 'on' : 'off');
 
+    markOverdueTimes(root, on);
+
     // Rescope the observer to the table wrapper as soon as it exists;
     // cheap no-op once already scoped.
     startDomObserver();
+  }
+
+  // Overdue rows: the target times that have passed ("... ago") get red
+  // text, so the reason for the outline is visible at a glance. Only the
+  // two target columns are checked, found by header text so hidden or
+  // moved columns do not matter. Classes are only written when they
+  // change, because the table observer listens to class changes.
+  function setClass(el, name, wanted) {
+    if (el.classList.contains(name) !== wanted) el.classList.toggle(name, wanted);
+  }
+
+  function markOverdueTimes(root, on) {
+    const head = root.querySelector('.dataTables_scrollHead thead tr') || root.querySelector('thead tr');
+    if (!head) return;
+    const targets = [];
+    Array.from(head.cells).forEach((th, index) => {
+      if (OVERDUE_TIME_COLUMNS.indexOf(th.textContent.replace(/\s+/g, ' ').trim()) !== -1) targets.push(index);
+    });
+    if (!targets.length) return;
+
+    root.querySelectorAll('tbody tr').forEach((tr) => {
+      const overdue = on && tr.classList.contains('sla-overdue');
+      targets.forEach((index) => {
+        const cell = tr.cells[index];
+        if (cell) setClass(cell, OVERDUE_TIME_CLASS, overdue && /\bago\b/i.test(cell.textContent));
+      });
+    });
   }
 
   function registerMenu() {
@@ -432,12 +463,16 @@
 
       --pz-alert-yellow:#4a4318;
       --pz-alert-orange:#4a3416;
-      --pz-alert-red:#4a232b;
+      --pz-alert-red:#4a1a22;
+      --pz-alert-rose:#4d2438;
       --pz-alert-deepred:#34141a;
 
       --pz-alert-yellow-edge:#8a7a1e;
       --pz-alert-orange-edge:#a85f1a;
-      --pz-alert-red-edge:#b14a5a;
+      --pz-alert-red-edge:#e04a5a;
+      --pz-alert-red-row-text:#f2a7ae;
+      --pz-alert-red-text:#ff6b78;
+      --pz-alert-rose-edge:#c25a7a;
       --pz-alert-deepred-edge:#8e2434;
     }
 
@@ -521,13 +556,21 @@
       color:var(--pz-text) !important;
     }
 
-    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr:nth-child(2n+1):not(.sla-limit70):not(.sla-limit50):not(.sla-overdue) > td{
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr:nth-child(2n+1):not([class*="sla-"]) > td{
       background:var(--pz-zebra-odd) !important;
       color:var(--pz-text) !important;
     }
 
-    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr:nth-child(2n):not(.sla-limit70):not(.sla-limit50):not(.sla-overdue) > td{
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr:nth-child(2n):not([class*="sla-"]) > td{
       background:var(--pz-zebra-even) !important;
+      color:var(--pz-text) !important;
+    }
+
+    /* Any SLA class without a colour of its own below (PCM adds new
+       limits from time to time) still gets a visible tint instead of
+       falling back to the plain stripe. */
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr[class*="sla-limit"] > td{
+      background:var(--pz-alert-orange) !important;
       color:var(--pz-text) !important;
     }
 
@@ -538,6 +581,12 @@
 
     .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-limit50 > td{
       background:var(--pz-alert-orange) !important;
+      color:var(--pz-text) !important;
+    }
+
+    /* Light red in PCM's own colours: the last step before overdue. */
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-limit20 > td{
+      background:var(--pz-alert-rose) !important;
       color:var(--pz-text) !important;
     }
 
@@ -556,6 +605,10 @@
       color:var(--pz-text) !important;
     }
 
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr[class*="sla-limit"] > td:first-child{
+      box-shadow:inset 3px 0 0 var(--pz-alert-orange-edge) !important;
+    }
+
     .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-limit70 > td:first-child{
       box-shadow:inset 3px 0 0 var(--pz-alert-yellow-edge) !important;
     }
@@ -564,8 +617,27 @@
       box-shadow:inset 3px 0 0 var(--pz-alert-orange-edge) !important;
     }
 
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-limit20 > td:first-child{
+      box-shadow:inset 3px 0 0 var(--pz-alert-rose-edge) !important;
+    }
+
+    /* Overdue: the same 3px left edge as the other steps, and red text
+       across the row instead of an outline. Links (ticket number,
+       subject) turn red too; status and priority badges keep their own
+       colours. Target times that have passed are a stronger red. */
     .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-overdue > td:first-child{
       box-shadow:inset 3px 0 0 var(--pz-alert-red-edge) !important;
+    }
+
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-overdue > td,
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-overdue > td a,
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-overdue > td span:not(.label):not(.badge){
+      color:var(--pz-alert-red-row-text) !important;
+    }
+
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-overdue > td.${OVERDUE_TIME_CLASS},
+    .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-overdue > td.${OVERDUE_TIME_CLASS} *{
+      color:var(--pz-alert-red-text) !important;
     }
 
     .${SCOPE_CLASS}[data-pz-dark="on"] tbody tr.sla-limit90 > td:first-child,
