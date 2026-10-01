@@ -1,12 +1,12 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 6.6_2026-09-04
+// @version = 6.7_2026-10-01
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.6_2026-09-04
+// @version      6.7_2026-10-01
 // @description  Present CustomerID, Customer Name, and Company Name on single rows. Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -121,10 +121,13 @@
     return unique(emails)[0] || '';
   }
 
+  // The ID label in Customer Intelligence: CustomerID on older
+  // organisations, AccountNumber on newer ones. Both are read; the value
+  // is still published as customerId so every consumer keeps working.
   function extractIds() {
     const values = [];
-    const inlineRx = /\b(?:customer\s*id|customerid|company\s*id|companyid)\b\s*[:\-]?\s*([A-Za-z0-9-]+)/ig;
-    const keyOnlyRx = /^(?:customer\s*id|customerid|company\s*id|companyid)$/i;
+    const inlineRx = /\b(?:customer\s*id|customerid|company\s*id|companyid|account\s*number|accountnumber)\b\s*[:\-]?\s*([A-Za-z0-9-]+)/ig;
+    const keyOnlyRx = /^(?:customer\s*id|customerid|company\s*id|companyid|account\s*number|accountnumber)$/i;
 
     for (const raw of arguments) {
       const chunk = String(raw || '');
@@ -176,7 +179,7 @@
       let score = 0;
       if (cells[0]) score += 2;
       if (cells.length >= 3) score += 1;
-      if (/\b(?:customer\s*id|customerid|company\s*id|companyid)\b/i.test(joined)) score += 4;
+      if (/\b(?:customer\s*id|customerid|company\s*id|companyid|account\s*number|accountnumber)\b/i.test(joined)) score += 4;
       if (/^organisation$/i.test(cells[0] || '')) score -= 10;
       if (/^description$/i.test(cells[1] || '')) score -= 10;
       if (/^attributes$/i.test(cells[2] || '')) score -= 10;
