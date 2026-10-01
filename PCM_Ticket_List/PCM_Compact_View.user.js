@@ -1,13 +1,13 @@
 // @file_name = PCM_Compact_View.user.js
 // @author = Kardo Rostam
-// @version = 1.4_2026-09-04
+// @version = 1.5_2026-10-01
 // @created = 2026-08-28 09:04
 
 // ==UserScript==
 // @name         PCM Compact View
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-09-04
-// @description  Compact settings menu for the tickets list, left of Hide Columns. Tightens cell padding and status badges, releases column widths so empty columns collapse, clamps Subject to a configurable MAX line count, and shortens times: minutes to m, hours to h, days to d. All settings live in the menu and persist in localStorage; reapplies on every DataTables draw.
+// @version      1.5_2026-10-01
+// @description  Compact settings menu for the tickets list, left of Hide Columns. Tightens cell padding and status badges, releases column widths so empty columns collapse, clamps Subject to a configurable MAX line count, and shortens times: minutes to m, hours to h, days to d, years to y, and "less than a minute" to <1m. All settings live in the menu and persist in localStorage; reapplies on every DataTables draw.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -244,12 +244,17 @@
 
     function shorten(value) {
         return value
+            // Worded times without a number come first, so the numeric
+            // rules below never see them half-shortened.
+            .replace(/less than an? minute|half an? minute/gi, '<1m')
+            .replace(/less than (\d+)\s*seconds?/gi, '<$1s')
             .replace(/(\d+)\s*seconds?/gi, '$1s')
             .replace(/(\d+)\s*minutes?/gi, '$1m')
             .replace(/(\d+)\s*hours?/gi, '$1h')
             .replace(/(\d+)\s*days?/gi, '$1d')
             .replace(/(\d+)\s*weeks?/gi, '$1w')
-            .replace(/(\d+)\s*months?/gi, '$1mo');
+            .replace(/(\d+)\s*months?/gi, '$1mo')
+            .replace(/(\d+)\s*years?/gi, '$1y');
     }
 
     // Squeeze or restore column widths through the DataTables column config.
@@ -456,7 +461,7 @@
                     // Original kept for clean restore when compact is turned off.
                     if (!cell.dataset.pcmOrig) cell.dataset.pcmOrig = current;
                     cell.textContent = short;
-                } else if (!cell.dataset.pcmOrig && /\d+[smhdw]/.test(current)) {
+                } else if (!cell.dataset.pcmOrig && /\d+[smhdwy]/.test(current)) {
                     cell.dataset.pcmOrig = current; // already short (idempotent redraws)
                 }
             }
