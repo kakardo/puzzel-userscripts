@@ -27,13 +27,16 @@
    * is the short text shown in the bubble, "color" its fill.
    ******************************************************************/
   const TEAM_BUTTONS = [
-    { label: 'Admin',   team: 'Admin Support',              color: '#3f6fd6' },
-    { label: 'Agent',   team: 'Agent Support',              color: '#b8860b' },
-    { label: 'Case',    team: 'Case Management Support',    color: '#7b2cbf' },
-    { label: 'PSI',     team: 'Sales Intelligence Support', color: '#b5179e' },
-    { label: 'Spam',    team: 'Spam/Virus Quarantine',      color: '#d32f2f' },
-    { label: 'Triage',  team: 'Triage Support',             color: '#2f7d2f' },
-    { label: 'Virtual', team: 'Virtual Agents Support',     color: '#0b7285' }
+    { label: 'Admin',   team: 'Admin Support',                       color: '#1e5bd8' }, // blue
+    { label: 'Agent',   team: 'Agent Support',                       color: '#e65100' }, // orange
+    { label: 'Case',    team: 'Case Management Support',             color: '#7b2cbf' }, // purple
+    { label: 'CHG',     team: 'Change Team',                         color: '#455a64' }, // slate grey
+    { label: 'CI',      team: 'Conversational Intelligence Support', color: '#6d4c41' }, // brown
+    { label: 'PSI',     team: 'Sales Intelligence Support',          color: '#b5179e' }, // magenta
+    { label: 'Spam',    team: 'Spam/Virus Quarantine',               color: '#d32f2f' }, // red
+    { label: 'Triage',  team: 'Triage Support',                      color: '#2f7d2f' }, // green
+    { label: 'Virtual', team: 'Virtual Agents Support',              color: '#00838f' }, // teal
+    { label: 'WFM',     team: 'WFM Support',                         color: '#9e7c00' }  // dark gold
   ];
 
   /******************************************************************
