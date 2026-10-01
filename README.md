@@ -29,6 +29,8 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). Only the Attributes script uses the shared DOM library.
 - `PCC_Admin_View/`: scripts for the Puzzel Admin console (app.puzzel.com/admin), a different app from PCM:
   - `PCC_User_Group_Search`: search box that live-filters the User Group dropdown on the Add/Edit User pages. Standalone (server-rendered pages, no DOM watching to share).
+- `Organisation_Settings/`: scripts for Puzzel Organisation Settings (app.puzzel.com/settings), a different app from PCM:
+  - `POS_Access_Log_Filter`: filter box above the Access log table; only rows whose Puzzel Id contains the typed text (or any of several comma-separated terms) stay visible. Standalone.
 - `PCC_Agent_View/`: scripts for the agent application (app.puzzel.com/agent), a different app from PCM:
   - `PCC_Agent_Highlighter`: highlights agent rows by status/profile and badges names in the ARIA agents grid. SPA-safe (grid rebinding, navigation hooks). Standalone.
   - `PCC_Softphone_Status_Highlight`: colours the Softphone Online/Offline value in the header. Standalone.
