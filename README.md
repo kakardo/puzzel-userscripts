@@ -30,12 +30,12 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
     - `PCM_Subscription_Buttons`: one-press handling of partner telephony subscription tickets (one button per product): fills the Change form fields and appends the confirmation mail, with user details read from the first mail in the ticket. Uses the shared DOM library.
     - `PCM_Template_ID_Viewer`: shows and copies the numeric template id of the selected entry in PCM's Insert Template modal. Standalone, purely event-driven.
 - `PCM_Ticket_List/`: scripts for the ticket list page (`/tickets`) and dashboard (`/`):
-  - `PCM_Auto_Refresh`: auto-reloads the page on an interval with a countdown ring UI. Standalone.
+  - `PCM_Auto_Refresh`: auto-reloads the page on an interval with a countdown ring UI. Standalone and light by default; turns dark with the toggle in `PCM_Dark_Mode_(Ticket_List)` when that script is installed (optional link, not a dependency).
   - `PCM_New_Ticket_Notifier`: alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
   - `PCM_Hide_Columns`: Hide Columns button with a checkbox panel per column; localStorage persistence with a FORCE_HIDDEN override at the top. Standalone, drives the DataTables API.
   - `PCM_Compact_View`: Compact toggle left of Hide Columns; tight cell padding, table shrinks to content, Subject clamped to a configurable line count, times shortened (s/m/h/d/w/mo/y, "less than a minute" to <1m). Uses the shared DOM library.
   - `PCM_Last_Activity_Sort`: makes the Last Activity column sortable (server-side, so the whole list is sorted) and keeps that sort across reloads. Standalone, drives the DataTables API.
-  - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). The Ticket List script puts its on/off toggle in the top bar between the bell and the profile picture and colours every SLA step, with overdue rows in red text. Only the Attributes script uses the shared DOM library.
+  - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). The Ticket List script puts its on/off toggle in the top bar between the bell and the profile picture and colours every SLA step, with overdue rows in red text. The Ticket List script owns the toggle and marks the page; the Attributes script follows that mark, so install them together. Only the Attributes script uses the shared DOM library.
 - `PCC_Admin_View/`: scripts for the Puzzel Admin console (app.puzzel.com/admin), a different app from PCM:
   - `PCC_User_Group_Search`: search box that live-filters the User Group dropdown on the Add/Edit User pages. Standalone (server-rendered pages, no DOM watching to share).
 - `Organisation_Settings/`: scripts for Puzzel Organisation Settings (app.puzzel.com/settings), a different app from PCM:

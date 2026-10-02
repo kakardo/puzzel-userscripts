@@ -1,12 +1,13 @@
 // @file_name = PCM_Dark_Mode_(Attributes).user.js
 // @author = Kardo Rostam
-// @version = 5.3_2026-09-04
+// @version = 5.6_2026-10-02
 // @created = 2026-03-27 (v4.5)
+// @note = Follows the dark mode toggle owned by PCM Dark Mode (Ticket List): its data-pz-dark="on"/"off" mark on the tickets widget decides light or dark here. Install both; on its own this script falls back to its own stored value, which defaults to dark.
 
 // ==UserScript==
 // @name         PCM Dark Mode (Attributes)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      5.3_2026-09-04
+// @version      5.6_2026-10-02
 // @description  Uses the shared PCM_DOM library for boot/retry and style injection. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the document-wide XPath search only runs when the cheap ID lookup fails. Keeps the working Attributes behavior.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -40,6 +41,7 @@
   const TICKETS_TABLE_ID  = 'tickets-table';
 
   const STATUS_SELECT_ID = 'ticket_search_status_id';
+  const PAGE_BG_ATTR = 'data-pz-tickets-pagebg';
 
   const STATUS_CLASSES = [
     'pz-status-open',
@@ -60,18 +62,30 @@
   let statusObservedNode = null;
   let domObserver = null;
 
+  // The on/off toggle lives in PCM Dark Mode (Ticket List), which marks
+  // the tickets widget data-pz-dark="on" or "off" and the page
+  // data-pz-tickets-pagebg="on" while dark. Its choice wins in BOTH
+  // directions: "off" means light here too. This script's own stored
+  // value is only a fallback for pages where that script has not marked
+  // anything yet.
+  function toggleState(el) {
+    const value = el && el.getAttribute('data-pz-dark');
+    return value === 'on' || value === 'off' ? value === 'on' : null;
+  }
+
   function isDark() {
     const w = document.getElementById(TICKETS_WIDGET_ID);
-    if (w && w.getAttribute('data-pz-dark') === 'on') return true;
-    if (w && w.closest) {
-      const jw = w.closest('.jarviswidget');
-      if (jw && jw.getAttribute('data-pz-dark') === 'on') return true;
-    }
     const tbl = document.getElementById(TICKETS_TABLE_ID);
-    if (tbl && tbl.closest) {
-      const jw = tbl.closest('.jarviswidget');
-      if (jw && jw.getAttribute('data-pz-dark') === 'on') return true;
+    const candidates = [
+      w,
+      w && w.closest ? w.closest('.jarviswidget') : null,
+      tbl && tbl.closest ? tbl.closest('.jarviswidget') : null
+    ];
+    for (const el of candidates) {
+      const state = toggleState(el);
+      if (state !== null) return state;
     }
+    if (document.documentElement.getAttribute(PAGE_BG_ATTR) === 'on') return true;
     try { return !!GM_getValue(STORAGE_KEY, true); } catch (_) { return true; }
   }
 
@@ -211,6 +225,23 @@
   }
 
   window.PCM_DOM.ensureStyleTag(STYLE_ID, `
+    /* Saved Searches: PCM paints it dark navy in light mode, which reads
+       as a leftover of dark mode. Same orange in BOTH modes, matching the
+       dark palette's --pz-btn-warning, so the button looks identical
+       whichever way the toggle is set. */
+    #saved-searches-dropdown.btn,
+    #saved-searches-dropdown.btn:focus {
+      background-color: #c79121 !important;
+      border-color: #b07d19 !important;
+      color: #fff !important;
+    }
+    #saved-searches-dropdown.btn:hover,
+    #saved-searches-dropdown.btn:active {
+      background-color: #b07d19 !important;
+      border-color: #9a6c14 !important;
+      color: #fff !important;
+    }
+
     /* ============================================================
        v4.1 - FIELD BOXES UNIFIED (SAFE FAILSAFE BASE)
        Purpose: Make all boxes look like the "good" green ones.

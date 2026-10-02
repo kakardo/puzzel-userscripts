@@ -1,13 +1,14 @@
 // @file_name = PCM_Auto_Refresh.user.js
 // @author = Kardo Rostam
-// @version = 2.2_2026-08-27
+// @version = 2.5_2026-10-02
 // @created = 2026-02-19 11:08
+// @note = Light by default and fully working on its own. Dark colours are an optional link to PCM Dark Mode (Ticket List), which owns the dark mode toggle and marks the page root with data-pz-tickets-pagebg="on" while dark; without that script this one simply stays light.
 
 // ==UserScript==
 // @name         PCM Auto Refresh
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.2_2026-08-27
-// @description  Auto-refresh PCM dashboard and ticket list with native-looking dt-button UI, dark mode palette, ring on right (top-aligned). Battery friendly: ring painting is skipped while the tab is hidden, and the ticket list refreshes via the DataTable's own ajax reload when available (full page reload as fallback), so the reload schedule keeps background refreshes (and the New Ticket Notifier) working.
+// @version      2.5_2026-10-02
+// @description  Auto-refresh PCM dashboard and ticket list with native-looking dt-button UI that follows the dark mode toggle (light and dark), ring on right (top-aligned). Battery friendly: ring painting is skipped while the tab is hidden, and the ticket list refreshes via the DataTable's own ajax reload when available (full page reload as fallback), so the reload schedule keeps background refreshes (and the New Ticket Notifier) working.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -44,25 +45,35 @@
   let ringEl = null;
   let ringInnerEl = null;
 
-  // ======== COLOR HELPERS (use Puzzel CSS variables with safe fallbacks) ========
-  const rootStyle = getComputedStyle(document.documentElement);
-
-  function cssVar(name, fallback) {
-    const v = rootStyle.getPropertyValue(name).trim();
-    return v || fallback;
-  }
-
+  // ======== COLORS ========
+  // Light and dark palettes live in a stylesheet, not in inline styles,
+  // so the button and ring follow the dark mode toggle live. PCM Dark Mode
+  // (Ticket List) marks the page root with data-pz-tickets-pagebg="on" while dark.
+  // Inside the list's dt-buttons row the button has no colours of its
+  // own: it takes PCM's native dt-button look, and the dark mode script
+  // restyles that row when dark.
   const COLORS = {
-    btnBG: cssVar('--pz-surface-3', '#232b3d'),
-    btnText: cssVar('--pz-text', '#e6e9ef'),
-    btnBorder: cssVar('--pz-border', 'rgba(255,255,255,0.10)'),
-    ringTrack: cssVar('--pz-surface-3', '#232b3d'),
-    ringBG: cssVar('--pz-surface', '#151923'),
+    ringTrack: 'var(--pz-ar-track)',
     ringGreen: '#2ecc71',
     ringAmber: '#f1c40f',
-    ringRed: '#e74c3c',
-    ringEdge: cssVar('--pz-border-strong', 'rgba(255,255,255,0.16)')
+    ringRed: '#e74c3c'
   };
+
+  const STYLE_ID = 'pcm-auto-refresh-style';
+  const DARK = 'html[data-pz-tickets-pagebg="on"]';
+
+  function ensureStyle() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = [
+      '#pcm-refresh-ring { --pz-ar-track:#dfe3e8; --pz-ar-bg:#ffffff; --pz-ar-text:#333333; --pz-ar-edge:rgba(0,0,0,.18); }',
+      DARK + ' #pcm-refresh-ring { --pz-ar-track:#232b3d; --pz-ar-bg:#151923; --pz-ar-text:#e6e9ef; --pz-ar-edge:rgba(255,255,255,.16); }',
+      '#pcm-auto-refresh-btn:not(.dt-buttons *) { background:#f5f5f5; border:1px solid #cccccc; color:#333333; }',
+      DARK + ' #pcm-auto-refresh-btn:not(.dt-buttons *) { background:#232b3d; border:1px solid rgba(255,255,255,.10); color:#e6e9ef; }'
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(style);
+  }
 
   // ======== DOM HELPERS ========
   function byText(root, selector, text) {
@@ -190,10 +201,9 @@
     span.textContent = getBtnLabel();
     a.appendChild(span);
 
-    // Minimal inline style only if the site CSS isn't loaded yet
-    a.style.background = COLORS.btnBG;
-    a.style.border = `1px solid ${COLORS.btnBorder}`;
-    a.style.color = COLORS.btnText;
+    // Layout only; colours come from PCM's dt-button styles or the
+    // stylesheet above, so light and dark both work.
+    ensureStyle();
     a.style.borderRadius = '4px';
     a.style.padding = '3px 8px';
     a.style.fontSize = '12px';
@@ -253,15 +263,15 @@
 
     ring.style.marginLeft = '0.333em'; // match dt-button spacing
     ring.style.background = `conic-gradient(${COLORS.ringTrack} 0deg, ${COLORS.ringTrack} 360deg)`;
-    ring.style.boxShadow = `inset 0 0 0 2px ${COLORS.ringEdge}`;
+    ring.style.boxShadow = 'inset 0 0 0 2px var(--pz-ar-edge)';
 
     const ringInner = document.createElement('div');
     ringInner.id = 'pcm-refresh-ring-inner';
     ringInner.style.width = '18px';
     ringInner.style.height = '18px';
     ringInner.style.borderRadius = '50%';
-    ringInner.style.background = COLORS.ringBG;
-    ringInner.style.color = COLORS.btnText;
+    ringInner.style.background = 'var(--pz-ar-bg)';
+    ringInner.style.color = 'var(--pz-ar-text)';
     ringInner.style.fontSize = '11px';
     ringInner.style.lineHeight = '18px';
     ringInner.style.textAlign = 'center';
