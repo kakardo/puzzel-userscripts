@@ -1,13 +1,13 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 6.8_2026-10-01
+// @version = 6.9_2026-10-02
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.8_2026-10-01
-// @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). Use Customer Intelligence only. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
+// @version      6.9_2026-10-02
+// @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -84,6 +84,69 @@
       if (text(el).toLowerCase() === 'customer intelligence') return el.closest('.jarviswidget') || null;
     }
     return null;
+  }
+
+  /******************************************************************
+   * Organisation Information widget (#wid-organisation)
+   * The ticket's own organisation, with an Attribute / Value table
+   * (AccountNumber, Partner, ...). When present it is the authoritative
+   * source: Customer Intelligence lists the customer's organisations,
+   * which may be several or none.
+   ******************************************************************/
+  const ORG_WIDGET_ID = 'wid-organisation';
+  const ORG_ID_KEYS = ['accountnumber', 'account number', 'customerid', 'customer id', 'companyid', 'company id'];
+
+  function orgWidget() {
+    return document.getElementById(ORG_WIDGET_ID);
+  }
+
+  function orgAttributes(widget) {
+    const attrs = {};
+    widget.querySelectorAll('tr').forEach((tr) => {
+      const cells = tr.querySelectorAll('td');
+      if (cells.length < 2) return;
+      const key = clean(cells[0].textContent).toLowerCase();
+      if (key && !(key in attrs)) attrs[key] = clean(cells[1].textContent);
+    });
+    return attrs;
+  }
+
+  // The widget is loadable: its table can arrive after the page. Waits
+  // for the first attribute row with an observer, bounded by a timeout,
+  // so a ticket without an organisation finishes quickly.
+  function waitForOrgAttributes(widget, timeoutMs) {
+    const now = orgAttributes(widget);
+    if (Object.keys(now).length) return Promise.resolve(now);
+    return new Promise((resolve) => {
+      const observer = new MutationObserver(() => {
+        const attrs = orgAttributes(widget);
+        if (!Object.keys(attrs).length) return;
+        window.clearTimeout(timer);
+        observer.disconnect();
+        resolve(attrs);
+      });
+      const timer = window.setTimeout(() => {
+        observer.disconnect();
+        resolve(orgAttributes(widget));
+      }, timeoutMs);
+      observer.observe(widget, { childList: true, subtree: true });
+    });
+  }
+
+  async function collectOrgInfo() {
+    const widget = orgWidget();
+    if (!widget) return null;
+    const attrs = await waitForOrgAttributes(widget, 2000);
+    const title = clean(text(widget.querySelector('#organisation-name')));
+    const key = ORG_ID_KEYS.find((name) => attrs[name]);
+    const id = key ? (attrs[key].match(/[A-Za-z0-9-]+/) || [''])[0] : ((title.match(/^([A-Za-z0-9-]{3,})\b/) || [])[1] || '');
+    if (!id && !title) return null;
+    return {
+      id: id,
+      nameRaw: title,
+      name: normalizeCompanyName(title, id),
+      partner: attrs.partner || ''
+    };
   }
 
   function extractCustomerName(box) {
@@ -316,14 +379,39 @@
       partner: '',
       partners: []
     };
-    if (!box) return info;
+    const org = await collectOrgInfo();
+    if (box) {
+      info.customerName = extractCustomerName(box) || extractCustomerEmail(box);
+      await collectCiOrganisations(box, info);
+    }
+    if (org) mergeOrgInfo(info, org);
+    return info;
+  }
 
-    info.customerName = extractCustomerName(box) || extractCustomerEmail(box);
+  // The ticket's organisation goes first: its ID becomes the primary ID
+  // (CI IDs stay listed after it), and its name and partner win.
+  function mergeOrgInfo(info, org) {
+    if (org.id) {
+      info.customerIds = unique([org.id].concat(info.customerIds || []));
+      info.customerId = org.id;
+      info.customerIdRaw = org.id;
+      info.customerIdsText = info.customerIds.join(' / ');
+    }
+    if (org.name) {
+      info.companyNameRaw = org.nameRaw;
+      info.companyName = org.name;
+    }
+    if (org.partner) {
+      info.partner = org.partner;
+      info.partners = unique([org.partner].concat(info.partners || []));
+    }
+  }
 
+  async function collectCiOrganisations(box, info) {
     const rowsResult = await ensureOrganisationRows(box);
     const initialRows = rowsResult.initialRows || [];
     const allRows = rowsResult.allRows || [];
-    if (!allRows.length) return info;
+    if (!allRows.length) return;
 
     const allIds = unique(allRows.flatMap(rowCustomerIds));
     const chosenRow = initialRows.find((row) => rowCustomerIds(row).length > 0) || allRows.find((row) => rowCustomerIds(row).length > 0) || initialRows[0] || allRows[0];
@@ -337,7 +425,6 @@
     info.companyName = normalizeCompanyName(info.companyNameRaw, primaryId);
     info.partners = unique(allRows.map(rowPartner).filter(Boolean));
     info.partner = rowPartner(chosenRow) || info.partners[0] || '';
-    return info;
   }
 
   function publish(info) {
@@ -433,7 +520,7 @@
 
   const config = window.PCM_DOM.mergeConfig ? window.PCM_DOM.mergeConfig({ BOOT_MAX_TRIES: 15, BOOT_INTERVAL_MS: 400 }) : { BOOT_MAX_TRIES: 15, BOOT_INTERVAL_MS: 400 };
   window.PCM_DOM.bootUntil(function() {
-    return !!document.querySelector('div.ticket-description.well') && !!ciWidget();
+    return !!document.querySelector('div.ticket-description.well') && !!(ciWidget() || orgWidget());
   }, function() {
     insert();
   }, config);
