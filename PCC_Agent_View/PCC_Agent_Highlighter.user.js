@@ -1,12 +1,12 @@
 // @file_name = PCC_Agent_Highlighter.user.js
 // @author = Kardo Rostam
-// @version = 4.7_2026-09-21
+// @version = 5.8_2026-10-02
 // @created = 2026-02-10 (v2.9)
 
 // ==UserScript==
 // @name         Puzzel Agent Highlighter
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.7_2026-09-21
+// @version      5.8_2026-10-02
 // @description  Highlights Puzzel Agent rows and badges names. Battery friendly: pauses all processing while the tab is hidden and resyncs once on return.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
@@ -69,10 +69,28 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     { names: ["Nikolay Kazandzhiev"],	emoji: 129680 }, // (U+1FA90) RINGED PLANET
   ];
 
-  // Column indexes for the Agents grid
-  const NAME_COL = 1;     // Name is a ROWHEADER in this grid
-  const STATUS_COL = 2;   // Status is a GRIDCELL
-  const PROFILE_COL = 4;  // Profile is a GRIDCELL
+  // Column numbers in the Agents grid are read from the header texts, not
+  // fixed: on narrow windows the grid adds an expand column first, which
+  // shifts every aria-colindex by one (Status 2 -> 3, Profile 4 -> 5).
+  // These are the wide-layout values, used only if a header is missing.
+  const DEFAULT_COLS = { status: '2', profile: '4' };
+  let colsCache = { grid: null, key: '', cols: DEFAULT_COLS };
+
+  function gridCols() {
+    const grid = AGENTS_GRID;
+    if (!grid) return DEFAULT_COLS;
+    const headers = [...grid.querySelectorAll('[role="columnheader"][aria-colindex]')];
+    const key = headers.map(h => h.getAttribute('aria-colindex') + ':' + (h.textContent ?? '').trim().toLowerCase()).join('|');
+    if (colsCache.grid === grid && colsCache.key === key) return colsCache.cols;
+    const cols = { status: DEFAULT_COLS.status, profile: DEFAULT_COLS.profile };
+    headers.forEach(h => {
+      const t = (h.textContent ?? '').trim().toLowerCase();
+      if (t === 'status') cols.status = h.getAttribute('aria-colindex');
+      if (t === 'profile') cols.profile = h.getAttribute('aria-colindex');
+    });
+    colsCache = { grid: grid, key: key, cols: cols };
+    return cols;
+  }
 
   // ============================================================================
   // STYLE
@@ -225,8 +243,9 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     return matched;
   }
 
+  // The name is the row's only rowheader, whatever its column number.
   function getNameHeader(row) {
-    return row.querySelector(`[role="rowheader"][aria-colindex="${NAME_COL}"]`);
+    return row.querySelector('[role="rowheader"]');
   }
 
   function textWithoutBadges(el) {
@@ -374,6 +393,17 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     const el = (target.nodeType === Node.TEXT_NODE) ? target.parentElement : target;
     const row = el?.closest?.('[role="row"]');
     if (row) dirtyRows.add(row);
+
+    // Rows added wholesale (the grid re-renders them, for example when the
+    // window width switches layout) are reported on their container, not
+    // on a row, so pick the new rows out of the added nodes.
+    if (mutation.type === 'childList') {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        if (node.matches('[role="row"]')) dirtyRows.add(node);
+        else node.querySelectorAll?.('[role="row"]').forEach(r => dirtyRows.add(r));
+      });
+    }
   }
 
   function scheduleProcess() {
@@ -413,7 +443,8 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   // ROW PROCESSING
   // ============================================================================
   function processRow(row) {
-    const status = textOfCell(row, STATUS_COL);
+    const cols = gridCols();
+    const status = textOfCell(row, cols.status);
 
     // If Status is temporarily unreadable (virtualization/update), reset to default.
     if (!status) {
@@ -422,7 +453,7 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
       return;
     }
 
-    const profile = textOfCell(row, PROFILE_COL);
+    const profile = textOfCell(row, cols.profile);
     const rule = matchRule(status, profile);
     applyHighlightIfChanged(row, rule);
     applyNameBadgeToRow(row);
@@ -617,4 +648,541 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   startShellObserver();
   maybeRebindGrid('boot');
 
+})();
+
+// ============================================================================
+// SCHEDULED ROW
+// One extra row in the agents grid during one week a year, following a
+// working-day schedule. Its texts are packed in ROW_DATA below. The row is
+// cloned from a real agent row, so the highlight rules and status icons
+// above apply to it like to any agent.
+// ============================================================================
+(function () {
+  'use strict';
+
+  /******************************************************************
+   * ROW DATA
+   * The row's texts, packed (base64 of UTF-8 JSON) so they do not show
+   * up as plain text in the file. Fields: name, emoji, number, profile,
+   * group, week ("MM-DD", the row shows Monday to Sunday of the week
+   * containing it), timeZone (IANA zone the schedule runs in), suffix
+   * (appended to every status) and statuses { admin, ready, lunch,
+   * pause, saturday, sunday }.
+   *
+   * Testing, from the console:
+   *   localStorage.setItem('pcc-scheduled-agent-row-test', '1')    show now
+   *   localStorage.removeItem('pcc-scheduled-agent-row-test')      remove
+   * "1" shows the row right away with today's schedule; outside its
+   * hours it shows Ready. A moment like '2026-11-09T13:30' (in the row's
+   * time zone) can be used instead to see a specific status.
+   ******************************************************************/
+  const ROW_DATA = [
+    'eyJuYW1lIjoiTmlrb2xheSBLYXphbmR6aGlldiIsImVtb2ppIjoi8J+qkCIsIm51',
+    'bWJlciI6IjAwMzU5MTk5MzExMDkiLCJwcm9maWxlIjoiU3lzdGVtIEVuZ2luZWVy',
+    'IiwiZ3JvdXAiOiJTdXBwb3J0IENDIEJHIiwid2VlayI6IjExLTA5IiwidGltZVpv',
+    'bmUiOiJFdXJvcGUvU29maWEiLCJzdWZmaXgiOiIo4oieKSIsInN0YXR1c2VzIjp7',
+    'ImFkbWluIjoiQWRtaW4iLCJyZWFkeSI6IlJlYWR5IiwibHVuY2giOiJMdW5jaCIs',
+    'InBhdXNlIjoiUGF1c2UiLCJzYXR1cmRheSI6ItCf0L7QvNC90LjQvCDRgtC1Iiwi',
+    'c3VuZGF5Ijoi0JLQtdGH0L3QsCDQv9Cw0LzQtdGCIn19'
+  ].join('');
+  const TEST_NOW_KEY = 'pcc-scheduled-agent-row-test';
+
+  // Working-day schedule, minutes after midnight.
+  const SCHEDULE = {
+    adminFrom: 6 * 60,          // 06:00
+    shiftFrom: 9 * 60,          // 09:00
+    shiftTo: 17 * 60 + 30,      // 17:30
+    lunchMinutes: 60,
+    lunch: { min: 12 * 60, peak: 13 * 60, max: 15 * 60 },   // start window
+    pause: { min: 0, peak: 60, max: 120 },                   // length after shift
+    weekendFrom: 6 * 60,        // 06:00
+    weekendTo: 24 * 60          // midnight
+  };
+
+  /******************************************************************
+   * INTERNAL SETTINGS
+   ******************************************************************/
+  const ROW_FLAG = 'pccScheduledRow';
+  const TICK_MS = 1000;
+  const GRID_RECHECK_TICKS = 2;
+
+  let unpacked;
+
+  function readConfig() {
+    if (unpacked === undefined) {
+      try {
+        const bytes = Uint8Array.from(atob(ROW_DATA), (ch) => ch.charCodeAt(0));
+        unpacked = JSON.parse(new TextDecoder().decode(bytes));
+      } catch (_) {
+        unpacked = null;
+      }
+    }
+    if (!unpacked) return null;
+    let testNow = '';
+    try { testNow = window.localStorage.getItem(TEST_NOW_KEY) || ''; } catch (_) { /* storage blocked */ }
+    unpacked.testNow = testNow;
+    return unpacked;
+  }
+
+  /******************************************************************
+   * Time in the configured zone
+   ******************************************************************/
+  const WEEKDAYS = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
+  let zoneFormat = null;
+  let zoneFormatFor = '';
+
+  // Wall clock in the zone: date parts, weekday (0 = Sunday) and seconds
+  // after midnight. testNow replaces the clock for trying the schedule.
+  function zoneNow(config) {
+    if (config.testNow) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(config.testNow);
+      if (m) {
+        const y = +m[1], mo = +m[2], d = +m[3];
+        const weekday = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+        const secondsOfDay = +m[4] * 3600 + +m[5] * 60 + (Math.floor(Date.now() / 1000) % 60);
+        return { y: y, mo: mo, d: d, weekday: weekday, seconds: secondsOfDay };
+      }
+    }
+    if (!zoneFormat || zoneFormatFor !== config.timeZone) {
+      zoneFormat = new Intl.DateTimeFormat('en-GB', {
+        timeZone: config.timeZone, hourCycle: 'h23', weekday: 'short',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+      zoneFormatFor = config.timeZone;
+    }
+    const parts = {};
+    zoneFormat.formatToParts(new Date()).forEach((p) => { parts[p.type] = p.value; });
+    return {
+      y: +parts.year, mo: +parts.month, d: +parts.day,
+      weekday: WEEKDAYS[parts.weekday],
+      seconds: +parts.hour * 3600 + +parts.minute * 60 + +parts.second
+    };
+  }
+
+  // Day number for plain calendar arithmetic (no time zone involved).
+  function dayNumber(y, mo, d) {
+    return Math.floor(Date.UTC(y, mo - 1, d) / 86400000);
+  }
+
+  // Monday to Sunday week that contains config.week in the current year.
+  function inConfiguredWeek(config, now) {
+    const m = /^(\d{2})-(\d{2})$/.exec(config.week);
+    if (!m) return false;
+    const target = new Date(Date.UTC(now.y, +m[1] - 1, +m[2]));
+    const monday = dayNumber(now.y, +m[1], +m[2]) - ((target.getUTCDay() + 6) % 7);
+    const today = dayNumber(now.y, now.mo, now.d);
+    return today >= monday && today <= monday + 6;
+  }
+
+  /******************************************************************
+   * Seeded, triangular randomness
+   * Same date + same salt = same number, so a day's lunch and pause
+   * stay put across reloads and are identical for every viewer.
+   ******************************************************************/
+  function seededUnit(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i += 1) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    // One mulberry32 step to spread the bits.
+    let t = (h + 0x6D2B79F5) >>> 0;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  // Inverse of the triangular distribution: most likely at peak, falling
+  // off evenly towards min and max.
+  function triangular(u, range) {
+    const a = range.min, c = range.peak, b = range.max;
+    const split = (c - a) / (b - a);
+    return u < split
+      ? a + Math.sqrt(u * (b - a) * (c - a))
+      : b - Math.sqrt((1 - u) * (b - a) * (b - c));
+  }
+
+  function dayPlan(now) {
+    const key = now.y + '-' + now.mo + '-' + now.d;
+    return {
+      lunchStart: Math.round(triangular(seededUnit(key + ':lunch'), SCHEDULE.lunch)),
+      pauseLength: Math.round(triangular(seededUnit(key + ':pause'), SCHEDULE.pause))
+    };
+  }
+
+  /******************************************************************
+   * What the row shows right now
+   * Returns { status, ready, sinceSeconds } or null (not shown).
+   ******************************************************************/
+  function currentState(config, now) {
+    const forced = config.testNow === '1';
+    if (!forced && !inConfiguredWeek(config, now)) return null;
+    const state = scheduledState(config, now);
+    if (state || !forced) return state;
+    return { status: (config.statuses || {}).ready, ready: true, sinceSeconds: Math.max(0, now.seconds - 60) };
+  }
+
+  function scheduledState(config, now) {
+    const s = config.statuses || {};
+    const t = now.seconds;
+    const at = (minutes) => minutes * 60;
+
+    if (now.weekday === 6 || now.weekday === 0) {
+      if (t < at(SCHEDULE.weekendFrom) || t >= at(SCHEDULE.weekendTo)) return null;
+      return { status: now.weekday === 6 ? s.saturday : s.sunday, ready: false, sinceSeconds: at(SCHEDULE.weekendFrom) };
+    }
+
+    const plan = dayPlan(now);
+    const lunchFrom = at(plan.lunchStart);
+    const lunchTo = lunchFrom + at(SCHEDULE.lunchMinutes);
+    const pauseTo = at(SCHEDULE.shiftTo + plan.pauseLength);
+
+    if (t < at(SCHEDULE.adminFrom)) return null;
+    if (t < at(SCHEDULE.shiftFrom)) return { status: s.admin, ready: false, sinceSeconds: at(SCHEDULE.adminFrom) };
+    if (t < lunchFrom) return { status: s.ready, ready: true, sinceSeconds: at(SCHEDULE.shiftFrom) };
+    if (t < lunchTo) return { status: s.lunch, ready: false, sinceSeconds: lunchFrom };
+    if (t < at(SCHEDULE.shiftTo)) return { status: s.ready, ready: true, sinceSeconds: lunchTo };
+    if (t < pauseTo) return { status: s.pause, ready: false, sinceSeconds: at(SCHEDULE.shiftTo) };
+    return null;
+  }
+
+  // The status icon is a span whose class picks the picture: "online" is
+  // the green check, "pause" the orange clock. Set from the row's own
+  // state on every tick, so it never depends on which agent was copied.
+  const ICON_CLASSES = ['online', 'pause'];
+
+  function setStatusIcon(statusCell, ready) {
+    const icon = statusCell && statusCell.querySelector('.new-status-icon');
+    if (!icon) return;
+    const wanted = ready ? 'online' : 'pause';
+    Array.from(icon.classList).forEach((c) => {
+      if (c !== wanted && c !== 'au-target' && c !== 'new-status-icon' &&
+          (ICON_CLASSES.indexOf(c) !== -1 || /^[a-z-]+$/.test(c))) icon.classList.remove(c);
+    });
+    if (!icon.classList.contains(wanted)) icon.classList.add(wanted);
+  }
+
+  // Same format as the grid: 3s, 16m 37s, 1h 1m 44s.
+  function formatDuration(totalSeconds) {
+    const sec = Math.max(0, Math.floor(totalSeconds));
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h) return h + 'h ' + m + 'm ' + s + 's';
+    if (m) return m + 'm ' + s + 's';
+    return s + 's';
+  }
+
+  function parseDuration(text) {
+    let total = 0;
+    const re = /(\d+)\s*([hms])/g;
+    let hit;
+    while ((hit = re.exec(text || '')) !== null) {
+      total += +hit[1] * (hit[2] === 'h' ? 3600 : hit[2] === 'm' ? 60 : 1);
+    }
+    return total;
+  }
+
+  /******************************************************************
+   * The agents grid (same detection as the PCC Agent Highlighter)
+   ******************************************************************/
+  const WANTED_HEADERS = ['name', 'status', 'number', 'profile', 'group', 'time'];
+
+  // The page can hold several agents grids (other queues, hidden tabs).
+  // Only a visible one with agent rows is usable: that is the list on
+  // screen, and it has rows to copy from.
+  // Visibility is judged on the rows, not the grid element: the grid can
+  // be a layout-less wrapper (display: contents) that reports no boxes
+  // even while its rows are on screen.
+  function usableGrid(g) {
+    if (!g || !g.isConnected) return false;
+    return shownRows(g).length > 0;
+  }
+
+  function findAgentsGrid() {
+    for (const g of document.querySelectorAll('[role="grid"]')) {
+      const got = Array.from(g.querySelectorAll('[role="columnheader"][aria-colindex]'))
+        .map((h) => (h.textContent || '').trim().toLowerCase());
+      if (WANTED_HEADERS.every((w) => got.indexOf(w) !== -1) && usableGrid(g)) return g;
+    }
+    return null;
+  }
+
+  function columnIndexes(grid) {
+    const map = {};
+    grid.querySelectorAll('[role="columnheader"][aria-colindex]').forEach((h) => {
+      const key = (h.textContent || '').trim().toLowerCase();
+      if (WANTED_HEADERS.indexOf(key) !== -1) map[key] = h.getAttribute('aria-colindex');
+    });
+    return map;
+  }
+
+  function agentRows(grid) {
+    return Array.from(grid.querySelectorAll('[role="row"]')).filter((r) =>
+      !r.dataset[ROW_FLAG] && r.querySelector('[role="rowheader"], [role="gridcell"]'));
+  }
+
+  // Only rows actually drawn on screen. The grid also holds rows that are
+  // not (hidden or zero-height helper rows of the list component, kept in
+  // a separate container at the top); using one of those as the model or
+  // as the placement anchor put this row at the top with wrong cells, and
+  // made it jump between there and its real place every second.
+  function shownRows(grid) {
+    return agentRows(grid).filter((r) => r.offsetHeight > 0 && r.querySelector('[role="rowheader"]'));
+  }
+
+  function cell(row, col) {
+    return row.querySelector('[aria-colindex="' + col + '"]');
+  }
+
+  // Each agent row sits in its own aa-data-grid-row wrapper element; that
+  // wrapper is what gets copied, placed and removed, never the inner row
+  // on its own (that ended up inside another agent's wrapper).
+  function unitOf(row) {
+    const p = row.parentElement;
+    return p && p.tagName.toLowerCase() === 'aa-data-grid-row' ? p : row;
+  }
+
+  // The grid changes layout with the window width (an expand column is
+  // added on narrow windows). The header line identifies the layout; when
+  // it changes, the row is rebuilt from a fresh copy in the new layout.
+  function layoutKey(grid) {
+    return Array.from(grid.querySelectorAll('[role="columnheader"][aria-colindex]'))
+      .map((h) => h.getAttribute('aria-colindex') + ':' + (h.textContent || '').trim().toLowerCase()).join('|');
+  }
+
+  // The visible text of a cell sits in its last non-empty text node; the
+  // status icon is a separate element, so replacing that node keeps it.
+  function setCellText(target, value) {
+    if (!target) return;
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+    let last = null;
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.nodeValue.trim() && !(node.parentElement && node.parentElement.closest('.m365-name-badge'))) last = node;
+    }
+    if (last) {
+      // Keep the cell's own leading space (the gap after the status icon).
+      const next = (last.nodeValue.match(/^\s*/) || [''])[0] + value;
+      if (last.nodeValue !== next) last.nodeValue = next;
+    } else {
+      target.appendChild(document.createTextNode(value));
+    }
+  }
+
+  function statusText(row, cols) {
+    const c = cell(row, cols.status);
+    return c ? (c.textContent || '').trim() : '';
+  }
+
+  // A real row in the same kind of status supplies the icon: a Ready
+  // agent for Ready, any other agent for the away statuses.
+  function templateFor(rows, cols, ready) {
+    const match = rows.find((r) => /^ready\b/i.test(statusText(r, cols)) === ready);
+    return match || rows[0] || null;
+  }
+
+  /******************************************************************
+   * Building and placing the row
+   ******************************************************************/
+  let ourRow = null;    // the inner role="row" element
+  let ourUnit = null;   // its wrapper, the element that is placed in the grid
+  let ourKind = null;   // 'ready' or 'away': which template it was cloned from
+  let ourLayout = '';   // layoutKey() the row was built for
+
+  function buildRow(grid, cols, config, state) {
+    const rows = shownRows(grid);
+    const template = templateFor(rows, cols, state.ready);
+    if (!template) return null;
+
+    const unit = unitOf(template).cloneNode(true);
+    const row = unit.matches('[role="row"]') ? unit : unit.querySelector('[role="row"]');
+    if (!row) return null;
+    unit.dataset[ROW_FLAG] = '1';
+    row.dataset[ROW_FLAG] = '1';
+    row.removeAttribute('aria-selected');
+    row.removeAttribute('tabindex');
+    // The clone carries the template's Highlighter colour and badge;
+    // clear them so the Highlighter evaluates this row on its own.
+    row.classList.remove('m365-highlight-row');
+    row.style.backgroundColor = '';
+    row.style.color = '';
+    delete row.dataset.m365HighlightKey;
+    row.querySelectorAll('.m365-name-badge').forEach((b) => b.remove());
+
+    const nameCell = cell(row, cols.name);
+    setCellText(nameCell, config.name);
+    if (config.emoji && nameCell) {
+      const badge = document.createElement('span');
+      badge.className = 'm365-name-badge';
+      badge.setAttribute('aria-hidden', 'true');
+      badge.textContent = ' ' + config.emoji;
+      const target = nameCell.querySelector('.aa-grid-cell-wrapper') || nameCell;
+      target.appendChild(badge);
+    }
+    setCellText(cell(row, cols.number), config.number || '');
+    setCellText(cell(row, cols.profile), config.profile || '');
+    setCellText(cell(row, cols.group), config.group || '');
+    ourKind = state.ready ? 'ready' : 'away';
+    ourLayout = layoutKey(grid);
+    ourUnit = unit;
+    return row;
+  }
+
+  // Keeps the grid's Time order: rows are compared by their Time value,
+  // ascending or descending as the grid currently is.
+  // Placed next to a real row (before the first one with a longer Time,
+  // otherwise after the last one), always in that row's own container.
+  function placeRow(grid, cols, unit, seconds) {
+    const rows = shownRows(grid);
+    if (!rows.length) return;
+    const units = rows.map(unitOf);
+    const times = rows.map((r) => parseDuration((cell(r, cols.time) || {}).textContent));
+    const ascending = times.length < 2 || times[0] <= times[times.length - 1];
+    let before = null;
+    for (let i = 0; i < units.length; i += 1) {
+      if (ascending ? seconds <= times[i] : seconds >= times[i]) { before = units[i]; break; }
+    }
+    if (before) {
+      if (unit.nextElementSibling !== before) before.parentElement.insertBefore(unit, before);
+    } else {
+      const last = units[units.length - 1];
+      if (last.nextElementSibling !== unit) last.insertAdjacentElement('afterend', unit);
+    }
+  }
+
+  // Narrow windows hide columns and change widths on the live rows only
+  // (hidden cells, inline widths). Mirror a real row onto ours: the row's
+  // sizing styles (not its colours, the Highlighter owns those) and each
+  // cell's class, style and hidden state. Only differences are written.
+  const ROW_SIZE_PROPS = ['gridTemplateColumns', 'width', 'minWidth', 'maxWidth', 'flex', 'display'];
+
+  function syncLayout(grid) {
+    const ref = shownRows(grid)[0];
+    if (!ref || !ourRow) return;
+    // Never removes the row. Cells are matched by column number, not by
+    // position, so a model row with an extra element cannot shift them.
+    ROW_SIZE_PROPS.forEach((p) => {
+      if (ourRow.style[p] !== ref.style[p]) ourRow.style[p] = ref.style[p];
+    });
+    Array.from(ref.querySelectorAll(':scope > [aria-colindex]')).forEach((refCell) => {
+      const mine = ourRow.querySelector(':scope > [aria-colindex="' + refCell.getAttribute('aria-colindex') + '"]');
+      if (!mine) return;
+      if (mine.className !== refCell.className) mine.className = refCell.className;
+      const refStyle = refCell.getAttribute('style') || '';
+      if ((mine.getAttribute('style') || '') !== refStyle) {
+        if (refStyle) mine.setAttribute('style', refStyle); else mine.removeAttribute('style');
+      }
+      const refHidden = refCell.getAttribute('aria-hidden');
+      if (mine.getAttribute('aria-hidden') !== refHidden) {
+        if (refHidden === null) mine.removeAttribute('aria-hidden'); else mine.setAttribute('aria-hidden', refHidden);
+      }
+    });
+  }
+
+  function removeRow() {
+    if (ourUnit && ourUnit.parentElement) ourUnit.remove();
+    ourRow = null;
+    ourUnit = null;
+    ourKind = null;
+    ourLayout = '';
+  }
+
+  /******************************************************************
+   * Tick
+   ******************************************************************/
+  let grid = null;
+  let gridObserver = null;
+  let ticks = 0;
+
+  function watchGrid(next) {
+    if (gridObserver) gridObserver.disconnect();
+    grid = next;
+    if (!grid) return;
+    // The app re-renders the list now and then and drops foreign rows;
+    // put ours back on the next tick instead of waiting for the reorder.
+    gridObserver = new MutationObserver(() => {
+      if (ourUnit && !ourUnit.isConnected) window.setTimeout(tick, 0);
+    });
+    gridObserver.observe(grid, { childList: true, subtree: true });
+  }
+
+  // Test mode only: say once in the console why the row is or is not
+  // shown, each time the reason changes. Silent otherwise.
+  let lastReason = '';
+  function report(config, reason) {
+    if (!config || !config.testNow || reason === lastReason) return;
+    lastReason = reason;
+    console.info('[Puzzel Highlighter] extra row:', reason);
+  }
+
+  function gridSummary() {
+    const grids = Array.from(document.querySelectorAll('[role="grid"]'));
+    return grids.map((g) => {
+      const heads = Array.from(g.querySelectorAll('[role="columnheader"]')).map((h) => (h.textContent || '').trim().toLowerCase());
+      const rows = agentRows(g);
+      return heads.length + ' headers [' + heads.join(',') + '] ' + rows.length + ' rows, ' +
+        rows.filter((r) => r.getClientRects().length > 0).length + ' visible';
+    }).join(' / ');
+  }
+
+  function tick() {
+    if (document.hidden) return;
+    const config = readConfig();
+    if (!config) { removeRow(); return; }
+
+    const now = zoneNow(config);
+    const state = currentState(config, now);
+    if (!state) { removeRow(); report(config, 'not scheduled now'); return; }
+
+    ticks += 1;
+    if (!usableGrid(grid)) {
+      if (grid && ticks % GRID_RECHECK_TICKS !== 0) return;
+      removeRow();
+      watchGrid(findAgentsGrid());
+      if (!grid) { report(config, 'no usable agents grid. Grids: ' + gridSummary()); return; }
+    }
+    const cols = columnIndexes(grid);
+    if (!cols.name || !cols.status || !cols.time) { report(config, 'columns not found: ' + JSON.stringify(cols)); return; }
+
+    // A change between ready and away needs the other kind of icon.
+    const kind = state.ready ? 'ready' : 'away';
+    if (ourRow && (ourKind !== kind || !grid.contains(ourUnit) || ourLayout !== layoutKey(grid))) removeRow();
+    if (!ourRow) {
+      ourRow = buildRow(grid, cols, config, state);
+      if (!ourRow) { report(config, 'could not copy an agent row'); return; }
+    }
+
+    const elapsed = now.seconds - state.sinceSeconds;
+    const statusCell = cell(ourRow, cols.status);
+    setCellText(statusCell, (state.status || '') + (config.suffix ? ' ' + config.suffix : ''));
+    setStatusIcon(statusCell, state.ready);
+    setCellText(cell(ourRow, cols.time), formatDuration(elapsed));
+
+    // Every tick: the app reorders its own rows whenever an agent changes
+    // status, which left this row behind in the old spot until the next
+    // check. placeRow only touches the DOM when the spot is wrong.
+    placeRow(grid, cols, ourUnit, elapsed);
+    if (!ourUnit.isConnected) { report(config, 'could not place the row in the list'); return; }
+    syncLayout(grid);
+    report(config, 'shown: ' + (state.status || ''));
+  }
+
+  // A failure is reported once in the console instead of silently on
+  // every tick, so a problem on a live page can be seen and fixed.
+  let reported = false;
+  function safeTick() {
+    try {
+      tick();
+    } catch (err) {
+      if (!reported) {
+        reported = true;
+        console.warn('[Puzzel Highlighter] extra row:', err);
+      }
+    }
+  }
+
+  window.setInterval(safeTick, TICK_MS);
+  safeTick();
 })();
