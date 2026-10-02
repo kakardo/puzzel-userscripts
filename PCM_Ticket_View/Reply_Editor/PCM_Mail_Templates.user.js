@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 1.8_2026-10-01
+// @version = 2.0_2026-10-02
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.8_2026-10-01
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in the TEMPLATES array at the top and support {name} (customer name from the ticket, via the PCM Ticket Info Extractor outputs when present) and {ticket} (ticket number) placeholders; unresolved placeholders stay visible so they are easy to spot. PCM_TEMPLATE_BUTTONS adds one-press shortcuts to PCM's own Insert Template entries: fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      2.0_2026-10-02
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {name} (customer name from the ticket, via the PCM Ticket Info Extractor outputs when present) and {ticket} (ticket number) placeholders; unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -23,9 +23,17 @@
 
     /******************************************************************
      * USER SETTINGS
-     * TEMPLATES is a flat list. An entry with `text` becomes a button.
-     * An entry with `items` becomes a small dropdown menu whose first
-     * option is the group label.
+     * TEMPLATES is one list, shown left to right in this order, so own
+     * templates and PCM's templates can be mixed freely. Each entry is:
+     *   { label, text, color }        own template, appended as text
+     *   { label, templateId, color }  PCM's own Insert Template entry,
+     *                                 fetched by its id (option value in
+     *                                 the Insert Template dropdown), so PCM
+     *                                 fills its own variables
+     *   { label, color, items: [...] } a dropdown menu; items are entries
+     *                                 of either kind above
+     * color is the button fill (white text); leave it out for PCM's plain
+     * grey button. Give related templates the same colour.
      *
      * Placeholders inside `text`:
      *   {name}   the customer name from the ticket, read from the
@@ -43,23 +51,39 @@
      * become empty paragraphs (same as pressing Enter in the editor).
      * End a template with \n to leave a blank line to write on.
      ******************************************************************/
+    // One colour per family of related templates.
+    var COLORS = {
+        hello: '#3f6fd6',     // greetings
+        account: '#0b7285',   // asking for the account number
+        handover: '#7b2cbf',  // incident handover and assigning
+        evidence: '#e65100',  // asking for call examples and logs
+        closing: '#2f7d2f'    // follow-up, no-reply and partner replies
+    };
+
     var TEMPLATES = [
         {
-            label: 'Hello (EN)',
+            label: 'Hello (EN)', color: COLORS.hello,
             text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n'
         },
         {
-            label: 'Hej (SE)',
+            label: 'Hej (SE)', color: COLORS.hello,
             text: 'Hej {name},\n\nTack för att du kontaktar Puzzel support.\n\n'
         },
         {
-            label: 'IF',
+            label: 'AccNr[ENG]', color: COLORS.account,
+            text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n' +
+            'Before we begin, could I get your Customer ID?\nWe are going to need it to find the correct solution.\n\n' +
+            'Thank you in advance!'
+        },
+        {
+            label: 'IF', color: COLORS.handover,
             text: 'Hello,\n\nThank you for contacting Puzzel Customer Care.\n\n' +
             'I have reviewed your ticket and identified that this incident will require further investigation by our ' +
             'second line engineers.\n\nWe will contact you as soon as we have an update.'
         },
+        { label: 'Assign', templateId: 37718, color: COLORS.handover },
         {
-            label: 'CallEx',
+            label: 'CallEx', color: COLORS.evidence,
             text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n' +
             'To help you with the below, we need a call example: the caller\'s number plus the date and time of ' +
             'the call.\nIf you can find the call in the archive in Puzzel Admin, that\'s even better: expand the call ' +
@@ -67,32 +91,21 @@
             'See how to here:\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=498'
         },
         {
-            label: 'Logs',
+            label: 'Logs', color: COLORS.evidence,
             text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n' +
             'To help us investigate this issue, please provide browser console logs from a browser where the issue occurs.\n' +
             'These logs can provide valuable information for our investigation.\n\n' +
             'Instructions for capturing console logs:\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253903\n\n' +
             'Once we have the console logs, we will continue our investigation.\n\nHave a great day!'
         },
-        {
-            label: 'Sub(PSI)',
-            text: 'Hello,\n\nUser xxFIRSTxLASTxx (xxUSERxIDxx) has received a new telephony subscription.\nDirect number = xxPHONExNUMBERxx\n\nHave a great day!'
-        }
-    ];
-
-    /******************************************************************
-     * Shortcuts to PCM's own "Insert Template" entries.
-     * templateId is the option value in the Insert Template modal's
-     * dropdown (probe it once via the modal's select). The button
-     * fetches the rendered body from the same endpoint the modal uses,
-     * so PCM fills its own variables (ticket number, assignee, ...)
-     * server-side and the template text stays maintained in PCM.
-     ******************************************************************/
-    var PCM_TEMPLATE_BUTTONS = [
-        { label: 'Assign', templateId: 37718 },
-        { label: 'PartnerSWE', templateId: 8584 },
-        { label: 'NoReplyENG', templateId: 8495 },
-        { label: 'NoReplySWE', templateId: 8448 }
+        // A dropdown: own templates and PCM templates mixed, in the order
+        // they are used (check in, close without reply, hand to partner).
+        { label: 'FollowUp', color: COLORS.closing, items: [
+            { label: 'CheckIn', text: 'Hello {name},\n\nJust checking in.\n\n' },
+            { label: 'NoReplyENG', templateId: 8495 },
+            { label: 'NoReplySWE', templateId: 8448 },
+            { label: 'PartnerENG', templateId: 8584 }
+        ] }
     ];
 
     // {name}: use only the first word of the ticket's customer name
@@ -129,6 +142,19 @@
         '.' + BAR_CLASS + ' .pcm-tpl-btn {',
         '    font-size: 12px;',
         '    padding: 3px 10px;',
+        '}',
+        '.' + BAR_CLASS + ' .pcm-tpl-colored,',
+        '.' + BAR_CLASS + ' .pcm-tpl-colored:hover,',
+        '.' + BAR_CLASS + ' .pcm-tpl-colored:focus {',
+        '    color: #fff !important;',
+        '    font-weight: 600;',
+        '}',
+        '.' + BAR_CLASS + ' .pcm-tpl-colored:hover {',
+        '    filter: brightness(1.12);',
+        '}',
+        '.' + BAR_CLASS + ' select.pcm-tpl-colored option {',
+        '    color: #333;',
+        '    background: #fff;',
         '}',
         '.' + BAR_CLASS + ' select.pcm-tpl-select {',
         '    font-size: 12px;',
@@ -275,14 +301,31 @@
         });
     }
 
+    // One click handler for both kinds of template: own text, or PCM's
+    // template fetched by id.
+    function runEntry(entry, container, btn) {
+        if (entry.templateId) insertPcmTemplate(container, entry.templateId, btn);
+        else if (entry.text) insertTemplate(container, entry.text);
+    }
+
+    function applyColor(el, color) {
+        if (!color) return;
+        el.classList.add('pcm-tpl-colored');
+        el.style.backgroundColor = color;
+        el.style.borderColor = color;
+    }
+
     function makeButton(entry, container) {
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'btn btn-default btn-xs pcm-tpl-btn';
         btn.textContent = entry.label;
-        btn.title = 'Append the "' + entry.label + '" template to the mail body';
+        btn.title = entry.templateId
+            ? 'Append the PCM template "' + entry.label + '" to the mail body'
+            : 'Append the "' + entry.label + '" template to the mail body';
+        applyColor(btn, entry.color);
         btn.addEventListener('click', function () {
-            insertTemplate(container, entry.text);
+            runEntry(entry, container, btn);
         });
         return btn;
     }
@@ -291,6 +334,7 @@
         var select = document.createElement('select');
         select.className = 'pcm-tpl-select';
         select.title = 'Append a "' + entry.label + '" template to the mail body';
+        applyColor(select, entry.color);
 
         var head = document.createElement('option');
         head.textContent = entry.label + '...';
@@ -307,21 +351,9 @@
         select.addEventListener('change', function () {
             var item = entry.items[Number(select.value)];
             select.selectedIndex = 0;
-            if (item) insertTemplate(container, item.text);
+            if (item) runEntry(item, container, select);
         });
         return select;
-    }
-
-    function makePcmButton(entry, container) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-default btn-xs pcm-tpl-btn';
-        btn.textContent = entry.label;
-        btn.title = 'Append the PCM template "' + entry.label + '" to the mail body';
-        btn.addEventListener('click', function () {
-            insertPcmTemplate(container, entry.templateId, btn);
-        });
-        return btn;
     }
 
     function buildBar(container) {
@@ -331,12 +363,9 @@
         TEMPLATES.forEach(function (entry) {
             if (Array.isArray(entry.items) && entry.items.length) {
                 bar.appendChild(makeDropdown(entry, container));
-            } else if (entry.text) {
+            } else if (entry.text || entry.templateId) {
                 bar.appendChild(makeButton(entry, container));
             }
-        });
-        PCM_TEMPLATE_BUTTONS.forEach(function (entry) {
-            if (entry.templateId) bar.appendChild(makePcmButton(entry, container));
         });
         container.parentNode.insertBefore(bar, container);
     }
