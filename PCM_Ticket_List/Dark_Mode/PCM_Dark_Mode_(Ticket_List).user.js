@@ -1,12 +1,12 @@
 // @file_name = PCM_Dark_Mode_(Ticket_List).user.js
 // @author = Kardo Rostam
-// @version = 6.9_2026-10-02
+// @version = 7.0_2026-10-02
 // @created = 2026-03-26 (v5.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket List)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.9_2026-10-02
+// @version      7.0_2026-10-02
 // @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the observer rescopes from body to the table wrapper once DataTables renders. The on/off toggle sits in the top bar left of the profile picture (BUTTON_PLACEMENT), falling back to the bottom-right corner when the top bar is not found.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -860,6 +860,19 @@
       transition:background-color ${THEME_FADE_MS}ms ease, color ${THEME_FADE_MS}ms ease,
         border-color ${THEME_FADE_MS}ms ease, box-shadow ${THEME_FADE_MS}ms ease,
         fill ${THEME_FADE_MS}ms ease, stroke ${THEME_FADE_MS}ms ease !important;
+    }
+
+    /* The ticket table switches instantly, outside the fade. Chrome does
+       not repaint table cells whose background is mid-transition: after a
+       dark to light switch the rows stayed dark (with dimmed text) until
+       hovered or until the tab was switched. Instant rows avoid that, and
+       hundreds of cells no longer animate, which also makes the fade
+       cheaper. */
+    html.${FADE_CLASS} body .dataTables_wrapper table,
+    html.${FADE_CLASS} body .dataTables_wrapper table *,
+    html.${FADE_CLASS} body .dataTables_wrapper table *::before,
+    html.${FADE_CLASS} body .dataTables_wrapper table *::after{
+      transition:none !important;
     }
 
     @media print{
