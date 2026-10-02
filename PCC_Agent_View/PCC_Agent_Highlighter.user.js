@@ -1,12 +1,12 @@
 // @file_name = PCC_Agent_Highlighter.user.js
 // @author = Kardo Rostam
-// @version = 5.8_2026-10-02
+// @version = 6.3_2026-10-02
 // @created = 2026-02-10 (v2.9)
 
 // ==UserScript==
 // @name         Puzzel Agent Highlighter
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      5.8_2026-10-02
+// @version      6.3_2026-10-02
 // @description  Highlights Puzzel Agent rows and badges names. Battery friendly: pauses all processing while the tab is hidden and resyncs once on return.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
@@ -1032,19 +1032,127 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
 
   // Keeps the grid's Time order: rows are compared by their Time value,
   // ascending or descending as the grid currently is.
-  // Placed next to a real row (before the first one with a longer Time,
-  // otherwise after the last one), always in that row's own container.
-  function placeRow(grid, cols, unit, seconds) {
+  /******************************************************************
+   * Following the grid's sort order
+   * The app's own comparison is not visible (Number sorts as plain text,
+   * Softphone first, then numbers highest first), so nothing is assumed.
+   * Each column is scored against the rows on screen, with each way of
+   * comparing and both directions, by counting neighbours that are out of
+   * order. The best fit wins, Time first on a tie (the grid's default).
+   * Header icons are not used: every header carries icons, sorted or
+   * not, which made an unsorted column look sorted. Columns with a single
+   * value on screen say nothing about the order and are skipped. The row
+   * then goes where it breaks that order the least.
+   ******************************************************************/
+  const SORT_KEYS = ['time', 'name', 'status', 'number', 'profile', 'group'];
+
+  // Reads the cell's text directly. Only a Name cell can hold the emoji
+  // badge; its text is cut out instead of copying the cell to remove it.
+  function cellValue(row, cols, key) {
+    const c = cell(row, cols[key]);
+    if (!c) return key === 'time' ? 0 : '';
+    let text = c.textContent || '';
+    const badge = key === 'name' ? c.querySelector('.m365-name-badge') : null;
+    if (badge && badge.textContent) text = text.split(badge.textContent).join('');
+    text = text.replace(/\s+/g, ' ').trim();
+    return key === 'time' ? parseDuration(text) : normalise(key, text);
+  }
+
+  // Status is compared without its counter: "Lunch (0)" and "Lunch (∞)"
+  // are the same status.
+  function normalise(key, text) {
+    return key === 'status' ? String(text).replace(/\s*\([^)]*\)\s*$/, '') : text;
+  }
+
+  const COMPARERS = {
+    duration: (a, b) => a - b,
+    natural: (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' }),
+    plain: (a, b) => { const x = String(a).toLowerCase(), y = String(b).toLowerCase(); return x < y ? -1 : x > y ? 1 : 0; }
+  };
+
+  function comparersFor(key) {
+    return key === 'time' ? ['duration'] : ['plain', 'natural'];
+  }
+
+  function outOfOrder(values, compare, dir) {
+    let bad = 0;
+    for (let i = 1; i < values.length; i += 1) if (compare(values[i - 1], values[i]) * dir > 0) bad += 1;
+    return bad;
+  }
+
+  // Every column is read once per check into this table and reused.
+  function sortSpec(cols, rows, table) {
+    const keys = SORT_KEYS.filter((k) => cols[k]);
+    let best = null;
+    keys.forEach((key) => {
+      const values = table[key] || (table[key] = rows.map((r) => cellValue(r, cols, key)));
+      if (new Set(values.map(String)).size < 2) return;
+      comparersFor(key).forEach((name) => {
+        [1, -1].forEach((dir) => {
+          const bad = outOfOrder(values, COMPARERS[name], dir);
+          if (!best || bad < best.bad) best = { key: key, compare: COMPARERS[name], dir: dir, bad: bad };
+        });
+      });
+    });
+    return best;
+  }
+
+  // The sort check only reruns when the list changes (other names, or
+  // the same names in another order). In between, only the sorted column
+  // (and Time, inside a group) is read, once per second.
+  let sortCache = { sig: null, spec: null };
+
+  function placeRow(grid, cols, unit, own) {
     const rows = shownRows(grid);
     if (!rows.length) return;
     const units = rows.map(unitOf);
-    const times = rows.map((r) => parseDuration((cell(r, cols.time) || {}).textContent));
-    const ascending = times.length < 2 || times[0] <= times[times.length - 1];
-    let before = null;
-    for (let i = 0; i < units.length; i += 1) {
-      if (ascending ? seconds <= times[i] : seconds >= times[i]) { before = units[i]; break; }
+    const table = { name: rows.map((r) => cellValue(r, cols, 'name')) };
+    const sig = table.name.join('\u0001');
+    if (sig !== sortCache.sig || !sortCache.spec) {
+      sortCache = { sig: sig, spec: sortSpec(cols, rows, table) };
     }
-    if (before) {
+    const spec = sortCache.spec;
+    if (!spec) return;
+    const values = table[spec.key] || (table[spec.key] = rows.map((r) => cellValue(r, cols, spec.key)));
+    const mine = spec.key === 'time' ? own.time : normalise(spec.key, own[spec.key]);
+
+    // Agents with the same value form a group (all on Lunch, say). The app
+    // orders the groups in its own way (Ready first, then the rest A to Z),
+    // so when such a group exists the row simply joins it, ordered by Time
+    // inside it like the others.
+    const group = [];
+    if (spec.key !== 'time') {
+      for (let k = 0; k < rows.length; k += 1) if (spec.compare(mine, values[k]) === 0) group.push(k);
+    }
+    if (group.length) {
+      const allTimes = table.time || (table.time = rows.map((r) => cellValue(r, cols, 'time')));
+      const times = group.map((k) => allTimes[k]);
+      const ascending = times.length < 2 || times[0] <= times[times.length - 1];
+      let at = group.find((k, n) => (ascending ? own.time <= times[n] : own.time >= times[n]));
+      if (at !== undefined) {
+        const before = units[at];
+        if (unit.nextElementSibling !== before) before.parentElement.insertBefore(unit, before);
+      } else {
+        const last = units[group[group.length - 1]];
+        if (last.nextElementSibling !== unit) last.insertAdjacentElement('afterend', unit);
+      }
+      return;
+    }
+
+    // Position i means "before row i" (rows.length = after the last).
+    let bestIndex = rows.length;
+    let bestCost = Infinity;
+    for (let i = 0; i <= rows.length; i += 1) {
+      let cost = 0;
+      for (let k = 0; k < rows.length; k += 1) {
+        const c = spec.compare(mine, values[k]) * spec.dir;
+        if (k < i && c < 0) cost += 1;     // a row above that should be below
+        if (k >= i && c > 0) cost += 1;    // a row below that should be above
+      }
+      if (cost < bestCost) { bestCost = cost; bestIndex = i; }
+    }
+    if (bestIndex < rows.length) {
+      const before = units[bestIndex];
       if (unit.nextElementSibling !== before) before.parentElement.insertBefore(unit, before);
     } else {
       const last = units[units.length - 1];
@@ -1163,7 +1271,11 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     // Every tick: the app reorders its own rows whenever an agent changes
     // status, which left this row behind in the old spot until the next
     // check. placeRow only touches the DOM when the spot is wrong.
-    placeRow(grid, cols, ourUnit, elapsed);
+    const statusLabel = (state.status || '') + (config.suffix ? ' ' + config.suffix : '');
+    placeRow(grid, cols, ourUnit, {
+      time: elapsed, name: config.name || '', status: statusLabel,
+      number: config.number || '', profile: config.profile || '', group: config.group || ''
+    });
     if (!ourUnit.isConnected) { report(config, 'could not place the row in the list'); return; }
     syncLayout(grid);
     report(config, 'shown: ' + (state.status || ''));
