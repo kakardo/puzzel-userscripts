@@ -1,13 +1,13 @@
 // @file_name = PCM_Dark_Mode_(Attributes).user.js
 // @author = Kardo Rostam
-// @version = 5.6_2026-10-02
+// @version = 5.8_2026-10-02
 // @created = 2026-03-27 (v4.5)
 // @note = Follows the dark mode toggle owned by PCM Dark Mode (Ticket List): its data-pz-dark="on"/"off" mark on the tickets widget decides light or dark here. Install both; on its own this script falls back to its own stored value, which defaults to dark.
 
 // ==UserScript==
 // @name         PCM Dark Mode (Attributes)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      5.6_2026-10-02
+// @version      5.8_2026-10-02
 // @description  Uses the shared PCM_DOM library for boot/retry and style injection. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the document-wide XPath search only runs when the cheap ID lookup fails. Keeps the working Attributes behavior.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -201,11 +201,12 @@
 
     if (on) {
       document.documentElement.setAttribute(GLOBAL_ATTR, 'on');
-      observeStatusChosen();
-      setTimeout(colorizeStatusChosen, 0);
     } else {
       document.documentElement.removeAttribute(GLOBAL_ATTR);
     }
+    // Status chips are coloured in both modes.
+    observeStatusChosen();
+    setTimeout(colorizeStatusChosen, 0);
 
     observeTicketsWidget();
   }
@@ -219,7 +220,10 @@
     if (ticketsWidgetObserver) ticketsWidgetObserver.disconnect();
 
     ticketsWidgetTarget = target;
-    ticketsWidgetObserver = new MutationObserver(() => scheduleApply());
+    // Applied at once, not debounced: the observer callback runs before the
+    // next paint, so this module switches in the same frame as the ticket
+    // list and the cross-fade of PCM Dark Mode (Ticket List) stays even.
+    ticketsWidgetObserver = new MutationObserver(() => apply());
     ticketsWidgetObserver.observe(target, { attributes: true, attributeFilter: ['data-pz-dark'] });
     return ticketsWidgetObserver;
   }
@@ -506,27 +510,38 @@
 
     /* ===================== STATUS BOX (keep working) ===================== */
 
-    /* Status chips colored */
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice {
+    /* Status chips: one shape in BOTH modes, modelled on the priority
+       badges in the tickets list (bold capitals on a solid colour, small
+       rounded corners, no gradient or shadow), so the chips look the same
+       in light and dark and match the list below. Only the box around
+       them changes with the mode. */
+    #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice {
       position: relative !important;
-      padding: 2px 20px 2px 8px !important;
+      padding: 3px 22px 3px 8px !important;
       border-radius: 4px !important;
-      margin: 2px 4px 2px 0 !important;
+      margin: 3px 4px 3px 0 !important;
+      font-size: 12px !important;
       font-weight: 700 !important;
-      letter-spacing: .2px !important;
+      line-height: 16px !important;
+      letter-spacing: .3px !important;
       text-transform: uppercase !important;
-      border: 1px solid rgba(255,255,255,.12) !important;
+      border: 1px solid rgba(0,0,0,.12) !important;
+      background-image: none !important;
+      box-shadow: none !important;
     }
 
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-open    { background: var(--pz-st-open) !important; color:#fff !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-pending { background: var(--pz-st-pending) !important; color:#fff !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-onhold  { background: var(--pz-st-onhold) !important; color:#fff !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-resolved{ background: var(--pz-st-resolved) !important; color:#fff !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-closed  { background: var(--pz-st-closed) !important; color:#fff !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-error   { background: var(--pz-st-error) !important; color:#fff !important; }
+    /* Status colours apply in BOTH modes (light too), so the chips look
+       the same whichever way the toggle is set and do not jump on a
+       switch. The colour variables carry their own fallbacks for light. */
+    #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-open    { background: var(--pz-st-open, #3f6fd6) !important; color:#fff !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-pending { background: var(--pz-st-pending, #2f7d2f) !important; color:#fff !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-onhold  { background: var(--pz-st-onhold, #7b2cbf) !important; color:#fff !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-resolved{ background: var(--pz-st-resolved, #f59e0b) !important; color:#fff !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-closed  { background: var(--pz-st-closed, #4b5563) !important; color:#fff !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice.pz-status-error   { background: var(--pz-st-error, #d32f2f) !important; color:#fff !important; }
 
     /* X as text */
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice .search-choice-close {
+    #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice .search-choice-close {
       position: absolute !important;
       right: 5px !important;
       top: 50% !important;
@@ -537,7 +552,7 @@
       background: none !important;
       opacity: 1 !important;
     }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice .search-choice-close::before {
+    #${STATUS_SELECT_ID}_chosen .chosen-choices li.search-choice .search-choice-close::before {
       content: "×";
       display: inline-block;
       width: 14px;
@@ -562,12 +577,12 @@
       border-radius: 4px;
     }
 
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-open    { border-left-color: var(--pz-st-open);    background: rgba(63,111,214,0.22) !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-pending { border-left-color: var(--pz-st-pending); background: rgba(47,125,47,0.22) !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-onhold  { border-left-color: var(--pz-st-onhold);  background: rgba(123,44,191,0.22) !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-resolved{ border-left-color: var(--pz-st-resolved);background: rgba(245,158,11,0.22) !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-closed  { border-left-color: var(--pz-st-closed);  background: rgba(75,85,99,0.22) !important; }
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-error   { border-left-color: var(--pz-st-error);   background: rgba(211,47,47,0.22) !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-open    { border-left-color: var(--pz-st-open, #3f6fd6);    background: rgba(63,111,214,0.22) !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-pending { border-left-color: var(--pz-st-pending, #2f7d2f); background: rgba(47,125,47,0.22) !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-onhold  { border-left-color: var(--pz-st-onhold, #7b2cbf);  background: rgba(123,44,191,0.22) !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-resolved{ border-left-color: var(--pz-st-resolved, #f59e0b);background: rgba(245,158,11,0.22) !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-closed  { border-left-color: var(--pz-st-closed, #4b5563);  background: rgba(75,85,99,0.22) !important; }
+    #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-error   { border-left-color: var(--pz-st-error, #d32f2f);   background: rgba(211,47,47,0.22) !important; }
 
     /* Status control: no blue border when expanded */
     .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen.chosen-container-active,

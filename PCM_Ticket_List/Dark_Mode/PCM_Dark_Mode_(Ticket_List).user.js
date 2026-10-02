@@ -1,12 +1,12 @@
 // @file_name = PCM_Dark_Mode_(Ticket_List).user.js
 // @author = Kardo Rostam
-// @version = 6.8_2026-10-01
+// @version = 6.9_2026-10-02
 // @created = 2026-03-26 (v5.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket List)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.8_2026-10-01
+// @version      6.9_2026-10-02
 // @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the observer rescopes from body to the table wrapper once DataTables renders. The on/off toggle sits in the top bar left of the profile picture (BUTTON_PLACEMENT), falling back to the bottom-right corner when the top bar is not found.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -40,6 +40,10 @@
   // never lost.
   const BUTTON_PLACEMENT = 'header';
 
+  // Length of the cross-fade when the toggle is pressed. Page loads stay
+  // instant: the fade only runs on a switch. Set 0 to switch instantly.
+  const THEME_FADE_MS = 350;
+
   /******************************************************************
    * INTERNAL SETTINGS
    ******************************************************************/
@@ -47,6 +51,7 @@
   const SCOPE_CLASS  = 'pz-dark-scope-root';
   const BTN_ID       = 'pz-darkmode-toggle';
   const DOCKED_CLASS = 'pz-darkmode-docked';
+  const FADE_CLASS   = 'pz-theme-fading';
   const OVERDUE_TIME_CLASS = 'pz-overdue-time';
   const OVERDUE_TIME_COLUMNS = ['Response Target', 'Resolve Target'];
   // The profile picture's own top bar item. The toggle goes right in
@@ -266,8 +271,7 @@
     btn.type = 'button';
 
     btn.addEventListener('click', () => {
-      setOn(!isOn());
-      apply();
+      switchTheme(!isOn());
     });
 
     placeButton(btn);
@@ -336,9 +340,30 @@
     });
   }
 
+  // A switch cross-fades colours: FADE_CLASS turns on colour transitions
+  // for the whole page (so every dark mode script's styles fade, not only
+  // this one's), the theme flips, and the class is removed again once the
+  // fade is done. The Attributes script follows a beat later through its
+  // own debounced observer, so the class stays on long enough to cover it.
+  // Never active on load, and skipped for users who prefer reduced motion.
+  let fadeTimer = 0;
+
+  function switchTheme(on) {
+    const root = document.documentElement;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (THEME_FADE_MS > 0 && !reduce) {
+      root.classList.add(FADE_CLASS);
+      void root.offsetWidth; // commit the transition rules before the colours change
+      clearTimeout(fadeTimer);
+      fadeTimer = setTimeout(() => root.classList.remove(FADE_CLASS), THEME_FADE_MS + 600);
+    }
+    setOn(on);
+    apply();
+  }
+
   function registerMenu() {
-    GM_registerMenuCommand('Dark mode: ON',  () => { setOn(true); apply(); });
-    GM_registerMenuCommand('Dark mode: OFF', () => { setOn(false); apply(); });
+    GM_registerMenuCommand('Dark mode: ON',  () => switchTheme(true));
+    GM_registerMenuCommand('Dark mode: OFF', () => switchTheme(false));
   }
 
   let pendingApply = false;
@@ -825,6 +850,17 @@
 
     #${BTN_ID}:hover{ opacity:1; }
     #${BTN_ID}:active{ transform:translateY(1px); }
+
+    /* Cross-fade, only while a switch is running (see switchTheme). */
+    html.${FADE_CLASS},
+    html.${FADE_CLASS} body,
+    html.${FADE_CLASS} body *,
+    html.${FADE_CLASS} body *::before,
+    html.${FADE_CLASS} body *::after{
+      transition:background-color ${THEME_FADE_MS}ms ease, color ${THEME_FADE_MS}ms ease,
+        border-color ${THEME_FADE_MS}ms ease, box-shadow ${THEME_FADE_MS}ms ease,
+        fill ${THEME_FADE_MS}ms ease, stroke ${THEME_FADE_MS}ms ease !important;
+    }
 
     @media print{
       #${BTN_ID}{ display:none !important; }
