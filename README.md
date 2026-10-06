@@ -44,6 +44,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
 - `PCC_Agent_View/`: scripts for the agent application (app.puzzel.com/agent), a different app from PCM:
   - `PCC_Agent_Highlighter`: highlights agent rows by status/profile and badges names in the ARIA agents grid. SPA-safe (grid rebinding, navigation hooks). Standalone.
   - `PCC_Softphone_Status_Highlight`: colours the Softphone Online/Offline value in the header. Standalone.
+  - `PCC_Request_Alert`: rings (and optionally notifies, flashes the tab title or the screen) when your status leaves Ready or a chat request arrives. Settings in the code and under the main menu. Standalone.
 
 ## Design logic: one shared DOM library per application, not one per folder
 
@@ -88,6 +89,7 @@ Current status:
 | PCC_User_Group_Search | No | Different app (Admin console), server-rendered, bounded boot only |
 | POS_Access_Log_Filter | No | Different app (Organisation Settings), server-rendered, bounded boot plus one row observer |
 | PCC_Agent_Highlighter | No | Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines |
+| PCC_Request_Alert | No | Different app. Watches one status element and adds one main menu entry; nothing to share |
 | PCC_Softphone_Status_Highlight | No | Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection |
 
 If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), add them additively to the shared library rather than forking it per folder.
