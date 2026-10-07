@@ -2,12 +2,13 @@
 // @author = Kardo Rostam
 // @version = 1.0_2026-10-07
 // @created = 2026-10-07 09:19
+// @note = Why: PCM's Merge Tickets search list leaves out some tickets, so they cannot be picked even though PCM accepts a merge into them (seen with tickets generated from incoming mail). Limitation: the script only fills in the ticket to merge into; PCM still decides. A ticket created by hand in PCM has no initial channel and cannot be merged at all: PCM refuses to merge into it ("Could not merge into ticket without initial channel"), hides the Merge option on it, and also refuses a merge sent from it ("Could not merge ticket without initial channel"). Tested both ways; this is enforced by PCM, not only hidden in the page. Use Parent and Child Tickets to link such tickets instead.
 
 // ==UserScript==
 // @name         PCM Merge By Number
 // @namespace    https://github.com/kakardo/puzzel-userscripts
 // @version      1.0_2026-10-07
-// @description  Adds a "merge into ticket number" field to PCM's Merge Tickets window, for when the search list does not show the ticket you want. Type the number and press Use: the ticket is looked up to confirm it exists and its title is shown, then it is put in the window exactly as if you had picked it from the list. You still press PCM's own Merge button, so the merge goes through PCM's normal request and checks. Optional (a tick box in the window, off by default): when you type a number in PCM's own search field and the ticket is not in its list, the script looks it up and tells you to use its field instead. Event-driven via Bootstrap's shown.bs.modal: zero cost while the window is closed, no observers, no polling.
+// @description  Adds a "merge into ticket number" field to PCM's Merge Tickets window, for when the search list does not show the ticket you want. Needed because PCM's search list leaves out some tickets that PCM does accept as merge targets (seen with tickets generated from incoming mail). Type the number and press Use: the ticket is looked up to confirm it exists and its title is shown, then it is put in the window exactly as if you had picked it from the list. You still press PCM's own Merge button, so the merge goes through PCM's normal request and checks. Limitation: a ticket created by hand in PCM (no initial channel) cannot be merged in either direction; PCM refuses it, so link it with Parent and Child Tickets instead. Optional (a tick box in the window, off by default): when you type a number in PCM's own search field and the ticket is not in its list, the script looks it up and tells you to use its field instead. Event-driven via Bootstrap's shown.bs.modal: zero cost while the window is closed, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -123,9 +124,10 @@
     // When you type a ticket number in PCM's own search field, the script
     // waits for PCM's list, checks whether the ticket is in it, and if not
     // looks it up itself and tells you, so you know to use the field below.
-    // PCM leaves tickets out of its list when it will not merge into them
-    // (for example a ticket without an initial channel), so a ticket that
-    // is only found this way may still be refused when you press Merge.
+    // PCM's list leaves out some tickets it does merge into (tickets
+    // generated from incoming mail), but also tickets it refuses (created
+    // by hand in PCM, so without an initial channel). The script cannot
+    // tell them apart, so the message mentions both.
     function waitForPcmList(done) {
         var started = Date.now();
         (function check() {
@@ -163,8 +165,8 @@
             lookUp(number).then(function (title) {
                 row.querySelector('.pcm-mbn-line input').value = number;
                 setMessage(row, 'Ticket ' + number + ' is not in PCM\'s list, but it exists' + (title ? ': ' + title : '') +
-                    '. Press Use to select it. PCM may still refuse the merge (for example when the ticket has no ' +
-                    'initial channel); if so, merge the other way: open ticket ' + number + ' and merge it into this one.', 'warn');
+                    '. Press Use to select it. If the ticket was created by hand in PCM, PCM will refuse the merge (no ' +
+                    'initial channel), in either direction; link the tickets with Parent and Child Tickets instead.', 'warn');
             }, function () {
                 setMessage(row, 'Ticket ' + number + ' was not found, or you do not have access to it.', false);
             });
