@@ -13,6 +13,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCM_Ticket_Info_Extractor`: surfaces CustomerID, Customer Name, Company Name and Partner from Customer Intelligence on one compact line, and publishes them for the other scripts (`PCM_TICKET_INFO`, data attributes, fixed elements, `pcm-ticket-info-ready`). Reads the ID from both the `CustomerID` and the newer `AccountNumber` attribute. Uses the shared DOM library.
   - `PCM_Name_Field_Placeholder`: adds a placeholder name link in Customer Intelligence when no name is set.
   - `PCM_Image_Viewer`: upgrades the attachment preview modal with an Open in tab button, zoom controls and drag to pan for images. Standalone, purely event-driven.
+  - `PCM_Merge_By_Number`: adds a ticket number field to the Merge Tickets window for tickets its search list does not show. The ticket is looked up and shown first; you still press PCM's own Merge button. Standalone, purely event-driven.
   - `PCM_No_Access_Redirection_Button`: adds a large Go to ticket list button to the "Ticket reassigned" message shown after sending a ticket to a team you cannot access, skipping the leave-page prompt; PCM's Confirm is replaced by a "stay in this ticket" link. Uses the shared DOM library.
   - `Attributes/`: scripts scoped to the Attributes widget (Organisation, Team, Assigned To, Status, Priority, Tags):
     - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
@@ -85,6 +86,7 @@ Current status:
 | PCM_Subscription_Buttons | Yes | Field finder, native value setter and editor helpers |
 | PCM_Template_ID_Viewer | No | Purely event-driven inside one modal |
 | PCM_Image_Viewer | No | Purely event-driven via `shown.bs.modal` and the iframe load event |
+| PCM_Merge_By_Number | No | Purely event-driven via `shown.bs.modal`; one lookup per Use click |
 | PCM_No_Access_Redirection_Button | Yes | `bootUntil`, `ensureStyleTag`, `cleanText`; one observer on the direct children of body |
 | PCC_User_Group_Search | No | Different app (Admin console), server-rendered, bounded boot only |
 | POS_Access_Log_Filter | No | Different app (Organisation Settings), server-rendered, bounded boot plus one row observer |
