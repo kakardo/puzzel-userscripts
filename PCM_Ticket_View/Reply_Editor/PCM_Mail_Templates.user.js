@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 2.0_2026-10-02
+// @version = 2.2_2026-10-07
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.0_2026-10-02
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {name} (customer name from the ticket, via the PCM Ticket Info Extractor outputs when present) and {ticket} (ticket number) placeholders; unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      2.2_2026-10-07
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) and {ticket} placeholders; {name} still works as {firstName}. Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -36,16 +36,22 @@
      * grey button. Give related templates the same colour.
      *
      * Placeholders inside `text`:
-     *   {name}   the customer name from the ticket, read from the
-     *            PCM Ticket Info Extractor outputs (window.PCM_TICKET_INFO
-     *            or its published DOM element). Falls back to a name
-     *            derived from the To address if the Extractor is not
-     *            running.
-     *   {ticket} the ticket number, taken from the page URL or the
-     *            [123456] tag in the reply subject.
-     * If {name} cannot be resolved, the placeholder AND any spaces just
-     * before it are removed, so 'Hello {name},' cleanly becomes
-     * 'Hello,'. An unresolved {ticket} stays visible so you notice it.
+     *   {firstName} the customer's first name from the ticket
+     *   {fullName}  the customer's full name from the ticket
+     *   {customer}  the customer company (the ticket's organisation)
+     *   {partner}   the partner that manages the customer (the
+     *               organisation's Partner attribute)
+     *   {ticket}    the ticket number, taken from the page URL or the
+     *               [123456] tag in the reply subject
+     *   {name}      older name for {firstName}, still works
+     * Names, customer and partner are read from the PCM Ticket Info
+     * Extractor outputs (window.PCM_TICKET_INFO or its published DOM
+     * elements). Without the Extractor, the names are guessed from the
+     * To address; customer and partner need the Extractor.
+     * If a name cannot be resolved, the placeholder AND any spaces just
+     * before it are removed, so 'Hello {firstName},' cleanly becomes
+     * 'Hello,'. An unresolved {customer}, {partner} or {ticket} stays
+     * visible so you notice it before sending.
      *
      * Every newline in `text` is a new line in the mail; empty lines
      * become empty paragraphs (same as pressing Enter in the editor).
@@ -63,15 +69,15 @@
     var TEMPLATES = [
         {
             label: 'Hello (EN)', color: COLORS.hello,
-            text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n'
+            text: 'Hello {firstName},\n\nThank you for contacting Puzzel support.\n\n'
         },
         {
             label: 'Hej (SE)', color: COLORS.hello,
-            text: 'Hej {name},\n\nTack för att du kontaktar Puzzel support.\n\n'
+            text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel support.\n\n'
         },
         {
             label: 'AccNr[ENG]', color: COLORS.account,
-            text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n' +
+            text: 'Hello {firstName},\n\nThank you for contacting Puzzel support.\n\n' +
             'Before we begin, could I get your Customer ID?\nWe are going to need it to find the correct solution.\n\n' +
             'Thank you in advance!'
         },
@@ -84,7 +90,7 @@
         { label: 'Assign', templateId: 37718, color: COLORS.handover },
         {
             label: 'CallEx', color: COLORS.evidence,
-            text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n' +
+            text: 'Hello {firstName},\n\nThank you for contacting Puzzel support.\n\n' +
             'To help you with the below, we need a call example: the caller\'s number plus the date and time of ' +
             'the call.\nIf you can find the call in the archive in Puzzel Admin, that\'s even better: expand the call ' +
             'details and send us the "Call ID" and "Session ID". That lets us look up the right log files quickly.\n\n' +
@@ -92,7 +98,7 @@
         },
         {
             label: 'Logs', color: COLORS.evidence,
-            text: 'Hello {name},\n\nThank you for contacting Puzzel support.\n\n' +
+            text: 'Hello {firstName},\n\nThank you for contacting Puzzel support.\n\n' +
             'To help us investigate this issue, please provide browser console logs from a browser where the issue occurs.\n' +
             'These logs can provide valuable information for our investigation.\n\n' +
             'Instructions for capturing console logs:\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253903\n\n' +
@@ -101,19 +107,22 @@
         // A dropdown: own templates and PCM templates mixed, in the order
         // they are used (check in, close without reply, hand to partner).
         { label: 'FollowUp', color: COLORS.closing, items: [
-            { label: 'CheckIn', text: 'Hello {name},\n\nJust checking in.\n\n' },
+            { label: 'CheckIn', text: 'Hello {firstName},\n\nJust checking in.\n\n' },
             { label: 'NoReplyENG', templateId: 8495 },
             { label: 'NoReplySWE', templateId: 8448 },
-            { label: 'PartnerENG', templateId: 8584 }
+            {
+                label: 'PartnerENG',
+                text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
+                'Your Puzzel services are managed by {partner}, so all support requests need to go through ' +
+                '{partner} support. They can then raise the case with us on your behalf if needed.\n\n' +
+                'We are sorry that we cannot help you directly with this request. We understand that you may have ' +
+                'contacted Puzzel Support directly in the past, and we appreciate your understanding.'
+            }
         ] }
     ];
 
-    // {name}: use only the first word of the ticket's customer name
-    // (greeting style). Set to false to insert the full name.
-    var NAME_FIRST_WORD_ONLY = true;
-
     // Email domains that are never the customer (skipped when the
-    // fallback resolves {name} from the reply block, so the From line
+    // fallback resolves the names from the reply block, so the From line
     // does not win).
     var IGNORE_EMAIL_DOMAINS = ['puzzel.com'];
 
@@ -204,52 +213,61 @@
         return null;
     }
 
-    function nameFromEmail(email) {
-        var local = email.split('@')[0];
-        var first = local.split(/[._-]/)[0].replace(/\d+/g, '');
-        if (!first) return null;
-        return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+    function capitalise(word) {
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     }
 
-    // Customer name as shown in the ticket. Soft dependency on the
-    // PCM Ticket Info Extractor: reads its published outputs when they
-    // exist, never requires them.
-    function ticketCustomerName() {
+    // 'first.last@example.com' gives 'First Last'.
+    function nameFromEmail(email) {
+        var parts = email.split('@')[0].split(/[._-]/).map(function (p) {
+            return p.replace(/\d+/g, '');
+        }).filter(Boolean);
+        return parts.length ? parts.map(capitalise).join(' ') : null;
+    }
+
+    // Values published by the PCM Ticket Info Extractor. Soft
+    // dependency: read when they exist, never required. Tries the global
+    // object, then the wrapper dataset, then the fixed value element.
+    function ticketInfo(key, elementId) {
         var info = window.PCM_TICKET_INFO || {};
-        var name = D.cleanText(info.customerName || '');
-        if (!name) {
-            var el = document.getElementById('pcm-ticket-customer-name');
-            name = el ? D.cleanText(el.textContent) : '';
-        }
-        if (!name) {
+        var value = D.cleanText(info[key] || '');
+        if (!value) {
             var root = document.getElementById('pcm-ticket-info');
-            name = root ? D.cleanText(root.dataset.customerName || '') : '';
+            value = root ? D.cleanText(root.dataset[key] || '') : '';
         }
-        if (!name) return null;
-        return NAME_FIRST_WORD_ONLY ? name.split(' ')[0] : name;
+        if (!value) {
+            var el = document.getElementById(elementId);
+            value = el ? D.cleanText(el.textContent) : '';
+        }
+        return value || null;
     }
 
     function resolvePlaceholders(text, container) {
         var block = replyBlock(container);
         var editable = container.querySelector('.note-editable');
 
-        var resolvedName = ticketCustomerName();
-        if (!resolvedName) {
+        var fullName = ticketInfo('customerName', 'pcm-ticket-customer-name');
+        if (!fullName) {
             var email = recipientEmail(block, editable);
-            resolvedName = email ? nameFromEmail(email) : null;
+            fullName = email ? nameFromEmail(email) : null;
         }
+        var values = {
+            firstName: fullName ? fullName.split(' ')[0] : null,
+            fullName: fullName,
+            customer: ticketInfo('companyName', 'pcm-ticket-company-name'),
+            partner: ticketInfo('partner', 'pcm-ticket-partner'),
+            ticket: ticketNumber(block)
+        };
+        values.name = values.firstName;
 
-        // No name found: drop the placeholder and the spaces before it,
-        // so 'Hello {name},' becomes 'Hello,' with no gap.
-        return text
-            .replace(/[ \t]*\{name\}/g, function (match) {
-                return resolvedName
-                    ? match.replace('{name}', resolvedName)
-                    : '';
-            })
-            .replace(/\{ticket\}/g, function (tag) {
-                return ticketNumber(block) || tag;
-            });
+        // Names that are not found are dropped with the spaces before
+        // them, so 'Hello {firstName},' becomes 'Hello,' with no gap.
+        // Other unresolved placeholders stay visible.
+        var DROP_IF_MISSING = { firstName: true, fullName: true, name: true };
+        return text.replace(/([ \t]*)\{(firstName|fullName|name|customer|partner|ticket)\}/g, function (match, space, key) {
+            if (values[key]) return space + values[key];
+            return DROP_IF_MISSING[key] ? '' : match;
+        });
     }
 
     // Text-to-HTML, emptiness, and the Summernote append path live in

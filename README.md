@@ -26,7 +26,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
     - `PCM_Incident_Button`: one button that sets the Forms widget to the platform-incident preset (Form, Puzzel Service, Product Area, cause, Impact, Urgency), waiting for each re-render. Uses the shared DOM library.
     - `PCM_Change_Completed_Now`: a Now button beside Change Completed that fills in the current date and time with the timezone visible. Uses the shared DOM library.
   - `Reply_Editor/`: scripts scoped to the Summernote reply editor:
-    - `PCM_Mail_Templates`: template buttons and dropdowns above the reply editor, with `{name}`/`{ticket}` placeholders and one-press shortcuts to PCM's own Insert Template entries. The editor is kept out of browser page translation, so typing is never rewritten and the cursor stays put. Uses the shared DOM library.
+    - `PCM_Mail_Templates`: template buttons and dropdowns above the reply editor, with `{firstName}`, `{fullName}`, `{customer}`, `{partner}` and `{ticket}` placeholders and one-press shortcuts to PCM's own Insert Template entries. The editor is kept out of browser page translation, so typing is never rewritten and the cursor stays put. Uses the shared DOM library.
     - `PCM_Subscription_Buttons`: one-press handling of partner telephony subscription tickets (one button per product): fills the Change form fields and appends the confirmation mail, with user details read from the first mail in the ticket. Uses the shared DOM library.
     - `PCM_Template_ID_Viewer`: shows and copies the numeric template id of the selected entry in PCM's Insert Template modal. Standalone, purely event-driven.
 - `PCM_Ticket_List/`: scripts for the ticket list page (`/tickets`) and dashboard (`/`):
