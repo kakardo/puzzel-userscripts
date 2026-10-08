@@ -1,12 +1,12 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 7.1_2026-10-08
+// @version = 7.2_2026-10-08
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      7.1_2026-10-08
+// @version      7.2_2026-10-08
 // @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts. Reads again when PCM Show Organisation Info signals that the Organisation Information module was added or changed after an Attributes save (event pcm-organisation-info-refreshed), and announces the new values the same way, so the scripts that use them update without a reload. The panel is put back automatically when PCM rebuilds the ticket header after an Attributes save.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -514,9 +514,8 @@
     return true;
   }
 
-  if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag || !window.PCM_DOM?.cleanText ||
-      !window.PCM_DOM?.createVisibilityGate) {
-    console.error(REQUIRE_ERROR + ' (lib 2.0 or newer required)');
+  if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag || !window.PCM_DOM?.cleanText) {
+    console.error(REQUIRE_ERROR + ' (lib 1.8 or newer required)');
     return;
   }
 
@@ -535,13 +534,14 @@
     insert().then(watchHeaderBox);
   }, config);
 
-  // An Attributes save makes PCM rebuild the ticket header box from the
-  // server's answer, which wipes the panel inside it. The values have not
-  // changed, so the panel is put back from the last published values,
-  // without reading the ticket again and without a new ready event.
-  // One observer on the main content area, behind the shared visibility
-  // gate; it only writes when the panel is missing, so it never feeds
-  // itself.
+  // An Attributes save (PATCH /tickets/<number>) makes PCM rebuild the
+  // ticket header box from the server's answer, which wipes the panel
+  // inside it. The values have not changed, so the panel is put back from
+  // the last published values, without reading the ticket again and
+  // without a new ready event. Runs only when such a save finishes
+  // (jQuery's ajaxComplete): nothing runs between saves. Checked right
+  // away and once more shortly after, in case PCM draws the box a moment
+  // later; it only writes when the panel is missing.
   function keepPanel() {
     if (!lastPayload || document.getElementById(PANEL_ID)) return;
     const host = document.querySelector('div.ticket-description.well');
@@ -549,16 +549,16 @@
   }
 
   function watchHeaderBox() {
-    const gate = window.PCM_DOM.createVisibilityGate(keepPanel, 50);
-    const root = document.getElementById('content') || document.body;
-    new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (m.addedNodes.length || m.removedNodes.length) {
-          gate.schedule();
-          return;
-        }
-      }
-    }).observe(root, { childList: true, subtree: true });
+    const jq = window.jQuery;
+    const ticket = (window.location.pathname.match(/^\/tickets\/(\d+)/) || [])[1];
+    if (!jq || !ticket) return;
+    const saveUrl = new RegExp('^(https://[^/]+)?/tickets/' + ticket + '(\\?|$)');
+    jq(document).on('ajaxComplete', (event, xhr, settings) => {
+      if (!settings || String(settings.type || settings.method).toUpperCase() !== 'PATCH') return;
+      if (!saveUrl.test(settings.url || '')) return;
+      window.setTimeout(keepPanel, 0);
+      window.setTimeout(keepPanel, 500);
+    });
   }
 
   // Wake-up from PCM Show Organisation Info: the organisation was saved
