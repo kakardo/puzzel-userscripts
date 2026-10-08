@@ -30,6 +30,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
     - `PCM_Change_Completed_Now`: a Now button beside Change Completed that fills in the current date and time with the timezone visible. Uses the shared DOM library.
   - `Reply_Editor/`: scripts scoped to the Summernote reply editor:
     - `PCM_Reply_Editor_Autosize`: the reply editor grows with its text from 10 rows and only scrolls past 100 rows. Pure CSS, standalone.
+    - `PCM_Timeline_Box_Autosize`: sizes the Timeline boxes (notes, mails, API entries) to their content between a min and max height, with a Box Sizing menu next to Timeline Options. Uses the shared DOM library.
     - `PCM_Mail_Templates`: template buttons and dropdowns above the reply editor, with `{firstName}`, `{fullName}`, `{customer}`, `{partner}` and `{ticket}` placeholders and one-press shortcuts to PCM's own Insert Template entries. The editor is kept out of browser page translation, so typing is never rewritten and the cursor stays put. Uses the shared DOM library.
     - `PCM_Subscription_Buttons`: one-press handling of partner telephony subscription tickets (one button per product): fills the Change form fields and appends the confirmation mail, with user details read from the first mail in the ticket. Uses the shared DOM library.
     - `PCM_Template_ID_Viewer`: shows and copies the numeric template id of the selected entry in PCM's Insert Template modal. Standalone, purely event-driven.
@@ -87,6 +88,7 @@ Current status:
 | PCM_Incident_Button | Yes | Field lookup and value setting over the re-rendering Forms widget |
 | PCM_Change_Completed_Now | Yes | Widget-scoped observer behind `createVisibilityGate` |
 | PCM_Reply_Editor_Autosize | No | Pure CSS, a single style tag |
+| PCM_Timeline_Box_Autosize | Yes | `createVisibilityGate`, `installNavigationHooks`, `readJson`/`writeJson`; one ResizeObserver plus one scoped MutationObserver |
 | PCM_Mail_Templates | Yes | Summernote editor helpers, `createVisibilityGate`, `flashLabel` |
 | PCM_Subscription_Buttons | Yes | Field finder, native value setter and editor helpers |
 | PCM_Template_ID_Viewer | No | Purely event-driven inside one modal |
