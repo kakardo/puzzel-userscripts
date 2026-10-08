@@ -1,13 +1,13 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 6.9_2026-10-02
+// @version = 7.1_2026-10-08
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.9_2026-10-02
-// @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts.
+// @version      7.1_2026-10-08
+// @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts. Reads again when PCM Show Organisation Info signals that the Organisation Information module was added or changed after an Attributes save (event pcm-organisation-info-refreshed), and announces the new values the same way, so the scripts that use them update without a reload. The panel is put back automatically when PCM rebuilds the ticket header after an Attributes save.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -471,8 +471,17 @@
     root.appendChild(item);
   }
 
+  // The last published values, so the panel can be put back without
+  // reading the ticket again (see keepPanel below).
+  let lastPayload = null;
+
   function render(info) {
     const payload = publish(info);
+    lastPayload = payload;
+    return buildPanel(payload);
+  }
+
+  function buildPanel(payload) {
     const panel = document.createElement('div');
     const root = document.createElement('div');
 
@@ -505,8 +514,9 @@
     return true;
   }
 
-  if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag || !window.PCM_DOM?.cleanText) {
-    console.error(REQUIRE_ERROR + ' (lib 1.8 or newer required)');
+  if (!window.PCM_DOM?.bootUntil || !window.PCM_DOM?.ensureStyleTag || !window.PCM_DOM?.cleanText ||
+      !window.PCM_DOM?.createVisibilityGate) {
+    console.error(REQUIRE_ERROR + ' (lib 2.0 or newer required)');
     return;
   }
 
@@ -522,6 +532,54 @@
   window.PCM_DOM.bootUntil(function() {
     return !!document.querySelector('div.ticket-description.well') && !!(ciWidget() || orgWidget());
   }, function() {
-    insert();
+    insert().then(watchHeaderBox);
   }, config);
+
+  // An Attributes save makes PCM rebuild the ticket header box from the
+  // server's answer, which wipes the panel inside it. The values have not
+  // changed, so the panel is put back from the last published values,
+  // without reading the ticket again and without a new ready event.
+  // One observer on the main content area, behind the shared visibility
+  // gate; it only writes when the panel is missing, so it never feeds
+  // itself.
+  function keepPanel() {
+    if (!lastPayload || document.getElementById(PANEL_ID)) return;
+    const host = document.querySelector('div.ticket-description.well');
+    if (host) host.appendChild(buildPanel(lastPayload));
+  }
+
+  function watchHeaderBox() {
+    const gate = window.PCM_DOM.createVisibilityGate(keepPanel, 50);
+    const root = document.getElementById('content') || document.body;
+    new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.addedNodes.length || m.removedNodes.length) {
+          gate.schedule();
+          return;
+        }
+      }
+    }).observe(root, { childList: true, subtree: true });
+  }
+
+  // Wake-up from PCM Show Organisation Info: the organisation was saved
+  // after the page loaded, so read again. publish() then sends the usual
+  // ready event and the scripts that listen to it update themselves.
+  // A read already running is followed by one more, never several.
+  let rereading = null;
+  let rereadAgain = false;
+  document.addEventListener('pcm-organisation-info-refreshed', function() {
+    if (rereading) {
+      rereadAgain = true;
+      return;
+    }
+    rereading = insert().catch(function(err) {
+      console.warn('[PCM Ticket Info Extractor] reading again failed', err);
+    }).then(function() {
+      rereading = null;
+      if (rereadAgain) {
+        rereadAgain = false;
+        document.dispatchEvent(new CustomEvent('pcm-organisation-info-refreshed'));
+      }
+    });
+  }, false);
 })();

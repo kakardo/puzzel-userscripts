@@ -19,6 +19,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
     - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
     - `PCM_Team_Quick_Select`: one-click buttons under the Team dropdown that select configured teams in the Chosen widget, each team in its own colour. Teams are a config array at the top. Uses the shared DOM library.
     - `PCM_Organisation_Quick_Search`: one-click search buttons under the Organisation dropdown for the Customer ID found on the ticket, the Customer ID entered in Forms (when it differs), and fixed search strings; a single matching organisation is picked automatically. Uses the shared DOM library.
+    - `PCM_Show_Organisation_Info`: shows the Organisation Information module right after an organisation is saved in Attributes, instead of only after a reload, by loading it once from the ticket page in the background. Standalone, event-driven via jQuery's ajaxComplete.
     - `PCM_Partner_Highlight`: shows the ticket's partner in large purple letters beside the Attributes heading, read from the Ticket Info Extractor; nothing is shown without a partner. Uses the shared DOM library.
     - `PCM_Unsaved_Attributes_Warning`: snapshot-based unsaved change detection for the Attributes widget; highlights changed fields and dropdowns and shows a warning next to Save. Uses the shared DOM library.
   - `Forms/`: scripts scoped to the Forms widget:
@@ -79,6 +80,7 @@ Current status:
 | PCM_Last_Activity_Sort | No | Drives the DataTables API, event-driven via init.dt and order.dt; no DOM watching to share |
 | PCM_Unsaved_Attributes_Warning | Yes | Built on `createUnsavedWatcher` |
 | PCM_Organisation_Quick_Search | Yes | `createFieldFinder`, `createVisibilityGate`, `flashLabel`; drives the select2 Organisation widget |
+| PCM_Show_Organisation_Info | No | Event-driven via jQuery `ajaxComplete`; one background request per organisation change |
 | PCM_Partner_Highlight | Yes | `createVisibilityGate`, `installNavigationHooks`; reads the Extractor's outputs |
 | PCM_Incident_Button | Yes | Field lookup and value setting over the re-rendering Forms widget |
 | PCM_Change_Completed_Now | Yes | Widget-scoped observer behind `createVisibilityGate` |

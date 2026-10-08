@@ -1,6 +1,6 @@
 // @file_name = PCM_Form_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 4.0_2026-09-04
+// @version = 4.1_2026-10-08
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -10,8 +10,8 @@
 // ==UserScript==
 // @name         PCM Form Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.0_2026-09-04
-// @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route.
+// @version      4.1_2026-10-08
+// @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route. When the Extractor announces new values after the form was handled (for example an organisation saved later), the buttons and mismatch markers update; autofill does not run again, so typed values are never overwritten.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -31,7 +31,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Form Buttons';
-  const SCRIPT_VERSION = '4.0_2026-09-04';
+  const SCRIPT_VERSION = '4.1_2026-10-08';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const FORMS_INJECT_ID = 'kardo-forms-customer-copy';
@@ -836,7 +836,16 @@
     document.addEventListener('change', onFieldEvent, true);
 
     document.addEventListener('pcm-ticket-info-ready', () => {
-      if (state.completedRouteKey === getRouteKey() && state.done.forms && state.done.autofill) return;
+      if (state.completedRouteKey === getRouteKey() && state.done.forms && state.done.autofill) {
+        // New values after the form was handled (an organisation saved
+        // later): update the buttons and the mismatch markers only.
+        // Autofill is not repeated, so typed values are never overwritten.
+        state.cache.extractorRoot = null;
+        const info = readTicketInfo();
+        if (hasUsableTicketInfo(info)) ensureFormsButtons(info);
+        mismatchGate.schedule();
+        return;
+      }
       clearAllCaches();
       scheduleRetry(0);
     }, false);
