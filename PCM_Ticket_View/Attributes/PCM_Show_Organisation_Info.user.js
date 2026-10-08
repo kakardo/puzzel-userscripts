@@ -1,12 +1,12 @@
 // @file_name = PCM_Show_Organisation_Info.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-10-08
+// @version = 1.1_2026-10-08
 // @created = 2026-10-08 08:45
 
 // ==UserScript==
 // @name         PCM Show Organisation Info
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-08
+// @version      1.1_2026-10-08
 // @description  Shows the Organisation Information module right after you save an organisation in Attributes, without reloading the page. PCM only builds that module when the page loads, so on a ticket that had no organisation it stayed missing until a reload. After an Attributes save that changed the organisation, the script loads the ticket page once in the background and puts its Organisation Information module in place (or updates it, or removes it when the organisation was cleared). Event-driven via jQuery's ajaxComplete: no observers, no polling, one background request per organisation change. Afterwards it signals the PCM Ticket Info Extractor (event pcm-organisation-info-refreshed) to read the ticket again, so the scripts that use its values update too.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -67,6 +67,18 @@
         return true;
     }
 
+    // On page load PCM's widget code marks each module's header and content
+    // (role="heading" / role="content"), and its stylesheet sizes the
+    // content by that mark. A module taken from the background page has
+    // not been through that code, so without the marks its content got
+    // an extra empty line on top.
+    function matchPcmLayout(widget) {
+        var header = widget.querySelector(':scope > header');
+        var content = widget.querySelector(':scope > div');
+        if (header && !header.getAttribute('role')) header.setAttribute('role', 'heading');
+        if (content && !content.getAttribute('role')) content.setAttribute('role', 'content');
+    }
+
     function refreshWidget() {
         if (busy) return;
         busy = true;
@@ -82,6 +94,7 @@
                 if (live) live.remove();
             } else {
                 var fresh = document.importNode(widget, true);
+                matchPcmLayout(fresh);
                 if (!placeWidget(fresh, freshDoc)) console.warn(LOG, 'no place found for the module');
             }
             // Wake-up for the PCM Ticket Info Extractor, which reads the
