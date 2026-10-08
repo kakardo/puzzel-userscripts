@@ -14,6 +14,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCM_Name_Field_Placeholder`: adds a placeholder name link in Customer Intelligence when no name is set.
   - `PCM_Image_Viewer`: upgrades the attachment preview modal with an Open in tab button, zoom controls and drag to pan for images. Standalone, purely event-driven.
   - `PCM_Merge_By_Number`: adds a ticket number field to the Merge Tickets window, because PCM's search list leaves out some tickets it does accept as merge targets (seen with tickets generated from incoming mail). The ticket is looked up and shown first; you still press PCM's own Merge button. Limitation: a ticket created by hand in PCM (no initial channel) cannot be merged in either direction; PCM refuses it, so link such tickets with Parent and Child Tickets instead. Optional automatic lookup from PCM's own search field. Standalone, purely event-driven.
+  - `PCM_No_Autoscroll`: keeps a ticket at the top when it opens instead of jumping down to the Timeline. Stops page scrolls started by code while the ticket loads, until your first scroll, click or key press. Runs at document-start so it is in place before PCM's code. Standalone.
   - `PCM_No_Access_Redirection_Button`: adds a large Go to ticket list button to the "Ticket reassigned" message shown after sending a ticket to a team you cannot access, skipping the leave-page prompt; PCM's Confirm is replaced by a "stay in this ticket" link. Uses the shared DOM library.
   - `Attributes/`: scripts scoped to the Attributes widget (Organisation, Team, Assigned To, Status, Priority, Tags):
     - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
@@ -89,6 +90,7 @@ Current status:
 | PCM_Template_ID_Viewer | No | Purely event-driven inside one modal |
 | PCM_Image_Viewer | No | Purely event-driven via `shown.bs.modal` and the iframe load event |
 | PCM_Merge_By_Number | No | Purely event-driven via `shown.bs.modal`; one lookup per Use click |
+| PCM_No_Autoscroll | No | Must run at document-start, before the library loads; active only while a ticket opens |
 | PCM_No_Access_Redirection_Button | Yes | `bootUntil`, `ensureStyleTag`, `cleanText`; one observer on the direct children of body |
 | PCC_User_Group_Search | No | Different app (Admin console), server-rendered, bounded boot only |
 | POS_Access_Log_Filter | No | Different app (Organisation Settings), server-rendered, bounded boot plus one row observer |

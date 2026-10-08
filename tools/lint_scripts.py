@@ -1,6 +1,6 @@
 # @file_name = lint_scripts.py
 # @author = Kardo Rostam
-# @version = 1.2_2026-09-04
+# @version = 1.3_2026-10-08
 # @created = 2026-08-27 06:20
 
 # Lints every userscript against the repo rules:
@@ -9,6 +9,9 @@
 #   - uniform ==UserScript== block: fixed key order, shared @namespace,
 #     both @version fields identical, @downloadURL/@updateURL matching the
 #     file's actual repo path (DOM library exempt: it has no block)
+#   - @run-at document-idle; document-start only with a metadata @note
+#     that explains why (since 1.3, for scripts that must act before
+#     PCM's own code, e.g. stopping its scroll on load)
 #   - no em dashes or en dashes anywhere (also checked in .md and .yml)
 #   - with --check-bump (CI): changed scripts must have a bumped @version.
 #     (The library cascade check was removed in 1.2: per the repo rules,
@@ -133,7 +136,11 @@ def check_userscript(relpath):
         err(relpath, "block @author missing or wrong")
     if values.get("version") != version:
         err(relpath, "block @version %r differs from metadata %r" % (values.get("version"), version))
-    if values.get("run-at") != "document-idle":
+    run_at = values.get("run-at")
+    explained_start = any(line.startswith("// @note = ") and "document-start" in line for line in lines)
+    if run_at == "document-start" and not explained_start:
+        err(relpath, "@run-at document-start needs a metadata @note explaining why")
+    elif run_at not in ("document-idle", "document-start"):
         err(relpath, "@run-at must be document-idle")
 
     expected_url = RAW + relpath
