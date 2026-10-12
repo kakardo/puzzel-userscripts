@@ -1,14 +1,14 @@
 // @file_name = PCM_Timeline_Preview_Cleanup.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-10-12
+// @version = 1.2_2026-10-12
 // @created = 2026-10-12 12:34
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). User names and ids are read from the page at runtime and kept in localStorage, never written here.
 
 // ==UserScript==
 // @name         PCM Timeline Preview Cleanup
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-10-12
-// @description  Makes the Timeline Preview window (opened by clicking an older ticket in Customer Intelligence) easier to read. Hides the "Rules applied" entries, which fill most of the window with rule lists; which entry types are hidden is a list at the top. Entries in the same minute by the same person, or all via API, are merged into one row with the person named once, and "Tag ... added" lines in it are joined into one "Tags added: ..." line. System events are shown as slim boxed rows with a small grey dot instead of the big pink icon, so mails and notes stand out and every event has a clear edge, and status changes are shown as PCM's coloured status labels (OPEN → RESOLVED). Mails all start collapsed, also the newest one PCM opens on load. Puts an avatar in front of every entry done by a person ("... by First Last"): a coloured circle with their initials, replaced by their profile picture once the script has learned who they are. PCM has no full user list, so names and user ids are learned from the Assigned To lists as they load (team changes included) and remembered in localStorage; pictures appear for more people the more teams you visit. Only the preview window is affected. Event-driven via jQuery's ajaxComplete and the modal's shown event: no observers, no polling.
+// @version      1.2_2026-10-12
+// @description  Makes the Timeline Preview window (opened by clicking an older ticket in Customer Intelligence) easier to read. Hides the "Rules applied" entries, which fill most of the window with rule lists; which entry types are hidden is a list at the top. Entries in the same minute by the same person, or all via API, are merged into one row with the person named once, and "Tag ... added" lines in it are joined into one "Tags added: ..." line. System events are shown as slim boxed rows with a small grey dot instead of the big pink icon, so mails and notes stand out and every event has a clear edge, and status changes are shown as PCM's coloured status labels (OPEN → RESOLVED). Mails all start collapsed, also the newest one PCM opens on load. Puts an avatar in front of every entry done by a person ("... by First Last"): a coloured circle with their initials, replaced by their profile picture once the script has learned who they are. PCM has no full user list, so names and user ids are learned from the Assigned To lists as they load (team changes included) and remembered in localStorage; pictures appear for more people the more teams you visit. Only the preview window is affected. Event-driven via jQuery's ajaxComplete and the modal's shown event, and only while the preview is open and the tab is visible: no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -469,9 +469,12 @@
     // One pass over the entries not seen yet. Consecutive event entries
     // with the same time and the same actor form one group; entries hidden
     // by HIDDEN_EVENTS are skipped over, anything else ends the group.
+    // Only while the preview is open: Bootstrap 3 marks a shown modal with
+    // .in. Content that arrives while it is closed is picked up by the
+    // shown.bs.modal handler when it opens.
     function decoratePreview() {
         var modal = document.getElementById(MODAL_ID);
-        if (!modal) return;
+        if (!modal || !modal.classList.contains('in')) return;
         var groups = [];
         var current = null;
         modal.querySelectorAll('.smart-timeline-list li:not([' + DONE_ATTR + '])').forEach(function (li) {
@@ -494,10 +497,26 @@
         groups.forEach(function (group) { renderGroup(group.members); });
     }
 
+    // PCM's ajax keeps running in a hidden tab (notification counts and
+    // similar). Nothing is done then; one catch-up run follows when the
+    // tab is shown again, and only if a request came in meanwhile.
+    var missedWhileHidden = false;
+
     function onAjaxComplete() {
+        if (document.hidden) {
+            missedWhileHidden = true;
+            return;
+        }
         learnUsers();
         decoratePreview();
     }
+
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden || !missedWhileHidden) return;
+        missedWhileHidden = false;
+        learnUsers();
+        decoratePreview();
+    }, false);
 
     // BOOT
     // Bounded: waits for jQuery, then runs on its events only. The
