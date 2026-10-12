@@ -1,13 +1,13 @@
 // @file_name = PCM_Timeline_Box_Autosize.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-10-08
+// @version = 1.3_2026-10-12
 // @created = 2026-09-09 10:12
 // @note = The timeline bodies are same-origin iframes with ids shaped email-<n>, note-<n> and api-<n>. PCM already sizes email iframes to their content with an inline height and never sizes notes, which take a flat height from a stylesheet and clip. This script sizes every type the same way.
 
 // ==UserScript==
 // @name         PCM Timeline Box Autosize
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-08
+// @version      1.3_2026-10-12
 // @description  Sizes the Timeline message boxes to their own content so notes, mails and API entries stop clipping behind a scrollbar. Each box is a same-origin iframe measured from the inside, then clamped between a minimum and a maximum height, with optional full width. Dragging a box's resize handle pins that box to the dragged height and is remembered per box. A settings dropdown left of Timeline Options carries the on/off switch, the min and max, full width, which box types are handled, and a button to forget pinned sizes. Event-driven: a ResizeObserver per open box and one scoped MutationObserver for new boxes, all behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -54,6 +54,7 @@
     var STYLE_ID = 'pcm-timeline-autosize-style';
     var MENU_ID = 'pcm-timeline-autosize-menu';
     var TOGGLE_ID = 'pcm-timeline-autosize-toggle';
+    var OPEN_CLASS = 'pcm-autosize-open';
     var SIZED_ATTR = 'data-pcm-autosized';
     var PIN_ATTR = 'data-pcm-pinned';
 
@@ -374,6 +375,16 @@
     }
 
     D.ensureStyleTag(STYLE_ID, [
+        // The menu shares the toolbar with Timeline Options. Bootstrap
+        // opens that one by putting .open on the toolbar, which would show
+        // this menu too, so this menu ignores .open and only shows with
+        // its own class.
+        '#' + MENU_ID + ' {',
+        '    display: none;',
+        '}',
+        '#' + MENU_ID + '.' + OPEN_CLASS + ' {',
+        '    display: block;',
+        '}',
         '#' + MENU_ID + ' {',
         '    min-width: 260px;',
         '    padding: 8px 12px;',
@@ -580,34 +591,65 @@
     }
 
     function buildToggle() {
-        var btn = document.createElement('button');
-        btn.className = 'btn dropdown-toggle btn-xs btn-default';
+        // A copy of the Timeline Options button, so classes, spacing
+        // between icon, text and caret, and height all match it exactly.
+        // Only the label text changes.
+        var source = optionsButton();
+        var btn;
+        if (source) {
+            btn = source.cloneNode(true);
+            var walker = document.createTreeWalker(btn, NodeFilter.SHOW_TEXT);
+            var node;
+            var replaced = false;
+            while ((node = walker.nextNode())) {
+                if (!node.nodeValue.trim()) continue;
+                node.nodeValue = replaced ? '' : node.nodeValue.replace(/\S.*\S|\S/, 'Box Sizing');
+                replaced = true;
+            }
+        } else {
+            btn = document.createElement('button');
+            btn.className = 'btn dropdown-toggle btn-xs btn-default';
+            btn.appendChild(document.createTextNode('Box Sizing'));
+        }
         btn.id = TOGGLE_ID;
         btn.type = 'button';
-        btn.setAttribute('data-toggle', 'dropdown');
+        // Opened by this script, not Bootstrap, see setMenuOpen.
+        btn.removeAttribute('data-toggle');
+        btn.setAttribute('aria-expanded', 'false');
         btn.title = 'Box sizing options';
-
-        // Same three-part shape as the Timeline Options button: icon
-        // label, text, caret label.
-        var icon = document.createElement('label');
-        icon.className = 'aa-pt-cogs-grey aa-14';
-
-        var text = document.createElement('span');
-        text.textContent = 'Box Sizing';
-
-        var caret = document.createElement('label');
-        caret.className = 'aa-pt-caret-down-grey aa-10 aa-mt-2';
-
-        btn.appendChild(icon);
-        btn.appendChild(text);
-        btn.appendChild(caret);
+        btn.addEventListener('click', function () {
+            var menu = document.getElementById(MENU_ID);
+            setMenuOpen(!(menu && menu.classList.contains(OPEN_CLASS)));
+        });
         return btn;
     }
+
+    function setMenuOpen(open) {
+        var menu = document.getElementById(MENU_ID);
+        var btn = document.getElementById(TOGGLE_ID);
+        if (menu) menu.classList.toggle(OPEN_CLASS, !!open);
+        if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    // Close on a click anywhere outside the button and menu (this also
+    // covers opening Timeline Options) and on Escape. Clicks inside the
+    // menu never reach here, the menu stops them.
+    document.addEventListener('click', function (event) {
+        var btn = document.getElementById(TOGGLE_ID);
+        if (btn && btn.contains(event.target)) return;
+        setMenuOpen(false);
+    }, false);
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') setMenuOpen(false);
+    }, false);
 
     function rebuildMenu() {
         var existing = document.getElementById(MENU_ID);
         if (!existing || !existing.parentElement) return;
-        existing.parentElement.replaceChild(buildMenu(), existing);
+        var next = buildMenu();
+        // Reset rebuilds the menu while it is open; keep it open.
+        if (existing.classList.contains(OPEN_CLASS)) next.classList.add(OPEN_CLASS);
+        existing.parentElement.replaceChild(next, existing);
     }
 
     function ensureControl() {
@@ -621,14 +663,11 @@
         var oldMenu = document.getElementById(MENU_ID);
         if (oldMenu) oldMenu.remove();
 
-        // Inserted before the Timeline Options button so it reads left
-        // of it, matching where PCM's own toolbar buttons sit.
+        // Inserted straight into the toolbar before the Timeline Options
+        // button, so both buttons share the same line and alignment.
         var anchor = optionsButton();
-        var toggle = buildToggle();
-        var menu = buildMenu();
-
-        bar.insertBefore(toggle, anchor);
-        bar.insertBefore(menu, anchor);
+        bar.insertBefore(buildToggle(), anchor);
+        bar.insertBefore(buildMenu(), anchor);
         return true;
     }
 
