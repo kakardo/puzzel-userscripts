@@ -1,14 +1,14 @@
 // @file_name = PCM_Timeline_Preview_Cleanup.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-10-12
+// @version = 1.1_2026-10-12
 // @created = 2026-10-12 12:34
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). User names and ids are read from the page at runtime and kept in localStorage, never written here.
 
 // ==UserScript==
 // @name         PCM Timeline Preview Cleanup
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-12
-// @description  Makes the Timeline Preview window (opened by clicking an older ticket in Customer Intelligence) easier to read. Hides the "Rules applied" entries, which fill most of the window with rule lists; which entry types are hidden is a list at the top. Entries in the same minute by the same person, or all via API, are merged into one row with the person named once, and "Tag ... added" lines in it are joined into one "Tags added: ..." line. System events are shown as slim rows with a small grey dot instead of the big pink icon, so mails and notes stand out, and status changes are shown as PCM's coloured status labels (OPEN → RESOLVED). Mails all start collapsed, also the newest one PCM opens on load. Puts an avatar in front of every entry done by a person ("... by First Last"): a coloured circle with their initials, replaced by their profile picture once the script has learned who they are. PCM has no full user list, so names and user ids are learned from the Assigned To lists as they load (team changes included) and remembered in localStorage; pictures appear for more people the more teams you visit. Only the preview window is affected. Event-driven via jQuery's ajaxComplete and the modal's shown event: no observers, no polling.
+// @version      1.1_2026-10-12
+// @description  Makes the Timeline Preview window (opened by clicking an older ticket in Customer Intelligence) easier to read. Hides the "Rules applied" entries, which fill most of the window with rule lists; which entry types are hidden is a list at the top. Entries in the same minute by the same person, or all via API, are merged into one row with the person named once, and "Tag ... added" lines in it are joined into one "Tags added: ..." line. System events are shown as slim boxed rows with a small grey dot instead of the big pink icon, so mails and notes stand out and every event has a clear edge, and status changes are shown as PCM's coloured status labels (OPEN → RESOLVED). Mails all start collapsed, also the newest one PCM opens on load. Puts an avatar in front of every entry done by a person ("... by First Last"): a coloured circle with their initials, replaced by their profile picture once the script has learned who they are. PCM has no full user list, so names and user ids are learned from the Assigned To lists as they load (team changes included) and remembered in localStorage; pictures appear for more people the more teams you visit. Only the preview window is affected. Event-driven via jQuery's ajaxComplete and the modal's shown event: no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -38,6 +38,10 @@
     // with a small grey dot instead of the big pink icon, so mails and
     // notes stand out. false keeps PCM's own look.
     var COMPACT_EVENTS = true;
+
+    // With COMPACT_EVENTS: each event row gets a light box with a thin
+    // border, so every event has a clear edge. false leaves them open.
+    var BOX_EVENTS = true;
 
     // "Status changed from open to resolved" shown as PCM's coloured
     // status labels: Status OPEN → RESOLVED. false keeps the plain text.
@@ -76,9 +80,11 @@
         // is PCM's 35px box (absolute, top 10px plus margin 9px), scaled
         // around its centre, so horizontally it stays on the timeline line.
         // Vertically, dot, first text line and first time line all centre
-        // about 11px below the top of the row: the description loses
-        // PCM's 11px top padding and the box moves up to top -6px
-        // (35px box, centre at 11.5px).
+        // on the first text line: the description loses PCM's 11px top
+        // padding and the box moves up to top -6px (35px box, centre at
+        // 11.5px). A boxed row pushes the text down by the box's border
+        // and padding (BOX_INSET), so dot and time move down by the same.
+        var BOX_INSET = BOX_EVENTS ? 6 : 0;
         var eventLi = '#' + MODAL_ID + ' .smart-timeline-list li:has(> .smart-timeline-icon[class*="timeline-event-"])';
         // flow-root: the time is a left float two lines high, taller than
         // a one-line row. Without it the float hangs into the next row
@@ -86,14 +92,14 @@
         css.push(
             eventLi + ' {',
             '    display: flow-root !important;',
-            '    padding-top: 2px !important;',
-            '    padding-bottom: 2px !important;',
+            '    padding-top: ' + (BOX_EVENTS ? 3 : 2) + 'px !important;',
+            '    padding-bottom: ' + (BOX_EVENTS ? 3 : 2) + 'px !important;',
             '    margin-top: 0 !important;',
             '    margin-bottom: 0 !important;',
             '    min-height: 0 !important;',
             '}',
             eventLi + ' > .smart-timeline-icon {',
-            '    top: -6px !important;',
+            '    top: ' + (-6 + BOX_INSET + (BOX_EVENTS ? 1 : 0)) + 'px !important;',
             '    margin-top: 0 !important;',
             '    background: #b8bec6 !important;',
             '    transform: scale(.35);',
@@ -103,6 +109,9 @@
             '    visibility: hidden;',
             '}',
             eventLi + ' > .smart-timeline-time {',
+            // The time's lines are shorter than the text's, so it starts
+            // 2px lower in a box to centre on the same height.
+            '    padding-top: ' + (BOX_EVENTS ? BOX_INSET + 2 : 0) + 'px !important;',
             '    font-size: 11px;',
             '    line-height: 1.25;',
             '    color: #999;',
@@ -122,6 +131,19 @@
             '    font-weight: 600;',
             '}'
         );
+        if (BOX_EVENTS) {
+            // Same family as PCM's mail panels (light grey, thin border),
+            // a shade lighter so mails still stand out. 1px border plus
+            // 5px padding is the BOX_INSET above.
+            css.push(
+                eventLi + ' > .smart-timeline-content {',
+                '    padding: 5px 10px !important;',
+                '    border: 1px solid #e1e4e8;',
+                '    border-radius: 4px;',
+                '    background: #fafbfc;',
+                '}'
+            );
+        }
     }
     css.push(
         '.pcm-tp-status {',
