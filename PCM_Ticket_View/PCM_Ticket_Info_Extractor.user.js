@@ -1,12 +1,12 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 7.2_2026-10-08
+// @version = 7.3_2026-10-12
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      7.2_2026-10-08
+// @version      7.3_2026-10-12
 // @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts. Reads again when PCM Show Organisation Info signals that the Organisation Information module was added or changed after an Attributes save (event pcm-organisation-info-refreshed), and announces the new values the same way, so the scripts that use them update without a reload. The panel is put back automatically when PCM rebuilds the ticket header after an Attributes save.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -345,13 +345,14 @@
 
   // Partner attribute, e.g. "Country: Norway Partner: Example AccountNumber:
   // 12345" in the Attributes column. The cell text is one line, so the
-  // value runs until the next "Key:" (one capitalised word followed by a
+  // value runs until the next "Key:" (one capitalised word, which may
+  // contain dots, digits or underscores like "Si.Odbc", followed by a
   // colon, or one of the known two-word keys) or the end of the cell, so
   // partner names of several words stay whole.
   function rowPartner(row) {
     if (!Array.isArray(row)) return '';
     const source = (row[2] || '') + ' ' + (row[1] || '');
-    const match = source.match(/\bPartner\s*:\s*(.+?)(?=\s+(?:Account\s+Number|Customer\s+ID|Company\s+ID|[A-Z][A-Za-z]*)\s*:|$)/);
+    const match = source.match(/\bPartner\s*:\s*(.+?)(?=\s+(?:Account\s+Number|Customer\s+ID|Company\s+ID|[A-Z][\w.]*)\s*:|$)/);
     return match ? clean(match[1]) : '';
   }
 
