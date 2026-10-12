@@ -15,6 +15,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCM_Image_Viewer`: upgrades the attachment preview modal with an Open in tab button, zoom controls and drag to pan for images. Standalone, purely event-driven.
   - `PCM_Merge_By_Number`: adds a ticket number field to the Merge Tickets window, because PCM's search list leaves out some tickets it does accept as merge targets (seen with tickets generated from incoming mail). The ticket is looked up and shown first; you still press PCM's own Merge button. Limitation: a ticket created by hand in PCM (no initial channel) cannot be merged in either direction; PCM refuses it, so link such tickets with Parent and Child Tickets instead. Optional automatic lookup from PCM's own search field. Standalone, purely event-driven.
   - `PCM_No_Autoscroll`: keeps a ticket at the top when it opens instead of jumping down to the Timeline. Stops page scrolls started by code while the ticket loads, until your first scroll, click or key press. Runs at document-start so it is in place before PCM's code. Standalone.
+  - `PCM_Timeline_Preview_Cleanup`: tidies the Timeline Preview window shown when clicking an older ticket in Customer Intelligence. Hides the "Rules applied" entries (which types are hidden is a list at the top), merges entries in the same minute by the same person into one row, shows system events as slim rows, status changes as coloured status labels, and puts an avatar in front of entries done by a person: coloured initials, or their profile picture once their user id has been learned from an Assigned To list (kept in localStorage). Standalone, event-driven via jQuery's ajaxComplete.
   - `PCM_No_Access_Redirection_Button`: adds a large Go to ticket list button to the "Ticket reassigned" message shown after sending a ticket to a team you cannot access, skipping the leave-page prompt; PCM's Confirm is replaced by a "stay in this ticket" link. Uses the shared DOM library.
   - `Attributes/`: scripts scoped to the Attributes widget (Organisation, Team, Assigned To, Status, Priority, Tags):
     - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To and Status fields. Built on the library's `createFieldRuntime`.
@@ -95,6 +96,7 @@ Current status:
 | PCM_Image_Viewer | No | Purely event-driven via `shown.bs.modal` and the iframe load event |
 | PCM_Merge_By_Number | No | Purely event-driven via `shown.bs.modal`; one lookup per Use click |
 | PCM_No_Autoscroll | No | Must run at document-start, before the library loads; active only while a ticket opens |
+| PCM_Timeline_Preview_Cleanup | No | CSS for hiding, plus jQuery `ajaxComplete` and `shown.bs.modal` for avatars; no observers |
 | PCM_No_Access_Redirection_Button | Yes | `bootUntil`, `ensureStyleTag`, `cleanText`; one observer on the direct children of body |
 | PCC_User_Group_Search | No | Different app (Admin console), server-rendered, bounded boot only |
 | POS_Access_Log_Filter | No | Different app (Organisation Settings), server-rendered, bounded boot plus one row observer |
