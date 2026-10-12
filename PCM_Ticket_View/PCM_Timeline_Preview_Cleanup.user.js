@@ -1,14 +1,14 @@
 // @file_name = PCM_Timeline_Preview_Cleanup.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-10-12
+// @version = 1.3_2026-10-12
 // @created = 2026-10-12 12:34
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). User names and ids are read from the page at runtime and kept in localStorage, never written here.
 
 // ==UserScript==
 // @name         PCM Timeline Preview Cleanup
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-10-12
-// @description  Makes the Timeline Preview window (opened by clicking an older ticket in Customer Intelligence) easier to read. Hides the "Rules applied" entries, which fill most of the window with rule lists; which entry types are hidden is a list at the top. Entries in the same minute by the same person, or all via API, are merged into one row with the person named once, and "Tag ... added" lines in it are joined into one "Tags added: ..." line. System events are shown as slim boxed rows with a small grey dot instead of the big pink icon, so mails and notes stand out and every event has a clear edge, and status changes are shown as PCM's coloured status labels (OPEN → RESOLVED). Mails all start collapsed, also the newest one PCM opens on load. Puts an avatar in front of every entry done by a person ("... by First Last"): a coloured circle with their initials, replaced by their profile picture once the script has learned who they are. PCM has no full user list, so names and user ids are learned from the Assigned To lists as they load (team changes included) and remembered in localStorage; pictures appear for more people the more teams you visit. Only the preview window is affected. Event-driven via jQuery's ajaxComplete and the modal's shown event, and only while the preview is open and the tab is visible: no observers, no polling.
+// @version      1.3_2026-10-12
+// @description  Makes the Timeline Preview window (opened by clicking an older ticket in Customer Intelligence) easier to read. Hides the "Rules applied" entries, which fill most of the window with rule lists; which entry types are hidden is a list at the top. Entries in the same minute by the same person, or all via API, are merged into one row with the person named once, and "Tag ... added" lines in it are joined into one "Tags added: ..." line. System events are shown as slim boxed rows with a small grey dot instead of the big pink icon, so mails and notes stand out and every event has a clear edge, and status changes are shown as PCM's coloured status labels (OPEN → RESOLVED). Mails all start collapsed and only open when you click them; PCM no longer opens the newest one by itself. Puts an avatar in front of every entry done by a person ("... by First Last"): a coloured circle with their initials, replaced by their profile picture once the script has learned who they are. PCM has no full user list, so names and user ids are learned from the Assigned To lists as they load (team changes included) and remembered in localStorage; pictures appear for more people the more teams you visit. Only the preview window is affected. Event-driven via jQuery's ajaxComplete and the modal's shown event, and only while the preview is open and the tab is visible: no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -466,6 +466,26 @@
         });
     }
 
+    // PCM can also open a mail from code after the preview has loaded,
+    // through Bootstrap's animated collapse ("collapsing" first, ".in"
+    // only when done), which the pass above does not see. Bootstrap 3
+    // asks first with show.bs.collapse and cancels when that is
+    // prevented, so a mail body in the preview may only open within a
+    // moment of a real click or key press.
+    var USER_ACTION_MS = 1000;
+    var lastUserAction = 0;
+
+    function blockAutoOpen(jq) {
+        ['click', 'keydown'].forEach(function (type) {
+            document.addEventListener(type, function (event) {
+                if (event.isTrusted) lastUserAction = Date.now();
+            }, true);
+        });
+        jq(document).on('show.bs.collapse', '#' + MODAL_ID + ' .panel-collapse.email-body', function (event) {
+            if (Date.now() - lastUserAction > USER_ACTION_MS) event.preventDefault();
+        });
+    }
+
     // One pass over the entries not seen yet. Consecutive event entries
     // with the same time and the same actor form one group; entries hidden
     // by HIDDEN_EVENTS are skipped over, anything else ends the group.
@@ -535,6 +555,7 @@
         jq(document).on('shown.bs.modal', function (event) {
             if (event.target && event.target.id === MODAL_ID) decoratePreview();
         });
+        if (COLLAPSE_MAILS) blockAutoOpen(jq);
     }
 
     start();
