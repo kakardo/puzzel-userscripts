@@ -1,6 +1,6 @@
 // @file_name = PCM_No_Autoscroll.user.js
 // @author = Kardo Rostam
-// @version = 2.0_2026-10-08
+// @version = 2.1_2026-10-12
 // @created = 2026-02-06 (v1.0)
 // @note = Continues PCM Ticket Anti-Autoscroll (1.0), which hid the Timeline and pulled the page up every frame while loading. From 2.0 the jump itself is stopped instead.
 // @note = run-at document-start on purpose: the guard has to be in place before PCM's own code runs, or the jump has already happened.
@@ -8,8 +8,8 @@
 // ==UserScript==
 // @name         PCM No Autoscroll
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.0_2026-10-08
-// @description  Stops a ticket from jumping down to the Timeline when it opens; the page stays at the top. While the ticket loads, page scrolls started by code are ignored and a field that takes focus does not pull the page along. A jump that still happens (for example from the browser itself) is undone once. Ends at your first scroll, click or key press, or 20 seconds after opening, so normal scrolling is never affected. Links to a specific note (an address with #) still go to that note. Set localStorage 'pcm-no-autoscroll-debug' to '1' to log in the console what was stopped and where it came from.
+// @version      2.1_2026-10-12
+// @description  Stops a ticket from jumping down to the Timeline when it opens; the page stays at the top. While the ticket loads, page scrolls started by code are ignored and a field that takes focus does not pull the page along. A jump that still happens (for example from the browser itself) is undone once. Ends at your first own scroll (wheel, touch, scrollbar or a scroll key), or 20 seconds after opening, so normal scrolling is never affected. Clicking or typing while the ticket loads does not end it, so clicking for example Customer Tickets early no longer lets the jump through. Links to a specific note (an address with #) still go to that note. Set localStorage 'pcm-no-autoscroll-debug' to '1' to log in the console what was stopped and where it came from.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-start
@@ -139,9 +139,14 @@
     window.addEventListener('scroll', onScroll, true);
 
     // END
-    // Your first own scroll, click or key press ends the guard, as does
-    // the time limit. Everything is put back as it was.
+    // Your first own scroll ends the guard, as does the time limit.
+    // Everything is put back as it was. Only real scrolling counts: the
+    // wheel, touch, a press on a scrollbar, or a scroll key outside a text
+    // field. A click or typing does not, so clicking something (for
+    // example Customer Tickets) while the ticket still loads no longer
+    // switches the guard off before PCM's late jump to the Timeline.
     var INTENT_EVENTS = ['wheel', 'mousedown', 'keydown', 'touchstart'];
+    var SCROLL_KEYS = ['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' ', 'Spacebar'];
     var endTimer = 0;
 
     function endGuard() {
@@ -155,8 +160,37 @@
         if (debug) console.log(LOG, 'guard ended');
     }
 
+    // A press on the page's scrollbar: on the html element itself, past
+    // the edge of the viewport content, or past the content of a
+    // container that scrolls the page.
+    function onScrollbar(event) {
+        var html = document.documentElement;
+        var target = event.target;
+        if (target === html || target === document) return true;
+        if (event.clientX >= html.clientWidth || event.clientY >= html.clientHeight) return true;
+        return !!(target && target.nodeType === 1 && isPageScroller(target) &&
+            (event.offsetX > target.clientWidth || event.offsetY > target.clientHeight));
+    }
+
+    function isEditable(el) {
+        if (!el || el.nodeType !== 1) return false;
+        return el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+    }
+
+    // Page Up and Page Down scroll the page anywhere; the other keys only
+    // outside text fields, where they move the cursor instead.
+    function isScrollKey(event) {
+        if (SCROLL_KEYS.indexOf(event.key) < 0) return false;
+        if (event.key === 'PageUp' || event.key === 'PageDown') return true;
+        return !isEditable(event.target);
+    }
+
     function onIntent(event) {
-        if (event.isTrusted) endGuard();
+        if (!event.isTrusted) return;
+        if (event.type === 'mousedown' && !onScrollbar(event)) return;
+        if (event.type === 'keydown' && !isScrollKey(event)) return;
+        if (debug) console.log(LOG, 'guard ended by', event.type, event.key || '');
+        endGuard();
     }
 
     INTENT_EVENTS.forEach(function (type) { window.addEventListener(type, onIntent, { capture: true, passive: true }); });
