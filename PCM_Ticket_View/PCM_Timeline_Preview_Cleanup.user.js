@@ -1,14 +1,14 @@
 // @file_name = PCM_Timeline_Preview_Cleanup.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-10-12
+// @version = 1.5_2026-10-13
 // @created = 2026-10-12 12:34
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). User names and ids are read from the page at runtime and kept in localStorage, never written here.
 
 // ==UserScript==
 // @name         PCM Timeline Preview Cleanup
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-10-12
-// @description  Makes the Timeline Preview window (opened by clicking an older ticket in Customer Intelligence) easier to read. Hides the "Rules applied" entries, which fill most of the window with rule lists; which entry types are hidden is a list at the top. Entries in the same minute by the same person, or all via API, are merged into one row with the person named once, and "Tag ... added" lines in it are joined into one "Tags added: ..." line. System events are shown as slim boxed rows with a small grey dot instead of the big pink icon, so mails and notes stand out and every event has a clear edge, and status changes are shown as PCM's coloured status labels (OPEN → RESOLVED). Mails all start collapsed and only open when you click them; PCM no longer opens the newest one by itself. Puts an avatar in front of every entry done by a person ("... by First Last"): a coloured circle with their initials, replaced by their profile picture once the script has learned who they are. PCM has no full user list, so names and user ids are learned from the Assigned To lists as they load (team changes included) and remembered in localStorage; pictures appear for more people the more teams you visit. Only the preview window is affected. Event-driven via jQuery's ajaxComplete and the modal's shown event, and only while the preview is open and the tab is visible: no observers, no polling.
+// @version      1.5_2026-10-13
+// @description  Makes the Timeline Preview window (opened by clicking an older ticket in Customer Intelligence) easier to read. Hides the "Rules applied" entries, which fill most of the window with rule lists; which entry types are hidden is a list at the top. Entries in the same minute by the same person, or all via API, are merged into one row with the person named once, and "Tag ... added" lines in it are joined into one "Tags added: ..." line. System events are shown as slim boxed rows with a small grey dot instead of the big pink icon, so mails and notes stand out and every event has a clear edge, and status changes are shown as PCM's coloured status labels (OPEN → RESOLVED). Mails all start collapsed and only open when you click them; PCM no longer opens the newest one by itself. A bar at the top shows the previewed ticket's organisation (number as a copy button, name in large text), read once per ticket from that ticket's own page in the background. Puts an avatar in front of every entry done by a person ("... by First Last"): a coloured circle with their initials, replaced by their profile picture once the script has learned who they are. PCM has no full user list, so names and user ids are learned from the Assigned To lists as they load (team changes included) and remembered in localStorage; pictures appear for more people the more teams you visit. Only the preview window is affected. Event-driven via jQuery's ajaxComplete and the modal's shown event, and only while the preview is open and the tab is visible: no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -50,6 +50,12 @@
     // PCM opens the newest mail when the preview loads. true closes it, so
     // every mail starts collapsed; mails you open yourself stay open.
     var COLLAPSE_MAILS = true;
+
+    // A bar at the top of the preview with the previewed ticket's
+    // organisation: its number in a chip and its name in large text. The
+    // preview does not contain it, so it is read from the ticket's own
+    // page (loaded once per ticket in the background). false turns it off.
+    var SHOW_ORGANISATION = true;
 
     // Entries in the same minute by the same person (or all via API) become
     // one row, with "Tag ... added" lines joined into one. false turns it off.
@@ -146,6 +152,76 @@
         }
     }
     css.push(
+        '.pcm-tp-org {',
+        '    display: flex;',
+        '    align-items: center;',
+        '    flex-wrap: wrap;',
+        '    gap: 10px;',
+        '    margin: 0 0 12px;',
+        '    padding: 8px 12px;',
+        '    border-left: 4px solid #1e5bd8;',
+        '    border-radius: 4px;',
+        '    background: #eef3fb;',
+        '    font-size: 18px;',
+        '    line-height: 1.3;',
+        '    color: #1f2933;',
+        '}',
+        '.pcm-tp-org-label {',
+        '    font-size: 12px;',
+        '    font-weight: 600;',
+        '    text-transform: uppercase;',
+        '    letter-spacing: .5px;',
+        '    color: #5b6b7f;',
+        '}',
+        // Same look as the CustomerId copy buttons of PCM Form Buttons:
+        // light blue, green while copied, fading back over 3 seconds.
+        '.pcm-tp-org-id {',
+        '    appearance: none;',
+        '    height: 32px;',
+        '    padding: 0 12px;',
+        '    border: 1px solid #7fa8e0;',
+        '    border-radius: 7px;',
+        '    background-color: #dbe9ff;',
+        '    color: #16365c;',
+        '    font-size: 15px;',
+        '    line-height: 30px;',
+        '    font-weight: 700;',
+        '    cursor: pointer;',
+        '    box-shadow: 0 1px 2px rgba(0,0,0,0.08);',
+        '    transition: none;',
+        '}',
+        '.pcm-tp-org-id:hover {',
+        '    background-color: #cfe2ff;',
+        '    border-color: #5c8fd6;',
+        '}',
+        '.pcm-tp-org-id.pcm-tp-copied {',
+        '    background-color: #bfe8bf;',
+        '    border-color: #7fc97f;',
+        '}',
+        '.pcm-tp-org-id.pcm-tp-fading {',
+        '    transition: background-color 3s ease, border-color 3s ease;',
+        '}',
+        '.pcm-tp-org-copied {',
+        '    color: #1f6f2a;',
+        '    font-size: 15px;',
+        '    font-weight: 700;',
+        '    white-space: nowrap;',
+        '    opacity: 0;',
+        '}',
+        '.pcm-tp-org-copied.pcm-tp-visible {',
+        '    opacity: 1;',
+        '}',
+        '.pcm-tp-org-copied.pcm-tp-fading {',
+        '    transition: opacity 3s ease;',
+        '}',
+        '.pcm-tp-org-name {',
+        '    font-weight: 600;',
+        '}',
+        '.pcm-tp-org-note {',
+        '    font-size: 14px;',
+        '    font-style: italic;',
+        '    color: #7b8794;',
+        '}',
         '.pcm-tp-status {',
         '    display: inline-block;',
         '    margin: 0 2px;',
@@ -216,7 +292,7 @@
     style.textContent = css.join('\n');
     (document.head || document.documentElement).appendChild(style);
 
-    if (!SHOW_AVATARS && !MERGE_SAME_MINUTE && !STATUS_CHIPS && !COLLAPSE_MAILS) return;
+    if (!SHOW_AVATARS && !MERGE_SAME_MINUTE && !STATUS_CHIPS && !COLLAPSE_MAILS && !SHOW_ORGANISATION) return;
 
     // LEARNING USERS
     function cleanText(value) {
@@ -489,12 +565,159 @@
     // One pass over the entries not seen yet. Consecutive event entries
     // with the same time and the same actor form one group; entries hidden
     // by HIDDEN_EVENTS are skipped over, anything else ends the group.
+    // ORGANISATION BAR
+    // The preview has no organisation, but the previewed ticket's own page
+    // (the View Full Ticket link) has it as the selected option of
+    // #organisation-select, written "<number> - <name>". That page is
+    // fetched once per ticket and parsed without running it (DOMParser
+    // runs no scripts and loads no images); results are kept for the rest
+    // of the page, so reopening a preview shows the bar at once.
+    var ORG_BAR_CLASS = 'pcm-tp-org';
+    var orgCache = {};      // ticket number -> { id, name } or null
+    var orgPending = {};    // ticket number -> true while loading
+
+    function previewTicketNumber(modal) {
+        var link = modal.querySelector('#view-ticket-link');
+        var match = link && (link.getAttribute('href') || '').match(/\/tickets\/(\d+)/);
+        return match ? match[1] : '';
+    }
+
+    function parseOrganisation(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var select = doc.getElementById('organisation-select');
+        var option = select && (select.querySelector('option[selected]') ||
+            (select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null));
+        var text = option && option.value ? cleanText(option.textContent) : '';
+        if (!text) return null;
+        var match = text.match(/^(\S+)\s+-\s+(.+)$/);
+        return match ? { id: match[1], name: match[2] } : { id: '', name: text };
+    }
+
+    function renderOrganisation(bar, org, failed) {
+        bar.textContent = '';
+        var label = document.createElement('span');
+        label.className = 'pcm-tp-org-label';
+        label.textContent = 'Organisation';
+        bar.appendChild(label);
+
+        if (!org) {
+            var note = document.createElement('span');
+            note.className = 'pcm-tp-org-note';
+            note.textContent = failed === 'loading' ? 'Loading organisation…' :
+                failed ? 'Could not be loaded' : 'None set on this ticket';
+            bar.appendChild(note);
+            return;
+        }
+        var copied = null;
+        if (org.id) {
+            var id = document.createElement('button');
+            id.type = 'button';
+            id.className = 'pcm-tp-org-id';
+            id.title = 'Copy ' + org.id;
+            id.textContent = org.id;
+            copied = document.createElement('span');
+            copied.className = 'pcm-tp-org-copied';
+            copied.textContent = 'Copied!';
+            id.addEventListener('click', function (event) {
+                event.preventDefault();
+                copyText(org.id).then(function () { flashCopied(id, copied); });
+            });
+            bar.appendChild(id);
+        }
+        var name = document.createElement('span');
+        name.className = 'pcm-tp-org-name';
+        name.textContent = org.name;
+        bar.appendChild(name);
+        if (copied) bar.appendChild(copied);
+    }
+
+    // COPYING
+    // Page context (@grant none), so the async clipboard API with the old
+    // execCommand route as fallback, the same as PCM Form Buttons.
+    function copyFallback(value) {
+        var area = document.createElement('textarea');
+        area.value = value;
+        area.style.position = 'fixed';
+        area.style.left = '-9999px';
+        document.body.appendChild(area);
+        area.select();
+        try { document.execCommand('copy'); } catch (_) { /* nothing more to try */ }
+        area.remove();
+    }
+
+    function copyText(value) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(value).catch(function () { copyFallback(value); });
+        }
+        copyFallback(value);
+        return Promise.resolve();
+    }
+
+    // Green with "Copied!" for a second, then both fade out over 3 s.
+    var copiedTimer = 0;
+    function flashCopied(button, status) {
+        window.clearTimeout(copiedTimer);
+        [button, status].forEach(function (el) { el.classList.remove('pcm-tp-fading'); });
+        button.classList.add('pcm-tp-copied');
+        status.classList.add('pcm-tp-visible');
+        copiedTimer = window.setTimeout(function () {
+            copiedTimer = 0;
+            [button, status].forEach(function (el) { el.classList.add('pcm-tp-fading'); });
+            void button.offsetWidth;
+            button.classList.remove('pcm-tp-copied');
+            status.classList.remove('pcm-tp-visible');
+        }, 1000);
+    }
+
+    function ensureOrganisationBar(modal) {
+        var number = previewTicketNumber(modal);
+        var header = modal.querySelector('.ticket-description');
+        if (!number || !header) return;
+
+        var bar = header.querySelector(':scope > .' + ORG_BAR_CLASS);
+        if (bar && bar.getAttribute('data-ticket') === number) return;
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.className = ORG_BAR_CLASS;
+            header.insertBefore(bar, header.firstChild);
+        }
+        bar.setAttribute('data-ticket', number);
+
+        if (Object.prototype.hasOwnProperty.call(orgCache, number)) {
+            renderOrganisation(bar, orgCache[number], false);
+            return;
+        }
+        renderOrganisation(bar, null, 'loading');
+        if (orgPending[number]) return;
+        orgPending[number] = true;
+
+        fetch('/tickets/' + number, { credentials: 'same-origin' })
+            .then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.text();
+            })
+            .then(function (html) {
+                orgCache[number] = parseOrganisation(html);
+                return false;
+            }, function () {
+                return true;
+            })
+            .then(function (failed) {
+                delete orgPending[number];
+                // Only fill the bar if the preview still shows this ticket;
+                // a newer preview has its own bar by then.
+                var live = document.querySelector('#' + MODAL_ID + ' .' + ORG_BAR_CLASS + '[data-ticket="' + number + '"]');
+                if (live) renderOrganisation(live, failed ? null : orgCache[number], failed);
+            });
+    }
+
     // Only while the preview is open: Bootstrap 3 marks a shown modal with
     // .in. Content that arrives while it is closed is picked up by the
     // shown.bs.modal handler when it opens.
     function decoratePreview() {
         var modal = document.getElementById(MODAL_ID);
         if (!modal || !modal.classList.contains('in')) return;
+        if (SHOW_ORGANISATION) ensureOrganisationBar(modal);
         var groups = [];
         var current = null;
         modal.querySelectorAll('.smart-timeline-list li:not([' + DONE_ATTR + '])').forEach(function (li) {
