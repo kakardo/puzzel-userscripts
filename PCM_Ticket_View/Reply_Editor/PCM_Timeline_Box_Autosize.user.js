@@ -1,14 +1,14 @@
 // @file_name = PCM_Timeline_Box_Autosize.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-10-12
+// @version = 1.6_2026-10-13
 // @created = 2026-09-09 10:12
 // @note = The timeline bodies are same-origin iframes with ids shaped email-<n>, note-<n> and api-<n>. PCM already sizes email iframes to their content with an inline height and never sizes notes, which take a flat height from a stylesheet and clip. This script sizes every type the same way.
 
 // ==UserScript==
 // @name         PCM Timeline Box Autosize
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-10-12
-// @description  Sizes the Timeline message boxes to their own content so notes, mails and API entries stop clipping behind a scrollbar. Each box is a same-origin iframe measured from the inside, then clamped between a minimum and a maximum height, with optional full width. Dragging a box's resize handle pins that box to the dragged height and is remembered per box. A settings dropdown left of Timeline Options carries the on/off switch, the min and max, full width, which box types are handled, and a button to forget pinned sizes. Event-driven: a ResizeObserver per open box and one scoped MutationObserver for new boxes, all behind the shared visibility gate, no polling.
+// @version      1.6_2026-10-13
+// @description  Sizes the Timeline message boxes to their own content so notes, mails and API entries stop clipping behind a scrollbar. Each box is a same-origin iframe measured from the inside, then clamped between a minimum and a maximum height, with optional full width. Long lines wrap inside the box by default (no sideways scrolling), with a menu switch to turn that off. Dragging a box's resize handle pins that box to the dragged height and is remembered per box. A settings dropdown left of Timeline Options carries the on/off switch, the min and max, full width, line wrapping, which box types are handled, and a button to forget pinned sizes. A box in a collapsed entry (such as a note PCM adds minimised) is left alone until the entry is opened, then sized. Event-driven: a ResizeObserver per open box and one scoped MutationObserver for new boxes, all behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -32,6 +32,7 @@
         minHeight: 60,        // px floor, so a one-line note still has a usable box
         maxHeight: 900,       // px cap; past this the box scrolls instead of growing
         fullWidth: true,      // stretch the box to its container's width
+        wrapLines: true,      // long lines continue on the next line, no sideways scrolling
         types: {              // which id prefixes to size
             note: true,
             email: true,
@@ -81,6 +82,7 @@
             minHeight: DEFAULTS.minHeight,
             maxHeight: DEFAULTS.maxHeight,
             fullWidth: DEFAULTS.fullWidth,
+            wrapLines: DEFAULTS.wrapLines,
             allowPin: DEFAULTS.allowPin,
             types: { note: DEFAULTS.types.note, email: DEFAULTS.types.email, api: DEFAULTS.types.api }
         };
@@ -88,6 +90,7 @@
 
         if (typeof stored.enabled === 'boolean') out.enabled = stored.enabled;
         if (typeof stored.fullWidth === 'boolean') out.fullWidth = stored.fullWidth;
+        if (typeof stored.wrapLines === 'boolean') out.wrapLines = stored.wrapLines;
         if (typeof stored.allowPin === 'boolean') out.allowPin = stored.allowPin;
         if (isSaneHeight(stored.minHeight)) out.minHeight = stored.minHeight;
         if (isSaneHeight(stored.maxHeight)) out.maxHeight = stored.maxHeight;
@@ -142,7 +145,15 @@
     }
 
     // FINDING AND MEASURING THE BOXES
+    // The widget holding PCM's Timeline Options button is the Timeline.
+    // The library's title lookup is only a fallback: it looks for the
+    // title in a <strong>, which PCM's Timeline header does not have, so
+    // on its own it found nothing and the structure observer never
+    // started.
     function timelineWidget() {
+        var options = document.getElementById('timeline-options-dropdown');
+        var widget = options && options.closest('.jarviswidget');
+        if (widget) return widget;
         return D.findWidgetByTitle ? D.findWidgetByTitle('Timeline') : null;
     }
 
@@ -183,10 +194,16 @@
         }
         if (!doc || !win || !doc.body) return null;
 
+        // A box inside a collapsed entry (a note PCM adds minimised) has
+        // no layout, so its content measures 0 and would be clamped to the
+        // minimum. Not measurable: it is left alone and sized when the
+        // entry is opened (see the shown.bs.collapse hook at boot).
+        if (!frame.getClientRects().length) return null;
+
         var range = doc.createRange();
         range.selectNodeContents(doc.body);
         var rect = range.getBoundingClientRect();
-        if (!rect || (rect.height === 0 && !doc.body.textContent.trim())) return null;
+        if (!rect || rect.height === 0) return null;
 
         var bodyStyle = win.getComputedStyle(doc.body);
         var bottom = rect.bottom + (win.scrollY || 0) +
@@ -220,11 +237,50 @@
         return true;
     }
 
+    // LINE WRAPPING INSIDE THE BOX
+    // A style tag inside the box's own document. Mails and notes often
+    // carry fixed widths, wide tables or no-wrap text, which give the box
+    // a sideways scrollbar. These rules let text wrap, shrink anything
+    // wider than the box to fit, and hide the sideways scrollbar. Set
+    // before measuring, so the box is sized to the wrapped text; a box
+    // whose document is replaced (srcdoc reload) gets it again on load.
+    var WRAP_STYLE_ID = 'pcm-timeline-autosize-wrap';
+    var WRAP_CSS = [
+        'html, body { overflow-x: hidden !important; }',
+        'body { overflow-wrap: anywhere; }',
+        'body * { max-width: 100% !important; box-sizing: border-box; }',
+        'pre, code, [style*="nowrap"] { white-space: pre-wrap !important; }',
+        'img, video { height: auto !important; }',
+        'table { table-layout: auto !important; width: auto !important; }',
+        'td, th { overflow-wrap: anywhere; }'
+    ].join('\n');
+
+    function setWrap(frame, on) {
+        var doc;
+        try {
+            doc = frame.contentDocument;
+        } catch (_) {
+            return;
+        }
+        if (!doc || !doc.head && !doc.documentElement) return;
+        var existing = doc.getElementById(WRAP_STYLE_ID);
+        if (on && !existing) {
+            var style = doc.createElement('style');
+            style.id = WRAP_STYLE_ID;
+            style.textContent = WRAP_CSS;
+            (doc.head || doc.documentElement).appendChild(style);
+        } else if (!on && existing) {
+            existing.remove();
+        }
+    }
+
     function applyBox(frame) {
         if (!settings.enabled || !typeEnabled(frame)) {
             release(frame);
             return;
         }
+
+        setWrap(frame, settings.wrapLines);
 
         var pinned = settings.allowPin ? pins[frame.id] : null;
         var target = isSaneHeight(pinned) ? pinned : null;
@@ -254,6 +310,7 @@
     // Hands the box back to PCM: our inline values are removed rather
     // than overwritten with guesses, so the page's own CSS applies again.
     function release(frame) {
+        setWrap(frame, false);
         if (!frame.hasAttribute(SIZED_ATTR)) return;
         frame.removeAttribute(SIZED_ATTR);
         frame.removeAttribute(PIN_ATTR);
@@ -502,6 +559,12 @@
             applyAll();
         }));
 
+        li.appendChild(checkboxRow('Wrap long lines', settings.wrapLines, function (on) {
+            settings.wrapLines = on;
+            saveSettings();
+            applyAll();
+        }));
+
         li.appendChild(separator());
 
         li.appendChild(numberRow('Min height (px)', settings.minHeight, function (next) {
@@ -697,5 +760,24 @@
         window.addEventListener('resize', function () {
             applyGate.schedule();
         });
+
+        // Opening a collapsed Timeline entry gives its box a layout for
+        // the first time, which neither the structure observer nor the
+        // inner ResizeObserver reports. Bootstrap announces it once per
+        // open, so the boxes are measured again then.
+        var jq = window.jQuery;
+        if (jq) {
+            // Also accepted when the opened part holds a box itself, so
+            // this does not depend on finding the widget.
+            jq(document).on('shown.bs.collapse', function (event) {
+                var target = event.target;
+                if (!target || target.nodeType !== 1) return;
+                var widget = timelineWidget();
+                var holdsBox = D.queryAll('iframe[id]', target).some(function (frame) {
+                    return TYPE_RE.test(frame.id);
+                });
+                if (holdsBox || (widget && widget.contains(target))) applyGate.schedule();
+            });
+        }
     }, { BOOT_MAX_TRIES: 60, BOOT_INTERVAL_MS: 250 });
 })();
