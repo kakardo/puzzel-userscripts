@@ -1,6 +1,6 @@
 # Puzzel Userscripts
 
-Tampermonkey scripts for the Puzzel web applications: PCM (ticketing), the Admin console, the agent application and Organisation Settings.
+Tampermonkey scripts for the Puzzel web applications: PCM (ticketing), the Admin console, the agent application and Organisation Settings, plus the shared Geckoboard dashboards.
 
 [![Download all scripts (zip)](https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20Download%20all%20scripts-Puzzel__Userscripts.zip-2ea44f?style=for-the-badge)](https://github.com/kakardo/puzzel-userscripts/releases/download/latest/Puzzel_Userscripts.zip)
 
@@ -47,6 +47,9 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCC_User_Group_Search`: search box that live-filters the User Group dropdown on the Add/Edit User pages. Standalone (server-rendered pages, no DOM watching to share).
 - `Organisation_Settings/`: scripts for Puzzel Organisation Settings (app.puzzel.com/settings), a different app from PCM:
   - `POS_Access_Log_Filter`: filter box above the Access log table; only rows whose Puzzel Id contains the typed text (or any of several comma-separated terms) stay visible. Standalone.
+- `Geckoboard/`: scripts for shared Geckoboard dashboards (share.geckoboard.com, which frames the dashboard from app.geckoboard.com; the scripts run in that frame), a different app from PCM:
+  - `Geckoboard_Full_Numbers`: shows numbers in table widgets in full instead of cut off with an ellipsis ("1,6..." becomes the whole number); right-aligned cells grow into the empty space on their left, names keep their normal shortening. Pure CSS, standalone.
+  - `Geckoboard_Keep_Last_Data`: when Geckoboard's data server fails a widget refresh (for example error 520), retries after 1 and 3 seconds and otherwise gives the widget its last good data, or (when it never loaded) leaves the failed request unanswered so the widget keeps what it shows, instead of "Failed to load widget data"; a note in the corner says when saved data is shown and how old it is. Runs at document-start so it wraps fetch before Geckoboard does. Standalone.
 - `PCC_Agent_View/`: scripts for the agent application (app.puzzel.com/agent), a different app from PCM:
   - `PCC_Agent_Highlighter`: highlights agent rows by status/profile and badges names in the ARIA agents grid. SPA-safe (grid rebinding, navigation hooks). Standalone.
   - `PCC_Softphone_Status_Highlight`: colours the Softphone Online/Offline value in the header. Standalone.
@@ -103,6 +106,8 @@ Current status:
 | PCC_Agent_Highlighter | No | Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines |
 | PCC_Request_Alert | No | Different app. Watches one status element and adds one main menu entry; nothing to share |
 | PCC_Softphone_Status_Highlight | No | Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection |
+| Geckoboard_Full_Numbers | No | Different app (Geckoboard). Pure CSS, a single style tag |
+| Geckoboard_Keep_Last_Data | No | Different app. Wraps fetch for widget data requests only; no observers, no polling |
 
 If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), add them additively to the shared library rather than forking it per folder.
 
