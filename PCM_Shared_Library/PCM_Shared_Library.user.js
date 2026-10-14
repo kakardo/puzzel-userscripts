@@ -1,6 +1,6 @@
 // @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 2.1_2026-09-04
+// @version = 2.2_2026-10-14
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -41,7 +41,9 @@
     - Summernote editor helpers: text to HTML, emptiness, append (v2.0)
     - transient button label flash (v2.0)
     - unsaved-change watcher engine: snapshot baseline, label keying,
-      re-render handling, per-zone save clearing (v2.0)
+      re-render handling, per-zone save clearing (v2.0); fields keyed by
+      the label's own text, so notes or buttons inside a label no longer
+      change a field's key (v2.2)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -951,10 +953,26 @@
             return cleanText(fieldEl.value) !== '';
         }
 
+        // The label's OWN text (its direct text nodes) names the field.
+        // Its full textContent would also take in whatever sits inside the
+        // label: PCM's "(User is online)" note, or buttons other scripts
+        // place there. That text comes and goes with re-renders, so the
+        // same field would get a different key before and after a save and
+        // be marked unsaved. Labels with no direct text (the text wrapped
+        // in a child) fall back to the full text.
+        function labelText(label) {
+            if (!label) return '';
+            let own = '';
+            label.childNodes.forEach(function(node) {
+                if (node.nodeType === 3) own += node.nodeValue;
+            });
+            return cleanText(own) || cleanText(label.textContent);
+        }
+
         function fieldLabel(fieldEl) {
             const section = fieldEl.closest('section, .form-group, .col-md-5, [class*="col"]');
             const label = section ? query('label.label, label', section) : null;
-            return cleanText(label ? label.textContent : '') || fieldEl.name || fieldEl.id || 'field';
+            return labelText(label) || fieldEl.name || fieldEl.id || 'field';
         }
 
         // Keyed by visible LABEL, not DOM node, so the baseline survives
@@ -1141,7 +1159,7 @@
     }
 
     global.PCM_DOM = {
-        LIB_VERSION: '2.1_2026-09-04',
+        LIB_VERSION: '2.2_2026-10-14',
         DEFAULT_CONFIG: assignDefined({}, DEFAULT_CONFIG),
         mergeConfig: mergeConfig,
         clearTimer: clearTimer,
