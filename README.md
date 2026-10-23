@@ -48,7 +48,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). The Ticket List script puts its on/off toggle in the top bar between the bell and the profile picture and colours every SLA step, with overdue rows in red text. The Ticket List script owns the toggle and marks the page; the Attributes script follows that mark, so install them together. Only the Attributes script uses the shared DOM library.
 - `PCC_Admin_View/`: scripts for the Puzzel Admin console (app.puzzel.com/admin), a different app from PCM:
   - `PCC_User_Group_Search`: search box that live-filters the User Group dropdown on the Add/Edit User pages. Standalone (server-rendered pages, no DOM watching to share).
-- `Organisation_Settings/`: scripts for Puzzel Organisation Settings (app.puzzel.com/settings), a different app from PCM:
+- `Organisation_Settings/`: scripts for Puzzel Organisation Settings (app.puzzel.com/settings and uk.puzzel.com/settings), a different app from PCM:
   - `POS_Access_Log_Filter`: filter box above the Access log table; only rows whose Puzzel Id contains the typed text (or any of several comma-separated terms) stay visible. Standalone.
 - `Geckoboard/`: scripts for shared Geckoboard dashboards (share.geckoboard.com, which frames the dashboard from app.geckoboard.com; the scripts run in that frame), a different app from PCM:
   - `Geckoboard_Full_Numbers`: shows numbers in table widgets in full instead of cut off with an ellipsis ("1,6..." becomes the whole number); right-aligned cells grow into the empty space on their left, names keep their normal shortening. Pure CSS, standalone.

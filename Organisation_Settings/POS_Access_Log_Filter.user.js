@@ -1,15 +1,16 @@
 // @file_name = POS_Access_Log_Filter.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-10-01
+// @version = 1.1_2026-10-23
 // @created = 2026-10-01 15:38
 
 // ==UserScript==
 // @name         POS Access Log Filter
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-01
+// @version      1.1_2026-10-23
 // @description  Adds a filter box with a Search button above the Access log table in Puzzel Organisation Settings. Type a full or partial Puzzel Id and press Enter or Search, and only the matching rows stay visible; separate several terms with commas to show rows matching any of them. Matches are case-insensitive, a counter shows how many rows match, and Escape clears the filter. The page's own Filters and table are never modified, rows are only hidden. Standalone: a bounded boot finds the table, and a MutationObserver on its body (rows only) re-applies the filter when the page reloads the list, no polling.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/settings/Id/AccessLog*
+// @match        https://uk.puzzel.com/settings/Id/AccessLog*
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Organisation_Settings/POS_Access_Log_Filter.user.js
