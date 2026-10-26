@@ -1,13 +1,13 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 2.3_2026-10-26
+// @version = 2.5_2026-10-26
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.3_2026-10-26
+// @version      2.5_2026-10-26
 // @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) and {ticket} placeholders; {name} still works as {firstName}. Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -61,6 +61,7 @@
     var COLORS = {
         hello: '#3f6fd6',     // greetings
         account: '#0b7285',   // asking for the account number
+        password: '#ad1457',  // locked accounts and password resets
         handover: '#7b2cbf',  // incident handover and assigning
         evidence: '#e65100',  // asking for call examples and logs
         closing: '#2f7d2f'    // follow-up, no-reply and partner replies
@@ -81,6 +82,48 @@
             'Before we begin, could I get your Customer ID?\nWe are going to need it to find the correct solution.\n\n' +
             'Thank you in advance!'
         },
+        // A dropdown: account locked after failed logins, reset the
+        // password. "you" writes to the user, "they" to someone writing on
+        // the user's behalf (an admin or partner).
+        { label: 'Password', color: COLORS.password, items: [
+            {
+                label: 'Reset (you)',
+                text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
+                'It appears that you are unable to log in because your account has been temporarily locked after ' +
+                'multiple failed login attempts.\n\n' +
+                'Please reset your password by following the instructions in the guide below:\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
+                'Once you have completed the password reset, please try logging in again.\n\n' +
+                'If you do not receive the password reset email, please check your spam/junk folder. If the issue ' +
+                'persists, feel free to reply to this email and we\'ll be happy to assist further.\n\n' +
+                'Have a great day!'
+            },
+            {
+                label: 'Reset (they)',
+                text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
+                'It appears that they are unable to log in because their account has been temporarily locked after ' +
+                'multiple failed login attempts.\n\n' +
+                'They can reset their password by following the instructions in the guide below:\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
+                'Once they have completed the password reset, ask them to try logging in again.\n\n' +
+                'If they do not receive the password reset email, please ask them to check their spam/junk folder. ' +
+                'If the issue persists, feel free to reply to this email and we\'ll be happy to assist further.\n\n' +
+                'Have a great day!'
+            },
+            {
+                label: 'Reset (SE)',
+                text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel Support.\n\n' +
+                'Det verkar som att du inte kan logga in eftersom kontot har låsts efter flera misslyckade ' +
+                'inloggningsförsök.\n\n' +
+                'Vänligen återställ ditt lösenord genom att följa instruktionerna i guiden nedan:\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
+                'När du har återställt ditt lösenord kan du försöka logga in igen.\n\n' +
+                'Om du inte får e-postmeddelandet för lösenordsåterställning, vänligen kontrollera din ' +
+                'skräppost-/spam-mapp. Om problemet kvarstår är du välkommen att svara på detta e-postmeddelande ' +
+                'så hjälper vi dig vidare.\n\n' +
+                'Ha en fortsatt fin dag!'
+            }
+        ] },
         {
             label: 'IF', color: COLORS.handover,
             text: 'Hello,\n\nThank you for contacting Puzzel Customer Care.\n\n' +
