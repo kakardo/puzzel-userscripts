@@ -1,13 +1,13 @@
 // @file_name = PCM_Assign_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-10-14
+// @version = 1.1_2026-10-28
 // @created = 2026-10-14 11:25
 
 // ==UserScript==
 // @name         PCM Assign Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-14
-// @description  Adds two buttons beside the "Assigned To:" label in the Attributes widget: Me selects you in the Assigned To list, Unassign selects the empty entry. You are recognised from your profile picture in the top bar (its address holds your user id), so no id is written in the script. Me is greyed out while you are not in the selected team's list. The choice is made the way picking it by hand would, so PCM (and the unsaved changes warning) sees it; you still press Save. The buttons come back by themselves when PCM rebuilds the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      1.1_2026-10-28
+// @description  Adds two buttons beside the "Assigned To:" label in the Attributes widget: Me selects you in the Assigned To list, Unassign selects the empty entry. You are recognised from your profile picture in the top bar (its address holds your user id), so no id is written in the script. Each button is greyed out when it would change nothing: Me while you are not in the selected team's list or already assigned, Unassign while nobody is assigned; the tooltip says why. The choice is made the way picking it by hand would, so PCM (and the unsaved changes warning) sees it; you still press Save. The buttons come back by themselves when PCM rebuilds the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -131,15 +131,26 @@
         var meButton = wrap.querySelector('[data-role="me"]');
         var blankButton = wrap.querySelector('[data-role="blank"]');
 
-        var meAvailable = !!(me && optionByValue(parts.select, me));
+        // Each button is greyed out when pressing it would change nothing:
+        // Me when you are not in the list or already chosen, Unassign when
+        // nobody is chosen. The tooltip says which.
+        var current = parts.select.value;
+        var meListed = !!(me && optionByValue(parts.select, me));
+        var meAvailable = meListed && current !== me;
         if (meButton.disabled === meAvailable) meButton.disabled = !meAvailable;
         var meTitle = !me ? 'Could not find who you are (no profile picture in the top bar)'
-            : meAvailable ? 'Assign the ticket to you (then press Save)'
-            : 'You are not in the Assigned To list of the selected team';
+            : !meListed ? 'You are not in the Assigned To list of the selected team'
+            : !meAvailable ? 'Already assigned to you'
+            : 'Assign the ticket to you (then press Save)';
         if (meButton.title !== meTitle) meButton.title = meTitle;
 
-        var blankAvailable = !!optionByValue(parts.select, '');
+        var blankListed = !!optionByValue(parts.select, '');
+        var blankAvailable = blankListed && current !== '';
         if (blankButton.disabled === blankAvailable) blankButton.disabled = !blankAvailable;
+        var blankTitle = !blankListed ? 'No empty choice in the Assigned To list'
+            : !blankAvailable ? 'Already unassigned'
+            : 'Clear Assigned To (then press Save)';
+        if (blankButton.title !== blankTitle) blankButton.title = blankTitle;
     }
 
     // PLACING THE BUTTONS
@@ -171,7 +182,6 @@
             wrap.id = WRAP_ID;
             wrap.appendChild(makeButton('me', ME_LABEL, ME_COLOUR, function () { choose(myUserId()); }));
             var blank = makeButton('blank', BLANK_LABEL, BLANK_COLOUR, function () { choose(''); });
-            blank.title = 'Clear Assigned To (then press Save)';
             wrap.appendChild(blank);
         }
         if (wrap.parentElement !== parts.label) parts.label.appendChild(wrap);
