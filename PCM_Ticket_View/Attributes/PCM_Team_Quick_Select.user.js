@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 1.7_2026-10-01
+// @version = 1.8_2026-10-28
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.7_2026-10-01
-// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active.
+// @version      1.8_2026-10-28
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -20,12 +20,12 @@
 (function () {
   'use strict';
 
-  /******************************************************************
-   * USER SETTINGS
-   * One bubble per entry. "team" is matched against the option text in
-   * the Team dropdown (case-insensitive, exact after trimming), "label"
-   * is the short text shown in the bubble, "color" its fill.
-   ******************************************************************/
+  // USER SETTINGS
+  // One bubble per entry. "team" is matched against the option text in
+  // the Team dropdown (case-insensitive, exact after trimming), "label"
+  // is the short text shown in the bubble, "color" its fill. An optional
+  // "status" is set in the Status dropdown at the same press (matched the
+  // same way), for teams that always go with one status.
   const TEAM_BUTTONS = [
     { label: 'Admin',   team: 'Admin Support',                       color: '#1e5bd8' }, // blue
     { label: 'Agent',   team: 'Agent Support',                       color: '#e65100' }, // orange
@@ -33,25 +33,21 @@
     { label: 'CHG',     team: 'Change Team',                         color: '#455a64' }, // slate grey
     { label: 'CI',      team: 'Conversational Intelligence Support', color: '#6d4c41' }, // brown
     { label: 'PSI',     team: 'Sales Intelligence Support',          color: '#b5179e' }, // magenta
-    { label: 'Spam',    team: 'Spam/Virus Quarantine',               color: '#d32f2f' }, // red
+    { label: 'Spam',    team: 'Spam/Virus Quarantine',               color: '#d32f2f', status: 'Resolved' }, // red
     { label: 'Triage',  team: 'Triage Support',                      color: '#2f7d2f' }, // green
     { label: 'Virtual', team: 'Virtual Agents Support',              color: '#00838f' }, // teal
     { label: 'WFM',     team: 'WFM Support',                         color: '#9e7c00' }  // dark gold
   ];
 
-  /******************************************************************
-   * Where the bubbles sit relative to the Team dropdown.
-   *   'below'  - on their own row under the dropdown (default)
-   *   'inline' - to the right of the "Team:" label text, above the
-   *              dropdown
-   * If the preferred spot cannot be found the other one is used, so a
-   * layout change in PCM can never leave the bubbles unplaced.
-   ******************************************************************/
+  // Where the bubbles sit relative to the Team dropdown.
+  //   'below'  - on their own row under the dropdown (default)
+  //   'inline' - to the right of the "Team:" label text, above the
+  //              dropdown
+  // If the preferred spot cannot be found the other one is used, so a
+  // layout change in PCM can never leave the bubbles unplaced.
   const BUTTON_PLACEMENT = 'below';
 
-  /******************************************************************
-   * INTERNAL SETTINGS
-   ******************************************************************/
+  // INTERNAL SETTINGS
   const D = window.PCM_DOM;
   if (!D || !D.bootUntil || !D.ensureStyleTag || !D.cleanText || !D.installNavigationHooks) {
     console.error('PCM Team Quick Select: PCM_DOM shared helpers are missing (lib 1.9 or newer required).');
@@ -147,6 +143,32 @@
     updateActiveStates();
   }
 
+  // The Status dropdown of the Attributes form: by id when PCM uses the
+  // same naming as the Team and Assigned To dropdowns, otherwise the
+  // select under the "Status:" label.
+  function getStatusSelect() {
+    const byId = document.getElementById('status-select');
+    if (byId && byId.tagName === 'SELECT') return byId;
+    const form = D.query('#ticket-attributes-form') || D.query('form.edit_ticket') || document;
+    const label = D.queryAll('label', form).find((el) =>
+      D.cleanText(el.textContent).toLowerCase().startsWith('status:')
+    );
+    const section = label && (label.closest('section, .form-group, [class*="col"]') || label.parentElement);
+    return section ? section.querySelector('select') : null;
+  }
+
+  // One native change event: PCM and the Styler listen through
+  // addEventListener (jQuery included), so the status colour and the
+  // unsaved warning follow as with a pick by hand.
+  function selectStatus(statusName) {
+    const select = getStatusSelect();
+    if (!select) return;
+    const option = findOption(select, statusName);
+    if (!option || select.value === option.value) return;
+    select.value = option.value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
   function updateActiveStates() {
     const select = getSelect();
     const wrap = document.getElementById(WRAP_ID);
@@ -219,13 +241,14 @@
         btn.disabled = true;
         btn.title = 'No option named "' + entry.team + '" in the Team list';
       } else {
-        btn.title = 'Set Team to ' + entry.team;
+        btn.title = 'Set Team to ' + entry.team + (entry.status ? ' and Status to ' + entry.status : '');
         btn.addEventListener('click', (event) => {
           // preventDefault also stops the surrounding label from toggling
           // the select widget.
           event.preventDefault();
           event.stopPropagation();
           selectTeam(entry.team);
+          if (entry.status) selectStatus(entry.status);
         });
       }
 
