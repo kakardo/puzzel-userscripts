@@ -1,6 +1,6 @@
 // @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 2.2_2026-10-14
+// @version = 2.3_2026-10-28
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -44,6 +44,9 @@
       re-render handling, per-zone save clearing (v2.0); fields keyed by
       the label's own text, so notes or buttons inside a label no longer
       change a field's key (v2.2)
+    - form readiness for PCM's Are You Sure plugin (formReady, recheckForm);
+      setNativeFieldValue asks it to re-check after every write; temporary
+      accordions close reliably after their open animation (v2.3)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -314,6 +317,25 @@
             });
     }
 
+    // Closes a Bootstrap collapse pane a helper opened. A hide is ignored
+    // while the open animation runs (.collapsing), and the pane does not
+    // count as visible yet then, so closing "if visible" left it open.
+    // Mid-animation the hide waits for shown.bs.collapse; without jQuery's
+    // collapse plugin the toggle is clicked as before. (v2.3)
+    function closeOpenedPane(pane, toggle, fallbackDelayMs) {
+        if (!pane) return;
+        const jq = window.jQuery;
+        if (jq && jq.fn && jq.fn.collapse) {
+            if (pane.classList.contains('collapsing')) {
+                jq(pane).one('shown.bs.collapse', function() { jq(pane).collapse('hide'); });
+            } else if (pane.classList.contains('in') || visible(pane)) {
+                jq(pane).collapse('hide');
+            }
+            return;
+        }
+        if (toggle && visible(pane)) clickAndWait(toggle, fallbackDelayMs);
+    }
+
     function withAccordionTemporarilyOpen(root, targetSelector, options, workFn) {
         let opts = options;
         let fn = workFn;
@@ -340,9 +362,7 @@
                 wasOpen: wasOpen,
                 openedByHelper: openedByHelper
             })).finally(function() {
-                if (openedByHelper && parts.toggle && visible(parts.pane)) {
-                    return clickAndWait(parts.toggle, closeDelayMs);
-                }
+                if (openedByHelper) closeOpenedPane(parts.pane, parts.toggle, closeDelayMs);
                 return null;
             });
         }
@@ -788,6 +808,28 @@
     // instead of silently keeping the default). Inputs and textareas go
     // through the native setter so framework bindings register the
     // change; input and change events fire either way.
+    // PCM's "Are You Sure" form plugin decides whether Save is allowed. It
+    // records each field's original value (jQuery data 'ays-orig') shortly
+    // after the form loads; a value written before that is recorded as the
+    // original, so Save stays grey although the value was never saved.
+    // formReady says whether the record exists. Without a record it waits
+    // while the plugin is bound to the form (it is about to record) or the
+    // page is younger than 5 s, so a form without the plugin never blocks
+    // for good. recheckForm asks the plugin to compare again. (v2.3)
+    function formReady(field) {
+        const jq = window.jQuery;
+        if (!jq || !field || !field.form) return true;
+        if (jq(field).data('ays-orig') !== undefined) return true;
+        const events = jq._data ? jq._data(field.form, 'events') : null;
+        if (events && events.checkform) return false;
+        return window.performance.now() > 5000;
+    }
+
+    function recheckForm(field) {
+        const jq = window.jQuery;
+        if (jq && field && field.form) jq(field.form).trigger('checkform.areYouSure');
+    }
+
     function setNativeFieldValue(field, value) {
         if (field.tagName === 'SELECT') {
             const wanted = cleanText(value).toLowerCase();
@@ -798,6 +840,7 @@
             if (!option) return false;
             field.value = option.value;
             field.dispatchEvent(new Event('change', { bubbles: true }));
+            recheckForm(field);
             return true;
         }
 
@@ -810,6 +853,7 @@
         }
         field.dispatchEvent(new Event('input', { bubbles: true }));
         field.dispatchEvent(new Event('change', { bubbles: true }));
+        recheckForm(field);
         return true;
     }
 
@@ -1159,7 +1203,7 @@
     }
 
     global.PCM_DOM = {
-        LIB_VERSION: '2.2_2026-10-14',
+        LIB_VERSION: '2.3_2026-10-28',
         DEFAULT_CONFIG: assignDefined({}, DEFAULT_CONFIG),
         mergeConfig: mergeConfig,
         clearTimer: clearTimer,
@@ -1198,6 +1242,8 @@
         editorIsEmpty: editorIsEmpty,
         editorAppendHtml: editorAppendHtml,
         setNativeFieldValue: setNativeFieldValue,
+        formReady: formReady,
+        recheckForm: recheckForm,
         flashLabel: flashLabel,
         createFieldFinder: createFieldFinder,
         createUnsavedWatcher: createUnsavedWatcher

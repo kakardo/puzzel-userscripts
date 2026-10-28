@@ -1,12 +1,12 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 1.9_2026-10-28
+// @version = 2.0_2026-10-28
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.9_2026-10-28
+// @version      2.0_2026-10-28
 // @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -129,21 +129,14 @@
   // is recorded as the original: Save stays grey while the unsaved warning
   // shows. So a press waits for the record, and afterwards the plugin is
   // asked to re-check the form.
+  // Shared since lib 2.3: the same check for every script that writes
+  // Attributes or Forms fields.
   function formReady(field) {
-    const jq = window.jQuery;
-    if (!jq || !field || !field.form) return true;
-    if (jq(field).data('ays-orig') !== undefined) return true;
-    // No record: wait while the plugin is bound to the form (it is
-    // about to record) or the page is still young; a form without
-    // the plugin must not block the buttons for good.
-    const events = jq._data ? jq._data(field.form, 'events') : null;
-    if (events && events.checkform) return false;
-    return window.performance.now() > 5000;
+    return D.formReady ? D.formReady(field) : true;
   }
 
   function recheckForm(field) {
-    const jq = window.jQuery;
-    if (jq && field && field.form) jq(field.form).trigger('checkform.areYouSure');
+    if (D.recheckForm) D.recheckForm(field);
   }
 
   function flash(btn, text) {

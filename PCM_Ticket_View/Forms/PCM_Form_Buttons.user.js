@@ -1,6 +1,6 @@
 // @file_name = PCM_Form_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 4.1_2026-10-08
+// @version = 4.2_2026-10-28
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -10,7 +10,7 @@
 // ==UserScript==
 // @name         PCM Form Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.1_2026-10-08
+// @version      4.2_2026-10-28
 // @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route. When the Extractor announces new values after the form was handled (for example an organisation saved later), the buttons and mismatch markers update; autofill does not run again, so typed values are never overwritten.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -31,7 +31,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Form Buttons';
-  const SCRIPT_VERSION = '4.1_2026-10-08';
+  const SCRIPT_VERSION = '4.2_2026-10-28';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const FORMS_INJECT_ID = 'kardo-forms-customer-copy';
@@ -521,6 +521,11 @@
   let settledApplied = false;
   let echoRefillUsed = false;
 
+  function formsReady() {
+    const field = findFormField('Customer ID') || findFormField('Customer Ref');
+    return !field || !D.formReady || D.formReady(field);
+  }
+
   function fieldsLocated() {
     return !!(findFormField('Customer ID') && findFormField('Customer Ref'));
   }
@@ -537,7 +542,10 @@
 
     const quietFor = Date.now() - lastFieldSwapAt;
     const waitedTotal = Date.now() - settleStartedAt;
-    const ready = (ajaxIdle() && quietFor >= SETTLE_QUIET_MS) || waitedTotal >= SETTLE_MAX_WAIT_MS;
+    // Also wait for PCM's Are You Sure plugin to record the form's original
+    // values (lib 2.3 formReady): a fill before that becomes the "original",
+    // and Save then stays grey although the value was never saved.
+    const ready = (ajaxIdle() && quietFor >= SETTLE_QUIET_MS && formsReady()) || waitedTotal >= SETTLE_MAX_WAIT_MS;
 
     if (!ready) {
       settleTimer = window.setTimeout(scheduleSettledAutofill, Math.max(SETTLE_QUIET_MS - quietFor, 100));

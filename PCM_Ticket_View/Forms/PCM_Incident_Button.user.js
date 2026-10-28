@@ -1,13 +1,13 @@
 // @file_name = PCM_Incident_Button.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-09-09
+// @version = 1.1_2026-10-28
 // @created = 2026-09-09 13:20
 // @note = Fields are located by the OPTION they must receive, not by their label. The Forms widget reuses the same label text on several fields (probing the live Incident form returned 'Customer ID' for five different selects), so label lookup cannot tell them apart. Field ids are index-based (attributes_2, attributes_3) and would break if Puzzel reorders the form, so they are not used either.
 
 // ==UserScript==
 // @name         PCM Incident Button
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-09-09
+// @version      1.1_2026-10-28
 // @description  One button that sets the Forms widget to a platform-incident preset: Form = Incident, then Puzzel Service, Contact Centre Product Area, Ticket caused by, Impact and Urgency. Fills in order and waits for each re-render, because selecting the Form rebuilds the field set and the Product Area list is a child of Puzzel Service. Customer ID and Customer Ref are deliberately left alone, PCM Form Buttons owns those. Each field is found by the option it must receive, with dash variants normalised, so the preset survives label duplication, field reordering, and an en dash in the option text. Anything not found or ambiguous is reported and skipped, never guessed at.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -140,6 +140,14 @@
     // re-render that each change triggers, and the later fields would be
     // written into a field set that is about to be replaced.
     function runPreset(btn) {
+        // Before PCM's Are You Sure plugin has recorded the form's original
+        // values, a change would be recorded as the original and Save would
+        // stay grey; the press is ignored then (lib 2.3 formReady).
+        var probe = document.querySelector('#form-fields-wrapper select, #form-fields-wrapper input:not([type="hidden"]), #form-fields-wrapper textarea');
+        if (probe && D.formReady && !D.formReady(probe)) {
+            D.flashLabel(btn, 'Loading\u2026', 1000);
+            return;
+        }
         var report = { set: 0, skipped: [], missing: [], ambiguous: [] };
         var index = 0;
         var tries = 0;

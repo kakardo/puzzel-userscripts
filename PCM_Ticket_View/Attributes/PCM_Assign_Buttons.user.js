@@ -1,12 +1,12 @@
 // @file_name = PCM_Assign_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-10-28
+// @version = 1.3_2026-10-28
 // @created = 2026-10-14 11:25
 
 // ==UserScript==
 // @name         PCM Assign Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-10-28
+// @version      1.3_2026-10-28
 // @description  Adds two buttons beside the "Assigned To:" label in the Attributes widget: Me selects you in the Assigned To list, Unassign selects the empty entry. You are recognised from your profile picture in the top bar (its address holds your user id), so no id is written in the script. Each button is greyed out when it would change nothing: Me while you are not in the selected team's list or already assigned, Unassign while nobody is assigned; the tooltip says why. The choice is made the way picking it by hand would, so PCM (and the unsaved changes warning) sees it; you still press Save. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the button says Loading, since PCM would otherwise take the new value as the saved one and keep Save grey; after each change PCM is asked to re-check the form. The buttons come back by themselves when PCM rebuilds the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -118,21 +118,14 @@
     // that is recorded as the original: Save stays grey while the unsaved
     // warning shows. So a press waits for the record, and afterwards the
     // plugin is asked to re-check the form.
+    // Shared since lib 2.3: the same check for every script that writes
+    // Attributes or Forms fields.
     function formReady(field) {
-        var jq = window.jQuery;
-        if (!jq || !field.form) return true;
-        if (jq(field).data('ays-orig') !== undefined) return true;
-        // No record: wait while the plugin is bound to the form (it is
-        // about to record) or the page is still young; a form without
-        // the plugin must not block the buttons for good.
-        var events = jq._data ? jq._data(field.form, 'events') : null;
-        if (events && events.checkform) return false;
-        return window.performance.now() > 5000;
+        return D.formReady ? D.formReady(field) : true;
     }
 
     function recheckForm(field) {
-        var jq = window.jQuery;
-        if (jq && field.form) jq(field.form).trigger('checkform.areYouSure');
+        if (D.recheckForm) D.recheckForm(field);
     }
 
     function choose(value, button) {
