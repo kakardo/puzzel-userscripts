@@ -1,13 +1,13 @@
 // @file_name = PCM_Assign_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-10-28
+// @version = 1.2_2026-10-28
 // @created = 2026-10-14 11:25
 
 // ==UserScript==
 // @name         PCM Assign Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-10-28
-// @description  Adds two buttons beside the "Assigned To:" label in the Attributes widget: Me selects you in the Assigned To list, Unassign selects the empty entry. You are recognised from your profile picture in the top bar (its address holds your user id), so no id is written in the script. Each button is greyed out when it would change nothing: Me while you are not in the selected team's list or already assigned, Unassign while nobody is assigned; the tooltip says why. The choice is made the way picking it by hand would, so PCM (and the unsaved changes warning) sees it; you still press Save. The buttons come back by themselves when PCM rebuilds the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      1.2_2026-10-28
+// @description  Adds two buttons beside the "Assigned To:" label in the Attributes widget: Me selects you in the Assigned To list, Unassign selects the empty entry. You are recognised from your profile picture in the top bar (its address holds your user id), so no id is written in the script. Each button is greyed out when it would change nothing: Me while you are not in the selected team's list or already assigned, Unassign while nobody is assigned; the tooltip says why. The choice is made the way picking it by hand would, so PCM (and the unsaved changes warning) sees it; you still press Save. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the button says Loading, since PCM would otherwise take the new value as the saved one and keep Save grey; after each change PCM is asked to re-check the form. The buttons come back by themselves when PCM rebuilds the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -111,15 +111,44 @@
     // One native change event: jQuery, Chosen and select2 handlers all
     // listen through addEventListener, so they see it too, and nothing
     // runs twice. Chosen redraws only on its own event.
-    function choose(value) {
+    //
+    // PCM decides whether Save is allowed with its "Are You Sure" form
+    // plugin, which records every field's original value (jQuery data
+    // 'ays-orig') shortly after the ticket opens. A change made before
+    // that is recorded as the original: Save stays grey while the unsaved
+    // warning shows. So a press waits for the record, and afterwards the
+    // plugin is asked to re-check the form.
+    function formReady(field) {
+        var jq = window.jQuery;
+        if (!jq || !field.form) return true;
+        if (jq(field).data('ays-orig') !== undefined) return true;
+        // No record: wait while the plugin is bound to the form (it is
+        // about to record) or the page is still young; a form without
+        // the plugin must not block the buttons for good.
+        var events = jq._data ? jq._data(field.form, 'events') : null;
+        if (events && events.checkform) return false;
+        return window.performance.now() > 5000;
+    }
+
+    function recheckForm(field) {
+        var jq = window.jQuery;
+        if (jq && field.form) jq(field.form).trigger('checkform.areYouSure');
+    }
+
+    function choose(value, button) {
         var parts = findParts();
         if (!parts || !optionByValue(parts.select, value)) return;
         var select = parts.select;
         if (select.value === value) return;
+        if (!formReady(select)) {
+            if (button && D.flashLabel) D.flashLabel(button, 'Loading…', 1000);
+            return;
+        }
         select.value = value;
         select.dispatchEvent(new Event('change', { bubbles: true }));
         var jq = window.jQuery;
         if (jq) jq(select).trigger('chosen:updated');
+        recheckForm(select);
         updateStates();
     }
 
@@ -164,7 +193,7 @@
             // Also keeps the label from opening the dropdown.
             event.preventDefault();
             event.stopPropagation();
-            onClick();
+            onClick(button);
         });
         return button;
     }
@@ -180,8 +209,8 @@
         if (!wrap) {
             wrap = document.createElement('span');
             wrap.id = WRAP_ID;
-            wrap.appendChild(makeButton('me', ME_LABEL, ME_COLOUR, function () { choose(myUserId()); }));
-            var blank = makeButton('blank', BLANK_LABEL, BLANK_COLOUR, function () { choose(''); });
+            wrap.appendChild(makeButton('me', ME_LABEL, ME_COLOUR, function (btn) { choose(myUserId(), btn); }));
+            var blank = makeButton('blank', BLANK_LABEL, BLANK_COLOUR, function (btn) { choose('', btn); });
             wrap.appendChild(blank);
         }
         if (wrap.parentElement !== parts.label) parts.label.appendChild(wrap);

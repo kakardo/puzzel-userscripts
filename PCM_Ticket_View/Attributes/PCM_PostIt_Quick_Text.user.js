@@ -1,13 +1,13 @@
 // @file_name = PCM_PostIt_Quick_Text.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-10-14
+// @version = 1.1_2026-10-28
 // @created = 2026-10-14 11:20
 
 // ==UserScript==
 // @name         PCM PostIt Quick Text
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-14
-// @description  Adds a red button beside the "Post-It Note:" label in the Attributes widget that writes a text in the Post-It Note, INCIDENT unless you choose another. The arrow on its right turns the button into a small text box: type what the button should write and press Enter (Esc cancels, an empty box goes back to INCIDENT); the choice is remembered in this browser. One press writes the text: into an empty note as is, above existing text on its own first line, and not at all when the note already contains it. The text is set the way typing would, so PCM (and the unsaved changes warning) sees the change; you still press Save. The button comes back by itself when PCM rebuilds the widget after a save. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      1.1_2026-10-28
+// @description  Adds a red button beside the "Post-It Note:" label in the Attributes widget that writes a text in the Post-It Note, INCIDENT unless you choose another. The arrow on its right turns the button into a small text box: type what the button should write and press Enter (Esc cancels, an empty box goes back to INCIDENT); the choice is remembered in this browser. One press writes the text: into an empty note as is, above existing text on its own first line, and not at all when the note already contains it. The text is set the way typing would, so PCM (and the unsaved changes warning) sees the change; you still press Save. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the button says Loading, since PCM would otherwise take the text as the saved one and keep Save grey. The button comes back by itself when PCM rebuilds the widget after a save. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -137,11 +137,34 @@
     // WRITING
     // "Already there" is a plain case-insensitive search, so any text
     // works, including ones with punctuation.
+    //
+    // PCM decides whether Save is allowed with its "Are You Sure" form
+    // plugin, which records every field's original value (jQuery data
+    // 'ays-orig') shortly after the ticket opens. Text written before that
+    // is recorded as the original: Save stays grey while the unsaved
+    // warning shows. So a press waits for the record, and afterwards the
+    // plugin is asked to re-check the form.
+    function formReady(field) {
+        var jq = window.jQuery;
+        if (!jq || !field.form) return true;
+        if (jq(field).data('ays-orig') !== undefined) return true;
+        // No record: wait while the plugin is bound to the form (it is
+        // about to record) or the page is still young; a form without
+        // the plugin must not block the buttons for good.
+        var events = jq._data ? jq._data(field.form, 'events') : null;
+        if (events && events.checkform) return false;
+        return window.performance.now() > 5000;
+    }
+
     function writeText(button) {
         var parts = findParts();
         if (!parts) return;
         var text = sessionText;
         var area = parts.area;
+        if (!formReady(area)) {
+            D.flashLabel(button, 'Loading\u2026', 1000);
+            return;
+        }
         var current = area.value || '';
         if (current.toLowerCase().indexOf(text.toLowerCase()) >= 0) {
             D.flashLabel(button, 'Already there', 1200);
@@ -149,6 +172,8 @@
         }
         var next = current.trim() ? text + '\n' + current : text;
         D.setNativeFieldValue(area, next);
+        var jq = window.jQuery;
+        if (jq && area.form) jq(area.form).trigger('checkform.areYouSure');
         D.flashLabel(button, 'Added', 900);
     }
 
