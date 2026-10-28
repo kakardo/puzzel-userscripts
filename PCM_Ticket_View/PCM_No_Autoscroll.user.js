@@ -1,6 +1,6 @@
 // @file_name = PCM_No_Autoscroll.user.js
 // @author = Kardo Rostam
-// @version = 2.1_2026-10-12
+// @version = 2.2_2026-10-28
 // @created = 2026-02-06 (v1.0)
 // @note = Continues PCM Ticket Anti-Autoscroll (1.0), which hid the Timeline and pulled the page up every frame while loading. From 2.0 the jump itself is stopped instead.
 // @note = run-at document-start on purpose: the guard has to be in place before PCM's own code runs, or the jump has already happened.
@@ -8,8 +8,8 @@
 // ==UserScript==
 // @name         PCM No Autoscroll
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.1_2026-10-12
-// @description  Stops a ticket from jumping down to the Timeline when it opens; the page stays at the top. While the ticket loads, page scrolls started by code are ignored and a field that takes focus does not pull the page along. A jump that still happens (for example from the browser itself) is undone once. Ends at your first own scroll (wheel, touch, scrollbar or a scroll key), or 20 seconds after opening, so normal scrolling is never affected. Clicking or typing while the ticket loads does not end it, so clicking for example Customer Tickets early no longer lets the jump through. Links to a specific note (an address with #) still go to that note. Set localStorage 'pcm-no-autoscroll-debug' to '1' to log in the console what was stopped and where it came from.
+// @version      2.2_2026-10-28
+// @description  Stops a ticket from jumping down to the Timeline when it opens; the page stays at the top. While the ticket loads, page scrolls started by code are ignored and a field that takes focus does not pull the page along. A jump that still happens (for example from the browser itself) is undone once. Stays on for 20 seconds after opening. Your own scrolling (wheel, touch, scrollbar, scroll keys) always works and does not end it, so scrolling a little while the ticket loads no longer lets the later jump through; once you have scrolled, the page is never pulled back up. Clicking or typing does not end it either. Links to a specific note (an address with #) still go to that note. Set localStorage 'pcm-no-autoscroll-debug' to '1' to log in the console what was stopped and where it came from.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-start
@@ -22,8 +22,8 @@
     'use strict';
 
     // USER SETTINGS
-    // How long after opening the guard stays on, at most. Your first
-    // scroll, click or key press ends it earlier.
+    // How long after opening the guard stays on. Your own scrolling does
+    // not end it: PCM's jump can come after you have started scrolling.
     var GUARD_MAX_MS = 20000;
 
     // INTERNAL SETTINGS
@@ -123,8 +123,10 @@
     // Fallback for jumps that do not go through code above (a field with
     // autofocus, the browser's own restore): put the page back at the top.
     var originalScrollTo = window.scrollTo;
+    // Off once you have scrolled yourself: from then on the page is where
+    // you put it, and only scrolls started by code are still stopped.
     function onScroll(event) {
-        if (!guarding) return;
+        if (!guarding || userScrolled) return;
         var target = event.target === document ? document.scrollingElement : event.target;
         if (target === document.scrollingElement || target === document.documentElement || target === document.body) {
             if (window.scrollY > 0) {
@@ -139,13 +141,16 @@
     window.addEventListener('scroll', onScroll, true);
 
     // END
-    // Your first own scroll ends the guard, as does the time limit.
-    // Everything is put back as it was. Only real scrolling counts: the
-    // wheel, touch, a press on a scrollbar, or a scroll key outside a text
-    // field. A click or typing does not, so clicking something (for
-    // example Customer Tickets) while the ticket still loads no longer
-    // switches the guard off before PCM's late jump to the Timeline.
+    // Only the time limit ends the guard; everything is put back as it
+    // was then. Your own scrolling (the wheel, touch, a press on a
+    // scrollbar, or a scroll key outside a text field) does not end it,
+    // because PCM's jump to the Timeline comes once loading is done, often
+    // after you have started scrolling. It only switches off the fallback
+    // above, so the page is never pulled back up under you. Scrolls
+    // started by code stay stopped until the time limit. Clicks and typing
+    // change nothing.
     var INTENT_EVENTS = ['wheel', 'mousedown', 'keydown', 'touchstart'];
+    var userScrolled = false;
     var SCROLL_KEYS = ['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' ', 'Spacebar'];
     var endTimer = 0;
 
@@ -189,8 +194,10 @@
         if (!event.isTrusted) return;
         if (event.type === 'mousedown' && !onScrollbar(event)) return;
         if (event.type === 'keydown' && !isScrollKey(event)) return;
-        if (debug) console.log(LOG, 'guard ended by', event.type, event.key || '');
-        endGuard();
+        if (userScrolled) return;
+        userScrolled = true;
+        window.removeEventListener('scroll', onScroll, true);
+        if (debug) console.log(LOG, 'you scrolled (' + event.type + (event.key ? ' ' + event.key : '') + '): fallback off, code scrolls still stopped');
     }
 
     INTENT_EVENTS.forEach(function (type) { window.addEventListener(type, onIntent, { capture: true, passive: true }); });
