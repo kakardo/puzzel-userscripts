@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 2.5_2026-10-26
+// @version = 2.8_2026-10-28
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.5_2026-10-26
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) and {ticket} placeholders; {name} still works as {firstName}. Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      2.8_2026-10-28
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) and {ticket} placeholders; {name} still works as {firstName}. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -131,8 +131,9 @@
             'second line engineers.\n\nWe will contact you as soon as we have an update.'
         },
         { label: 'Assign', templateId: 37718, color: COLORS.handover },
-        // A dropdown: asking for a call example, console logs, or both.
-        { label: 'CallEx/Logs', color: COLORS.evidence, items: [
+        // A dropdown: asking for evidence (a call example, console logs,
+        // both, or softphone checks plus logs).
+        { label: 'Evidence', color: COLORS.evidence, items: [
             {
                 label: 'CallEx',
                 text: 'Hello {firstName},\n\nThank you for contacting Puzzel support.\n\n' +
@@ -162,6 +163,22 @@
                 'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253903\n\n' +
                 'Once we have the call example and the console logs, we will continue our investigation.\n\n' +
                 'Have a great day!'
+            },
+            {
+                label: 'Softphone + Logs',
+                text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
+                'We have no known issues affecting Contact Centre at the moment, so the problem is most likely ' +
+                'local to your setup.\n\n' +
+                'Please start by working through our softphone troubleshooting guide:\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=9355\n\n' +
+                'If the issue persists, we will need your browser console logs to investigate further. ' +
+                'To capture them:\n\n' +
+                '1. Follow the first steps in this guide to enable log preservation:\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253903\n' +
+                '2. Reproduce the problem.\n' +
+                '3. Save the logs and attach them in your reply.\n\n' +
+                'Please also include the approximate time the issue occurred and your user ID, as this helps us ' +
+                'match the logs to our system records.'
             }
         ] },
         // A dropdown: own templates and PCM templates mixed, in the order
@@ -330,10 +347,67 @@
         });
     }
 
-    // Text-to-HTML, emptiness, and the Summernote append path live in
-    // the shared library since lib 2.0.
+    // Emptiness and the Summernote append path live in the shared library
+    // since lib 2.0; plain lines go through its text-to-HTML.
+    //
+    // LISTS: lines starting with "1.", "2." ... become a numbered list and
+    // lines starting with "- " a bullet list, as real list markup so the
+    // mail shows proper lists. A line directly under a list item (no blank
+    // line in between, not itself an item) continues that item on a new
+    // line, so a link under a step stays inside the step. Any other line
+    // ends the list. A list brings its own space above and below, so empty
+    // lines right before and after it are dropped; kept, they doubled the
+    // gap on both sides.
+    var LIST_ITEM_RE = { ol: /^\s*\d+[.)]\s+(.*)$/, ul: /^\s*-\s+(.*)$/ };
+
+    function listKind(line) {
+        if (LIST_ITEM_RE.ol.test(line)) return 'ol';
+        if (LIST_ITEM_RE.ul.test(line)) return 'ul';
+        return '';
+    }
+
+    function textToHtml(text) {
+        var esc = D.escapeHtml || function (v) {
+            return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        };
+        var lines = String(text).split('\n');
+        var html = '';
+        var plain = [];
+        var i = 0;
+
+        function flushPlain() {
+            if (plain.length) html += D.editorTextToHtml(plain.join('\n'));
+            plain = [];
+        }
+
+        while (i < lines.length) {
+            var kind = listKind(lines[i]);
+            if (!kind) {
+                plain.push(lines[i]);
+                i += 1;
+                continue;
+            }
+            while (plain.length && !plain[plain.length - 1].trim()) plain.pop();
+            flushPlain();
+            var items = [];
+            while (i < lines.length && listKind(lines[i]) === kind) {
+                var parts = [lines[i].match(LIST_ITEM_RE[kind])[1]];
+                i += 1;
+                while (i < lines.length && lines[i].trim() && !listKind(lines[i])) {
+                    parts.push(lines[i].trim());
+                    i += 1;
+                }
+                items.push('<li>' + parts.map(esc).join('<br>') + '</li>');
+            }
+            html += '<' + kind + '>' + items.join('') + '</' + kind + '>';
+            while (i < lines.length && !lines[i].trim()) i += 1;
+        }
+        flushPlain();
+        return html;
+    }
+
     function insertTemplate(container, templateText) {
-        D.editorAppendHtml(container, D.editorTextToHtml(resolvePlaceholders(templateText, container)));
+        D.editorAppendHtml(container, textToHtml(resolvePlaceholders(templateText, container)));
     }
 
     // PCM template shortcut: replicates the Insert Template modal's own
