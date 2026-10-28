@@ -24,6 +24,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
     - `PCM_Organisation_Quick_Search`: one-click search buttons under the Organisation dropdown for the Customer ID found on the ticket, the Customer ID entered in Forms (when it differs), and fixed search strings; a single matching organisation is picked automatically. Uses the shared DOM library.
     - `PCM_Show_Organisation_Info`: shows the Organisation Information module right after an organisation is saved in Attributes, instead of only after a reload, by loading it once from the ticket page in the background. Standalone, event-driven via jQuery's ajaxComplete.
     - `PCM_Partner_Highlight`: shows the ticket's partner in large purple letters beside the Attributes heading, read from the Ticket Info Extractor; nothing is shown without a partner. Uses the shared DOM library.
+    - `PCM_Collapse_Categories`: folds away the Categories section of Attributes until you click its heading; it opens by itself when a category has a value, and the heading shows how many are set. Uses the shared DOM library.
     - `PCM_Assign_Buttons`: Me and Unassign buttons beside the Assigned To label; Me picks you (recognised from your profile picture in the top bar) and is greyed out when you are not in the team's list, Unassign picks the empty entry. You still press Save. Uses the shared DOM library.
     - `PCM_PostIt_Quick_Text`: a red button beside the Post-It Note label that writes INCIDENT into the note (as its first line when there is text already, not at all when it is there); the arrow beside it lets you type another text for the button, remembered per browser. You still press Save. Uses the shared DOM library.
     - `PCM_Unsaved_Attributes_Warning`: snapshot-based unsaved change detection for the Attributes widget; highlights changed fields and dropdowns and shows a warning next to Save. Uses the shared DOM library.
@@ -96,6 +97,7 @@ Current status:
 | PCM_Partner_Highlight | Yes | `createVisibilityGate`, `installNavigationHooks`; reads the Extractor's outputs |
 | PCM_PostIt_Quick_Text | Yes | `bootUntil`, `setNativeFieldValue`, `flashLabel`, `createVisibilityGate`; one scoped MutationObserver |
 | PCM_Assign_Buttons | Yes | `bootUntil`, `createVisibilityGate`, `cleanText`; one scoped MutationObserver |
+| PCM_Collapse_Categories | Yes | `bootUntil`, `ensureStyleTag`, `createVisibilityGate`; one scoped MutationObserver |
 | PCM_Incident_Button | Yes | Field lookup and value setting over the re-rendering Forms widget |
 | PCM_Change_Completed_Now | Yes | Widget-scoped observer behind `createVisibilityGate` |
 | PCM_Reply_Editor_Autosize | No | Pure CSS, a single style tag |
