@@ -47,6 +47,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCM_Compact_View`: Compact toggle left of Hide Columns; tight cell padding, table shrinks to content, Subject clamped to a configurable line count, times shortened (s/m/h/d/w/mo/y, "less than a minute" to <1m). Uses the shared DOM library.
   - `PCM_Selected_Row_Highlight`: makes selected rows (round checkbox) clear in light and dark mode with a coloured left band, bold coloured text and a tint laid over the row's own colour, so SLA colours still show. Standalone, pure CSS; dark colours follow the toggle in `PCM_Dark_Mode_(Ticket_List)`.
   - `PCM_Last_Activity_Sort`: makes the Last Activity column sortable (server-side, so the whole list is sorted) and keeps that sort across reloads. Standalone, drives the DataTables API.
+  - `PCM_Ticket_Search_New_Tab`: a small arrow button next to the top bar's Ticket # field (or Ctrl+Enter / Shift+Enter in it) opens that ticket in a new tab (plain Enter as before, or always a new tab with ALWAYS_NEW_TAB). Runs on every PCM page. Standalone, one key listener.
   - `PCM_Bulk_Update_Presets`: preset buttons in the bulk "Updating Ticket(s)" window; Spam fills in Team Spam/Virus Quarantine, Status Closed and Priority Junk. You still press Update. Presets are a list at the top. Standalone, event-driven via shown.bs.modal.
   - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). The Ticket List script puts its on/off toggle in the top bar between the bell and the profile picture and colours every SLA step, with overdue rows in red text. The Ticket List script owns the toggle and marks the page; the Attributes script follows that mark, so install them together. Only the Attributes script uses the shared DOM library.
 - `PCC_Admin_View/`: scripts for the Puzzel Admin console (app.puzzel.com/admin), a different app from PCM:
@@ -91,6 +92,7 @@ Current status:
 | PCM_Compact_View | Yes | `bootUntil`, `ensureStyleTag`, `createVisibilityGate`; rewrites cells per draw so the visibility gate matters |
 | PCM_Selected_Row_Highlight | No | Pure CSS on the `selected` class DataTables sets |
 | PCM_Last_Activity_Sort | No | Drives the DataTables API, event-driven via init.dt and order.dt; no DOM watching to share |
+| PCM_Ticket_Search_New_Tab | No | One capture-phase key listener; nothing to watch |
 | PCM_Bulk_Update_Presets | No | Purely event-driven via `shown.bs.modal`; sets three plain selects |
 | PCM_Unsaved_Attributes_Warning | Yes | Built on `createUnsavedWatcher` |
 | PCM_Organisation_Quick_Search | Yes | `createFieldFinder`, `createVisibilityGate`, `flashLabel`; drives the select2 Organisation widget |
