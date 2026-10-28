@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 2.0_2026-10-28
+// @version = 2.1_2026-10-28
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.0_2026-10-28
-// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form.
+// @version      2.1_2026-10-28
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To once PCM has reloaded it for the new team: Agent does. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -25,10 +25,11 @@
   // the Team dropdown (case-insensitive, exact after trimming), "label"
   // is the short text shown in the bubble, "color" its fill. An optional
   // "status" is set in the Status dropdown at the same press (matched the
-  // same way), for teams that always go with one status.
+  // same way), for teams that always go with one status. "unassign: true"
+  // also clears Assigned To, for teams whose queue takes the ticket over.
   const TEAM_BUTTONS = [
     { label: 'Admin',   team: 'Admin Support',                       color: '#1e5bd8' }, // blue
-    { label: 'Agent',   team: 'Agent Support',                       color: '#e65100' }, // orange
+    { label: 'Agent',   team: 'Agent Support',                       color: '#e65100', unassign: true }, // orange
     { label: 'Case',    team: 'Case Management Support',             color: '#7b2cbf' }, // purple
     { label: 'CHG',     team: 'Change Team',                         color: '#455a64' }, // slate grey
     { label: 'CI',      team: 'Conversational Intelligence Support', color: '#6d4c41' }, // brown
@@ -187,6 +188,46 @@
   // One native change event: PCM and the Styler listen through
   // addEventListener (jQuery included), so the status colour and the
   // unsaved warning follow as with a pick by hand.
+  // Clears Assigned To once PCM has refilled it for the new team. A team
+  // change makes PCM reload the Assigned To list; clearing it before that
+  // reload could be undone by it. So the list is watched (an observer on
+  // its own parent, nothing else) and cleared right after it changes, or
+  // after UNASSIGN_MAX_WAIT_MS if it never does. When the team did not
+  // change there is no reload, and it is cleared at once.
+  const UNASSIGN_MAX_WAIT_MS = 3000;
+
+  function clearAssignee() {
+    const select = document.getElementById('user-select');
+    if (!select || select.value === '') return;
+    if (![...select.options].some((option) => option.value === '')) return;
+    D.setNativeFieldValue(select, '');
+  }
+
+  function unassignAfterRefill(teamChanged) {
+    const select = document.getElementById('user-select');
+    if (!select) return;
+    if (!teamChanged) {
+      clearAssignee();
+      return;
+    }
+    const root = select.parentElement || select;
+    let done = false;
+    let timer = 0;
+    const observer = new MutationObserver(() => {
+      // Let PCM finish setting the refilled list's own selection first.
+      window.setTimeout(finish, 50);
+    });
+    function finish() {
+      if (done) return;
+      done = true;
+      observer.disconnect();
+      window.clearTimeout(timer);
+      clearAssignee();
+    }
+    observer.observe(root, { childList: true, subtree: true });
+    timer = window.setTimeout(finish, UNASSIGN_MAX_WAIT_MS);
+  }
+
   function selectStatus(statusName) {
     const select = getStatusSelect();
     if (!select) return;
@@ -268,7 +309,7 @@
         btn.disabled = true;
         btn.title = 'No option named "' + entry.team + '" in the Team list';
       } else {
-        btn.title = 'Set Team to ' + entry.team + (entry.status ? ' and Status to ' + entry.status : '');
+        btn.title = 'Set Team to ' + entry.team + (entry.status ? ' and Status to ' + entry.status : '') + (entry.unassign ? ' and clear Assigned To' : '');
         btn.addEventListener('click', (event) => {
           // preventDefault also stops the surrounding label from toggling
           // the select widget.
@@ -278,8 +319,10 @@
             flash(btn, 'Loading\u2026');
             return;
           }
+          const teamBefore = selectedTeamText(getSelect());
           selectTeam(entry.team);
           if (entry.status) selectStatus(entry.status);
+          if (entry.unassign) unassignAfterRefill(selectedTeamText(getSelect()) !== teamBefore);
           recheckForm(getSelect());
         });
       }
