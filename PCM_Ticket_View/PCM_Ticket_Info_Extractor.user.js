@@ -1,13 +1,13 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 7.3_2026-10-12
+// @version = 7.4_2026-10-28
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      7.3_2026-10-12
-// @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Retry after opening CI Organisations so multi-row tickets can load their rows. Expose machine-friendly hooks for other scripts. Reads again when PCM Show Organisation Info signals that the Organisation Information module was added or changed after an Attributes save (event pcm-organisation-info-refreshed), and announces the new values the same way, so the scripts that use them update without a reload. The panel is put back automatically when PCM rebuilds the ticket header after an Attributes save.
+// @version      7.4_2026-10-28
+// @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Organisation rows already in the page are read without opening CI Organisations; only when they load on opening is it opened briefly and closed again once its animation has finished, so it no longer stays open. Expose machine-friendly hooks for other scripts. Reads again when PCM Show Organisation Info signals that the Organisation Information module was added or changed after an Attributes save (event pcm-organisation-info-refreshed), and announces the new values the same way, so the scripts that use them update without a reload. The panel is put back automatically when PCM rebuilds the ticket header after an Attributes save.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -269,12 +269,6 @@
 
 
 
-  async function clickControl(el, delay) {
-    if (!el) return;
-    el.click();
-    await wait(typeof delay === 'number' ? delay : 500);
-  }
-
   // Observer-based row waiting: resolves the moment rows render instead of
   // sleeping through fixed 500ms/180ms waits. Bounded by a timeout so a
   // ticket without organisation rows still finishes quickly.
@@ -308,24 +302,44 @@
     });
   }
 
+  // Closes a pane the script opened. Bootstrap ignores a hide while the
+  // open animation runs (.collapsing), and the pane does not count as
+  // visible yet then, so a close at that moment was skipped and the pane
+  // stayed open. Now: mid-animation, wait for shown.bs.collapse and hide
+  // then; open, hide now; without jQuery fall back to the toggle.
+  function closeOpenedPane(box, toggle) {
+    const pane = organisationsPane(box);
+    if (!pane) return;
+    const jq = window.jQuery;
+    if (jq && jq.fn && jq.fn.collapse) {
+      if (pane.classList.contains('collapsing')) {
+        jq(pane).one('shown.bs.collapse', () => jq(pane).collapse('hide'));
+      } else if (pane.classList.contains('in') || visible(pane)) {
+        jq(pane).collapse('hide');
+      }
+      return;
+    }
+    if (toggle && visible(pane)) toggle.click();
+  }
+
   async function ensureOrganisationRows(box) {
     const pane = organisationsPane(box);
     const toggle = findOrganisationsToggle(box);
     const wasOpen = visible(pane);
-    let openedByScript = false;
 
-    if (!wasOpen && toggle) {
-      // No fixed post-click wait: the observer below picks up the rows as
-      // soon as the accordion renders them.
-      toggle.click();
-      openedByScript = true;
+    // Rows already in the page (only hidden) are read as they are, without
+    // opening anything: no flicker, nothing left open.
+    const present = extractOrganisationRows(box);
+    if (present.length || wasOpen || !toggle) {
+      const rows = present.length ? present : await waitForOrganisationRows(box, 400);
+      return { initialRows: rows, allRows: rows };
     }
 
-    const rows = await waitForOrganisationRows(box, wasOpen ? 400 : 1500);
-
-    if (openedByScript && toggle && visible(organisationsPane(box))) {
-      await clickControl(toggle, 120);
-    }
+    // Rows that only load when the pane opens: open it, read them as soon
+    // as they render (observer, no fixed wait), then close it again.
+    toggle.click();
+    const rows = await waitForOrganisationRows(box, 1500);
+    closeOpenedPane(box, toggle);
 
     return {
       initialRows: rows,
