@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 3.4_2026-10-29
+// @version = 3.5_2026-10-29
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.4_2026-10-29
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      3.5_2026-10-29
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. A template or dropdown can set fontSize for its text. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -32,6 +32,10 @@
      *                                 fills its own variables
      *   { label, color, items: [...] } a dropdown menu; items are entries
      *                                 of either kind above
+     * Own templates and dropdowns can also have fontSize (in px, as in
+     * the editor's size menu): the inserted text gets that size. Set on a
+     * dropdown it applies to all its entries, unless an entry has its own.
+     * Left out, the text keeps the editor's normal size.
      * color is the button fill (white text); leave it out for PCM's plain
      * grey button. Give related templates the same colour.
      *
@@ -189,7 +193,7 @@
         // the priority the ticket had when it was opened; {priority:name}
         // writes that priority. Both come out as small labels in PCM's own
         // priority colours, as in "Highest (P1)".
-        { label: 'Priority', color: COLORS.priority, items: [
+        { label: 'Priority', color: COLORS.priority, fontSize: 18, items: [
             { label: 'Highest (P1)', text: 'Priority change: {priorityFrom} to {priority:Highest}' },
             { label: 'High (P2)', text: 'Priority change: {priorityFrom} to {priority:High}' },
             { label: 'Normal (P3)', text: 'Priority change: {priorityFrom} to {priority:Normal}' },
@@ -501,12 +505,21 @@
             'background-color:' + colour.bg + ';color:' + (colour.fg || '#fff') + ';">' + text + '</span>';
     }
 
-    function insertTemplate(container, templateText) {
+    // fontSize: every top-level block (paragraph or list) gets the size
+    // inline, so it stays in the saved note and the mail; list items and
+    // priority labels take it from their block.
+    function withFontSize(html, fontSize) {
+        var size = Number(fontSize);
+        if (!size || size < 6 || size > 72) return html;
+        return html.replace(/<(p|ol|ul)>/g, '<$1 style="font-size:' + size + 'px;">');
+    }
+
+    function insertTemplate(container, templateText, fontSize) {
         var resolved = resolvePlaceholders(templateText, container);
         var html = textToHtml(resolved).replace(PRIO_MARK_RE, function (match, name) {
             return priorityLabelHtml(name);
         });
-        D.editorAppendHtml(container, html);
+        D.editorAppendHtml(container, withFontSize(html, fontSize));
     }
 
     // PCM template shortcut: replicates the Insert Template modal's own
@@ -554,9 +567,9 @@
 
     // One click handler for both kinds of template: own text, or PCM's
     // template fetched by id.
-    function runEntry(entry, container, btn) {
+    function runEntry(entry, container, btn, groupFontSize) {
         if (entry.templateId) insertPcmTemplate(container, entry.templateId, btn);
-        else if (entry.text) insertTemplate(container, entry.text);
+        else if (entry.text) insertTemplate(container, entry.text, entry.fontSize || groupFontSize);
     }
 
     function applyColor(el, color) {
@@ -623,7 +636,7 @@
         select.addEventListener('change', function () {
             var item = entry.items[Number(select.value)];
             select.selectedIndex = 0;
-            if (item) runEntry(item, container, select);
+            if (item) runEntry(item, container, select, entry.fontSize);
         });
         return select;
     }
