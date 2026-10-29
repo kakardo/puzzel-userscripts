@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 2.8_2026-10-28
+// @version = 3.4_2026-10-29
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.8_2026-10-28
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) and {ticket} placeholders; {name} still works as {firstName}. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      3.4_2026-10-29
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -43,6 +43,9 @@
      *               organisation's Partner attribute)
      *   {ticket}    the ticket number, taken from the page URL or the
      *               [123456] tag in the reply subject
+     *   {priorityFrom} the priority the ticket had when it was opened,
+     *               as a coloured label with its level: "Highest (P1)"
+     *   {priority:Name} that priority as the same coloured label
      *   {name}      older name for {firstName}, still works
      * Names, customer and partner are read from the PCM Ticket Info
      * Extractor outputs (window.PCM_TICKET_INFO or its published DOM
@@ -64,7 +67,8 @@
         password: '#ad1457',  // locked accounts and password resets
         handover: '#7b2cbf',  // incident handover and assigning
         evidence: '#e65100',  // asking for call examples and logs
-        closing: '#2f7d2f'    // follow-up, no-reply and partner replies
+        closing: '#2f7d2f',   // follow-up, no-reply and partner replies
+        priority: '#3949ab'   // priority change notes
     };
 
     var TEMPLATES = [
@@ -180,6 +184,18 @@
                 'Please also include the approximate time the issue occurred and your user ID, as this helps us ' +
                 'match the logs to our system records.'
             }
+        ] },
+        // A dropdown: a note line for a priority change. {priorityFrom} is
+        // the priority the ticket had when it was opened; {priority:name}
+        // writes that priority. Both come out as small labels in PCM's own
+        // priority colours, as in "Highest (P1)".
+        { label: 'Priority', color: COLORS.priority, items: [
+            { label: 'Highest (P1)', text: 'Priority change: {priorityFrom} to {priority:Highest}' },
+            { label: 'High (P2)', text: 'Priority change: {priorityFrom} to {priority:High}' },
+            { label: 'Normal (P3)', text: 'Priority change: {priorityFrom} to {priority:Normal}' },
+            { label: 'Low (P4)', text: 'Priority change: {priorityFrom} to {priority:Low}' },
+            { label: 'Lowest (P5)', text: 'Priority change: {priorityFrom} to {priority:Lowest}' },
+            { label: 'Junk (P6)', text: 'Priority change: {priorityFrom} to {priority:Junk}' }
         ] },
         // A dropdown: own templates and PCM templates mixed, in the order
         // they are used (check in, close without reply, hand to partner).
@@ -319,6 +335,69 @@
         return value || null;
     }
 
+    // PRIORITY
+    // "From" is the priority the ticket had when it was OPENED, remembered
+    // per ticket for as long as the page stays open: changing and even
+    // saving the priority before writing the note keeps the right "from".
+    // It is read from the option PCM rendered as selected (the saved
+    // value, not an unsaved choice in the dropdown). It is captured once,
+    // when the ticket opens, and nothing changes it afterwards: not a save,
+    // not a priority note.
+    var PRIORITY_LEVELS = { highest: 'P1', high: 'P2', normal: 'P3', low: 'P4', lowest: 'P5', junk: 'P6' };
+
+    function prioritySelect() {
+        var byId = document.getElementById('priority-select');
+        if (byId && byId.tagName === 'SELECT') return byId;
+        var form = document.getElementById('ticket-attributes-form') || document.querySelector('form.edit_ticket');
+        if (!form) return null;
+        var labels = form.querySelectorAll('label');
+        for (var i = 0; i < labels.length; i += 1) {
+            if (!/^\s*priority:?/i.test(labels[i].textContent || '')) continue;
+            var section = labels[i].closest('section, .form-group, [class*="col"]') || labels[i].parentElement;
+            var select = section && section.querySelector('select');
+            if (select) return select;
+        }
+        return null;
+    }
+
+    function savedPriorityName() {
+        var select = prioritySelect();
+        if (!select) return null;
+        var option = Array.prototype.find.call(select.options, function (o) { return o.defaultSelected; }) ||
+            select.options[select.selectedIndex];
+        var name = option ? option.textContent.replace(/\s+/g, ' ').trim() : '';
+        return name || null;
+    }
+
+    var priorityAtOpen = {};   // ticket number -> priority name
+
+    function ticketKey() {
+        var match = window.location.pathname.match(/\/tickets\/(\d+)/);
+        return match ? match[1] : '';
+    }
+
+    // Runs with every scan, so it catches the Attributes form as soon as
+    // it is there; once a ticket has a value it is never overwritten here.
+    function capturePriority() {
+        var key = ticketKey();
+        if (!key || priorityAtOpen[key]) return;
+        var name = savedPriorityName();
+        if (name) priorityAtOpen[key] = name;
+    }
+
+    function priorityFromName() {
+        capturePriority();
+        return priorityAtOpen[ticketKey()] || savedPriorityName();
+    }
+
+    // Priorities travel through the text as markers and become coloured
+    // labels after the text has been turned into HTML (see insertTemplate).
+    var PRIO_MARK_RE = /\u0001P:([^\u0002]+)\u0002/g;
+
+    function priorityMarker(name) {
+        return name ? '\u0001P:' + name + '\u0002' : null;
+    }
+
     function resolvePlaceholders(text, container) {
         var block = replyBlock(container);
         var editable = container.querySelector('.note-editable');
@@ -333,7 +412,8 @@
             fullName: fullName,
             customer: ticketInfo('companyName', 'pcm-ticket-company-name'),
             partner: ticketInfo('partner', 'pcm-ticket-partner'),
-            ticket: ticketNumber(block)
+            ticket: ticketNumber(block),
+            priorityFrom: /\{priorityFrom\}/.test(text) ? priorityMarker(priorityFromName()) : null
         };
         values.name = values.firstName;
 
@@ -341,7 +421,10 @@
         // them, so 'Hello {firstName},' becomes 'Hello,' with no gap.
         // Other unresolved placeholders stay visible.
         var DROP_IF_MISSING = { firstName: true, fullName: true, name: true };
-        return text.replace(/([ \t]*)\{(firstName|fullName|name|customer|partner|ticket)\}/g, function (match, space, key) {
+        text = text.replace(/\{priority:([^}]+)\}/g, function (match, name) {
+            return priorityMarker(name.trim()) || match;
+        });
+        return text.replace(/([ \t]*)\{(firstName|fullName|name|customer|partner|ticket|priorityFrom)\}/g, function (match, space, key) {
             if (values[key]) return space + values[key];
             return DROP_IF_MISSING[key] ? '' : match;
         });
@@ -406,8 +489,24 @@
         return html;
     }
 
+    // A priority as a small label in PCM's own colour for it, written with
+    // inline styles so it keeps its colour in the saved note and the mail.
+    // Without a known colour it is plain bold text.
+    function priorityLabelHtml(name) {
+        var level = PRIORITY_LEVELS[name.toLowerCase()];
+        var text = (D.escapeHtml || String)(level ? name + ' (' + level + ')' : name);
+        var colour = pcmLabelColour(name.toLowerCase());
+        if (!colour) return '<b>' + text + '</b>';
+        return '<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-weight:700;' +
+            'background-color:' + colour.bg + ';color:' + (colour.fg || '#fff') + ';">' + text + '</span>';
+    }
+
     function insertTemplate(container, templateText) {
-        D.editorAppendHtml(container, textToHtml(resolvePlaceholders(templateText, container)));
+        var resolved = resolvePlaceholders(templateText, container);
+        var html = textToHtml(resolved).replace(PRIO_MARK_RE, function (match, name) {
+            return priorityLabelHtml(name);
+        });
+        D.editorAppendHtml(container, html);
     }
 
     // PCM template shortcut: replicates the Insert Template modal's own
@@ -482,6 +581,27 @@
         return btn;
     }
 
+    // PCM's own colours for a priority: a hidden label with PCM's class is
+    // measured once per priority and remembered, so the note always
+    // matches the colours PCM shows elsewhere, whatever PCM changes them
+    // to. Without a colour (class unknown to PCM) null comes back.
+    var pcmLabelColours = {};
+
+    function pcmLabelColour(name) {
+        if (Object.prototype.hasOwnProperty.call(pcmLabelColours, name)) return pcmLabelColours[name];
+        var probe = document.createElement('span');
+        probe.className = 'label label-priority-' + name;
+        probe.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;';
+        probe.textContent = 'x';
+        document.body.appendChild(probe);
+        var cs = window.getComputedStyle(probe);
+        var bg = cs.backgroundColor;
+        var result = bg && bg !== 'transparent' && !/rgba\([^)]*,\s*0\)/.test(bg) ? { bg: bg, fg: cs.color } : null;
+        probe.remove();
+        pcmLabelColours[name] = result;
+        return result;
+    }
+
     function makeDropdown(entry, container) {
         var select = document.createElement('select');
         select.className = 'pcm-tpl-select';
@@ -537,6 +657,7 @@
     // Idempotent: flags each editor container so re-renders that keep
     // the node are free, and containers replaced by PCM get a new bar.
     function scan() {
+        capturePriority();
         var editors = document.querySelectorAll('.note-editor');
         for (var i = 0; i < editors.length; i++) {
             var container = editors[i];
