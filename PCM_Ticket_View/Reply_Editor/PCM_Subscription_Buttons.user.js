@@ -1,13 +1,13 @@
 // @file_name = PCM_Subscription_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.7_2026-10-28
+// @version = 1.8_2026-10-29
 // @created = 2026-09-02 14:17
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The partner name lives in localStorage (pcm-partner-name), never in code.
 
 // ==UserScript==
 // @name         PCM Subscription Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.7_2026-10-28
+// @version      1.8_2026-10-29
 // @description  One-press handling of partner telephony subscription tickets, one button per product (PSI and PCC), each with its own colour and mail template. Both fill the five Change form fields (invoiceable hours, soundfiles, out of hours, to be invoiced, and Invoice Information = the ticket title) and append their confirmation mail to the reply, with the user's name, id, email, user group, and profile team resolved from the first mail in the ticket (iframes included). Values that only exist after configuration stay visible as placeholders. Since 1.5 a label present but blank in the mail is reported as empty, by name, on the button and in the console, instead of silently taking the following line as its value. Partner details are read from localStorage, keeping this file free of customer information. Event-driven injection behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -116,8 +116,9 @@
 
     var D = window.PCM_DOM;
     if (!D || !D.bootUntil || !D.ensureStyleTag || !D.createVisibilityGate ||
-        !D.createFieldFinder || !D.setNativeFieldValue || !D.editorAppendHtml || !D.flashLabel) {
-        console.error('[PCM Subscription Buttons] PCM_DOM shared library missing or stale (lib 2.0 or newer required), aborting.');
+        !D.createFieldFinder || !D.setNativeFieldValue || !D.editorAppendHtml || !D.flashLabel ||
+        !D.formReady || !D.recheckForm) {
+        console.error('[PCM Subscription Buttons] PCM_DOM shared library missing or stale (lib 2.3 or newer required), aborting.');
         return;
     }
 
@@ -334,7 +335,7 @@
         // original values, the filled fields would become the "originals"
         // and Save would stay grey; the press is ignored then (lib 2.3).
         var probe = document.querySelector('#form-fields-wrapper select, #form-fields-wrapper input:not([type="hidden"]), #form-fields-wrapper textarea');
-        if (probe && D.formReady && !D.formReady(probe)) {
+        if (probe && !D.formReady(probe)) {
             flashLabel(btn, 'Loading\u2026');
             return;
         }

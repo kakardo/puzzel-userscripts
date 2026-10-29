@@ -1,12 +1,12 @@
 // @file_name = PCM_PostIt_Quick_Text.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-10-28
+// @version = 1.3_2026-10-29
 // @created = 2026-10-14 11:20
 
 // ==UserScript==
 // @name         PCM PostIt Quick Text
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-10-28
+// @version      1.3_2026-10-29
 // @description  Adds a red button beside the "Post-It Note:" label in the Attributes widget that writes a text in the Post-It Note, INCIDENT unless you choose another. The arrow on its right turns the button into a small text box: type what the button should write and press Enter (Esc cancels, an empty box goes back to INCIDENT); the choice is remembered in this browser. One press writes the text: into an empty note as is, above existing text on its own first line, and not at all when the note already contains it. The text is set the way typing would, so PCM (and the unsaved changes warning) sees the change; you still press Save. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the button says Loading, since PCM would otherwise take the text as the saved one and keep Save grey. The button comes back by itself when PCM rebuilds the widget after a save. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -28,8 +28,9 @@
     // INTERNAL SETTINGS
     var D = window.PCM_DOM;
     if (!D || !D.bootUntil || !D.ensureStyleTag || !D.cleanText || !D.createVisibilityGate ||
-        !D.installNavigationHooks || !D.setNativeFieldValue || !D.flashLabel) {
-        console.error('[PCM PostIt Quick Text] PCM_DOM shared helpers are missing (lib 2.0 or newer required).');
+        !D.installNavigationHooks || !D.setNativeFieldValue || !D.flashLabel ||
+        !D.formReady || !D.recheckForm) {
+        console.error('[PCM PostIt Quick Text] PCM_DOM shared helpers are missing (lib 2.3 or newer required).');
         return;
     }
 
@@ -147,7 +148,7 @@
     // Shared since lib 2.3: the same check for every script that writes
     // Attributes or Forms fields.
     function formReady(field) {
-        return D.formReady ? D.formReady(field) : true;
+        return D.formReady(field);
     }
 
     function writeText(button) {

@@ -1,12 +1,12 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 2.1_2026-10-28
+// @version = 2.2_2026-10-29
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.1_2026-10-28
+// @version      2.2_2026-10-29
 // @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To once PCM has reloaded it for the new team: Agent does. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -50,8 +50,9 @@
 
   // INTERNAL SETTINGS
   const D = window.PCM_DOM;
-  if (!D || !D.bootUntil || !D.ensureStyleTag || !D.cleanText || !D.installNavigationHooks) {
-    console.error('PCM Team Quick Select: PCM_DOM shared helpers are missing (lib 1.9 or newer required).');
+  if (!D || !D.bootUntil || !D.ensureStyleTag || !D.cleanText || !D.installNavigationHooks ||
+      !D.setNativeFieldValue || !D.formReady || !D.recheckForm) {
+    console.error('PCM Team Quick Select: PCM_DOM shared helpers are missing (lib 2.3 or newer required).');
     return;
   }
 
@@ -133,11 +134,11 @@
   // Shared since lib 2.3: the same check for every script that writes
   // Attributes or Forms fields.
   function formReady(field) {
-    return D.formReady ? D.formReady(field) : true;
+    return D.formReady(field);
   }
 
   function recheckForm(field) {
-    if (D.recheckForm) D.recheckForm(field);
+    D.recheckForm(field);
   }
 
   function flash(btn, text) {

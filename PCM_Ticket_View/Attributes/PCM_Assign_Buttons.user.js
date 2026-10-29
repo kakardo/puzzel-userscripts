@@ -1,12 +1,12 @@
 // @file_name = PCM_Assign_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-10-28
+// @version = 1.4_2026-10-29
 // @created = 2026-10-14 11:25
 
 // ==UserScript==
 // @name         PCM Assign Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-10-28
+// @version      1.4_2026-10-29
 // @description  Adds two buttons beside the "Assigned To:" label in the Attributes widget: Me selects you in the Assigned To list, Unassign selects the empty entry. You are recognised from your profile picture in the top bar (its address holds your user id), so no id is written in the script. Each button is greyed out when it would change nothing: Me while you are not in the selected team's list or already assigned, Unassign while nobody is assigned; the tooltip says why. The choice is made the way picking it by hand would, so PCM (and the unsaved changes warning) sees it; you still press Save. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the button says Loading, since PCM would otherwise take the new value as the saved one and keep Save grey; after each change PCM is asked to re-check the form. The buttons come back by themselves when PCM rebuilds the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -29,8 +29,8 @@
     // INTERNAL SETTINGS
     var D = window.PCM_DOM;
     if (!D || !D.bootUntil || !D.ensureStyleTag || !D.cleanText || !D.createVisibilityGate ||
-        !D.installNavigationHooks) {
-        console.error('[PCM Assign Buttons] PCM_DOM shared helpers are missing (lib 2.0 or newer required).');
+        !D.installNavigationHooks || !D.formReady || !D.recheckForm) {
+        console.error('[PCM Assign Buttons] PCM_DOM shared helpers are missing (lib 2.3 or newer required).');
         return;
     }
 
@@ -121,11 +121,11 @@
     // Shared since lib 2.3: the same check for every script that writes
     // Attributes or Forms fields.
     function formReady(field) {
-        return D.formReady ? D.formReady(field) : true;
+        return D.formReady(field);
     }
 
     function recheckForm(field) {
-        if (D.recheckForm) D.recheckForm(field);
+        D.recheckForm(field);
     }
 
     function choose(value, button) {
