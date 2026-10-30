@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 2.2_2026-10-29
+// @version = 2.4_2026-10-30
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.2_2026-10-29
-// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To once PCM has reloaded it for the new team: Agent does. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form.
+// @version      2.4_2026-10-30
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -161,12 +161,12 @@
 
     select.value = option.value;
 
-    // Chosen redraws from the native select on this event; the change
-    // events make the app itself react to the new value.
+    // Chosen redraws from the native select on its own event. Then ONE
+    // native change: PCM's jQuery handlers hear it too. A jQuery change on
+    // top made PCM run its team-change work twice (two Assigned To
+    // requests per press, the second undoing an unassign).
     const jq = window.jQuery || window.$;
-    if (jq) {
-      jq(select).trigger('chosen:updated').trigger('change');
-    }
+    if (jq) jq(select).trigger('chosen:updated');
     select.dispatchEvent(new Event('change', { bubbles: true }));
 
     updateActiveStates();
@@ -189,44 +189,45 @@
   // One native change event: PCM and the Styler listen through
   // addEventListener (jQuery included), so the status colour and the
   // unsaved warning follow as with a pick by hand.
-  // Clears Assigned To once PCM has refilled it for the new team. A team
-  // change makes PCM reload the Assigned To list; clearing it before that
-  // reload could be undone by it. So the list is watched (an observer on
-  // its own parent, nothing else) and cleared right after it changes, or
-  // after UNASSIGN_MAX_WAIT_MS if it never does. When the team did not
-  // change there is no reload, and it is cleared at once.
-  const UNASSIGN_MAX_WAIT_MS = 3000;
+  // Clears Assigned To at once, then guards it: a team change makes PCM
+  // fetch the new team's Assigned To list, sometimes more than once, and
+  // every answer rebuilds the list with the current person selected again.
+  // For UNASSIGN_GUARD_MS after the press, each such answer is followed by
+  // another clear. A pick by hand in Assigned To ends the guard at once,
+  // so your own choice is never overridden. Event-driven through jQuery's
+  // ajaxComplete; nothing is left listening afterwards.
+  const UNASSIGN_GUARD_MS = 8000;
 
   function clearAssignee() {
     const select = document.getElementById('user-select');
-    if (!select || select.value === '') return;
-    if (![...select.options].some((option) => option.value === '')) return;
+    if (!select || select.value === '') return false;
+    if (![...select.options].some((option) => option.value === '')) return false;
     D.setNativeFieldValue(select, '');
+    return true;
   }
 
-  function unassignAfterRefill(teamChanged) {
-    const select = document.getElementById('user-select');
-    if (!select) return;
-    if (!teamChanged) {
-      clearAssignee();
-      return;
+  function unassignAndGuard() {
+    clearAssignee();
+    const jq = window.jQuery;
+    if (!jq) return;
+    let stopped = false;
+    const onAjax = (event, xhr, settings) => {
+      if (stopped || !settings || !/assignable_users/.test(settings.url || '')) return;
+      // Let PCM finish rebuilding the list from this answer first.
+      window.setTimeout(() => { if (!stopped) clearAssignee(); }, 50);
+    };
+    const onHandPick = (event) => {
+      if (event.isTrusted && event.target && event.target.id === 'user-select') stop();
+    };
+    function stop() {
+      if (stopped) return;
+      stopped = true;
+      jq(document).off('ajaxComplete', onAjax);
+      document.removeEventListener('change', onHandPick, true);
     }
-    const root = select.parentElement || select;
-    let done = false;
-    let timer = 0;
-    const observer = new MutationObserver(() => {
-      // Let PCM finish setting the refilled list's own selection first.
-      window.setTimeout(finish, 50);
-    });
-    function finish() {
-      if (done) return;
-      done = true;
-      observer.disconnect();
-      window.clearTimeout(timer);
-      clearAssignee();
-    }
-    observer.observe(root, { childList: true, subtree: true });
-    timer = window.setTimeout(finish, UNASSIGN_MAX_WAIT_MS);
+    jq(document).on('ajaxComplete', onAjax);
+    document.addEventListener('change', onHandPick, true);
+    window.setTimeout(stop, UNASSIGN_GUARD_MS);
   }
 
   function selectStatus(statusName) {
@@ -320,10 +321,9 @@
             flash(btn, 'Loading\u2026');
             return;
           }
-          const teamBefore = selectedTeamText(getSelect());
           selectTeam(entry.team);
           if (entry.status) selectStatus(entry.status);
-          if (entry.unassign) unassignAfterRefill(selectedTeamText(getSelect()) !== teamBefore);
+          if (entry.unassign) unassignAndGuard();
           recheckForm(getSelect());
         });
       }
