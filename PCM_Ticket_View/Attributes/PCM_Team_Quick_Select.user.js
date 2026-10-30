@@ -1,12 +1,12 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 2.4_2026-10-30
+// @version = 2.5_2026-10-30
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.4_2026-10-30
+// @version      2.5_2026-10-30
 // @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -194,8 +194,8 @@
   // every answer rebuilds the list with the current person selected again.
   // For UNASSIGN_GUARD_MS after the press, each such answer is followed by
   // another clear. A pick by hand in Assigned To ends the guard at once,
-  // so your own choice is never overridden. Event-driven through jQuery's
-  // ajaxComplete; nothing is left listening afterwards.
+  // so your own choice is never overridden. Event-driven (an observer on
+  // the field and jQuery's ajaxComplete); nothing is left listening.
   const UNASSIGN_GUARD_MS = 8000;
 
   function clearAssignee() {
@@ -206,15 +206,21 @@
     return true;
   }
 
+  // No flash: the clear runs before the browser paints the rebuilt list.
+  // A MutationObserver on the Assigned To field reacts in the same task
+  // as PCM's rebuild (its callback runs before the next paint), and
+  // ajaxComplete clears synchronously as a backstop. A clear only changes
+  // the value, not the options, so it never wakes the observer itself.
   function unassignAndGuard() {
     clearAssignee();
     const jq = window.jQuery;
-    if (!jq) return;
+    const select = document.getElementById('user-select');
+    const root = select && (select.parentElement || select);
     let stopped = false;
+    const observer = root ? new MutationObserver(() => { if (!stopped) clearAssignee(); }) : null;
     const onAjax = (event, xhr, settings) => {
       if (stopped || !settings || !/assignable_users/.test(settings.url || '')) return;
-      // Let PCM finish rebuilding the list from this answer first.
-      window.setTimeout(() => { if (!stopped) clearAssignee(); }, 50);
+      clearAssignee();
     };
     const onHandPick = (event) => {
       if (event.isTrusted && event.target && event.target.id === 'user-select') stop();
@@ -222,10 +228,12 @@
     function stop() {
       if (stopped) return;
       stopped = true;
-      jq(document).off('ajaxComplete', onAjax);
+      if (observer) observer.disconnect();
+      if (jq) jq(document).off('ajaxComplete', onAjax);
       document.removeEventListener('change', onHandPick, true);
     }
-    jq(document).on('ajaxComplete', onAjax);
+    if (observer) observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['selected'] });
+    if (jq) jq(document).on('ajaxComplete', onAjax);
     document.addEventListener('change', onHandPick, true);
     window.setTimeout(stop, UNASSIGN_GUARD_MS);
   }
