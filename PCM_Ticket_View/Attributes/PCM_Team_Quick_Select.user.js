@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 2.5_2026-10-30
+// @version = 2.6_2026-11-02
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.5_2026-10-30
-// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form.
+// @version      2.6_2026-11-02
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. PCM's Save in Attributes is then pressed right away, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form; SAVE_RIGHT_AWAY at the top turns it off.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -47,6 +47,11 @@
   // If the preferred spot cannot be found the other one is used, so a
   // layout change in PCM can never leave the bubbles unplaced.
   const BUTTON_PLACEMENT = 'below';
+
+  // true: a press also presses PCM's Save in Attributes (which saves every
+  // change in that form) once PCM has reloaded Assigned To for the new
+  // team. false: you press Save yourself.
+  const SAVE_RIGHT_AWAY = true;
 
   // INTERNAL SETTINGS
   const D = window.PCM_DOM;
@@ -238,6 +243,60 @@
     window.setTimeout(stop, UNASSIGN_GUARD_MS);
   }
 
+  // SAVING
+  // A team change makes PCM fetch the new team's Assigned To list, so
+  // PCM's Save is pressed once PCM has had no requests running for
+  // SAVE_QUIET_MS, at the latest after SAVE_MAX_WAIT_MS. For a bubble that
+  // clears Assigned To, it is cleared once more just before saving.
+  // Event-driven via jQuery's ajaxSend and ajaxStop; nothing is left
+  // listening afterwards. Save is only pressed when PCM allows it (not
+  // greyed out), so an unchanged form is never sent.
+  const SAVE_QUIET_MS = 300;
+  const SAVE_MAX_WAIT_MS = 8000;
+
+  function findSaveButton(form) {
+    let button = form.querySelector('button[type="submit"], input[type="submit"]');
+    if (!button && form.id) button = document.querySelector('[type="submit"][form="' + form.id + '"]');
+    return button;
+  }
+
+  function saveWhenQuiet(beforeSave) {
+    const jq = window.jQuery;
+    let done = false;
+    let quietTimer = 0;
+    let capTimer = 0;
+    const onSend = () => window.clearTimeout(quietTimer);
+    const onStop = () => arm();
+    function finish() {
+      if (done) return;
+      done = true;
+      window.clearTimeout(quietTimer);
+      window.clearTimeout(capTimer);
+      if (jq) jq(document).off('ajaxSend', onSend).off('ajaxStop', onStop);
+      if (beforeSave) beforeSave();
+      // Looked up again: PCM may have rebuilt the form.
+      const select = getSelect();
+      const form = select && select.form;
+      if (!form) return;
+      recheckForm(select);
+      const button = findSaveButton(form);
+      if (!button) {
+        console.warn('PCM Team Quick Select: could not find the Attributes Save button.');
+        return;
+      }
+      if (!button.disabled) button.click();
+    }
+    function arm() {
+      window.clearTimeout(quietTimer);
+      quietTimer = window.setTimeout(() => {
+        if (!jq || !jq.active) finish();
+      }, SAVE_QUIET_MS);
+    }
+    if (jq) jq(document).on('ajaxSend', onSend).on('ajaxStop', onStop);
+    capTimer = window.setTimeout(finish, SAVE_MAX_WAIT_MS);
+    arm();
+  }
+
   function selectStatus(statusName) {
     const select = getStatusSelect();
     if (!select) return;
@@ -319,7 +378,7 @@
         btn.disabled = true;
         btn.title = 'No option named "' + entry.team + '" in the Team list';
       } else {
-        btn.title = 'Set Team to ' + entry.team + (entry.status ? ' and Status to ' + entry.status : '') + (entry.unassign ? ' and clear Assigned To' : '');
+        btn.title = 'Set Team to ' + entry.team + (entry.status ? ' and Status to ' + entry.status : '') + (entry.unassign ? ' and clear Assigned To' : '') + (SAVE_RIGHT_AWAY ? ', then save' : '');
         btn.addEventListener('click', (event) => {
           // preventDefault also stops the surrounding label from toggling
           // the select widget.
@@ -333,6 +392,7 @@
           if (entry.status) selectStatus(entry.status);
           if (entry.unassign) unassignAndGuard();
           recheckForm(getSelect());
+          if (SAVE_RIGHT_AWAY) saveWhenQuiet(entry.unassign ? clearAssignee : null);
         });
       }
 

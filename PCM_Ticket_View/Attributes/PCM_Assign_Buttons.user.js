@@ -1,13 +1,13 @@
 // @file_name = PCM_Assign_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.5_2026-10-30
+// @version = 1.6_2026-11-02
 // @created = 2026-10-14 11:25
 
 // ==UserScript==
 // @name         PCM Assign Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.5_2026-10-30
-// @description  Adds two buttons on a row of their own under the "Assigned To:" label in the Attributes widget (so they and the field stay put when PCM's "(User is online)" note comes and goes): Me selects you in the Assigned To list, Unassign selects the empty entry. You are recognised from your profile picture in the top bar (its address holds your user id), so no id is written in the script. Each button is greyed out when it would change nothing: Me while you are not in the selected team's list or already assigned, Unassign while nobody is assigned; the tooltip says why. The choice is made the way picking it by hand would, so PCM (and the unsaved changes warning) sees it; you still press Save. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the button says Loading, since PCM would otherwise take the new value as the saved one and keep Save grey; after each change PCM is asked to re-check the form. The buttons come back by themselves when PCM rebuilds the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      1.6_2026-11-02
+// @description  Adds two buttons on a row of their own under the "Assigned To:" label in the Attributes widget (so they and the field stay put when PCM's "(User is online)" note comes and goes): Me selects you in the Assigned To list, Unassign selects the empty entry. You are recognised from your profile picture in the top bar (its address holds your user id), so no id is written in the script. Each button is greyed out when it would change nothing: Me while you are not in the selected team's list or already assigned, Unassign while nobody is assigned; the tooltip says why. The choice is made the way picking it by hand would, so PCM (and the unsaved changes warning) sees it, and PCM's Save in Attributes is then pressed right away (once PCM has no requests running; this saves every change in the Attributes form; SAVE_RIGHT_AWAY at the top turns it off). A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the button says Loading, since PCM would otherwise take the new value as the saved one and keep Save grey; after each change PCM is asked to re-check the form. The buttons come back by themselves when PCM rebuilds the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -25,6 +25,9 @@
     var ME_COLOUR = '#1e5bd8';
     var BLANK_LABEL = 'Unassign';
     var BLANK_COLOUR = '#607080';
+    // true: a press also presses PCM's Save in Attributes (which saves
+    // every change in that form). false: you press Save yourself.
+    var SAVE_RIGHT_AWAY = true;
 
     // INTERNAL SETTINGS
     var D = window.PCM_DOM;
@@ -146,6 +149,59 @@
         if (jq) jq(select).trigger('chosen:updated');
         recheckForm(select);
         updateStates();
+        if (SAVE_RIGHT_AWAY) saveWhenQuiet(SELECT_ID);
+    }
+
+    // SAVING
+    // PCM's Save is pressed once PCM has no requests running for
+    // SAVE_QUIET_MS (a change can make PCM fetch something first), at the
+    // latest after SAVE_MAX_WAIT_MS. Event-driven via jQuery's ajaxSend and
+    // ajaxStop; nothing is left listening afterwards. Save is only pressed
+    // when PCM allows it (not greyed out), so an unchanged form is never
+    // sent.
+    var SAVE_QUIET_MS = 200;
+    var SAVE_MAX_WAIT_MS = 8000;
+
+    function findSaveButton(form) {
+        var button = form.querySelector('button[type="submit"], input[type="submit"]');
+        if (!button && form.id) button = document.querySelector('[type="submit"][form="' + form.id + '"]');
+        return button;
+    }
+
+    function saveWhenQuiet(fieldId) {
+        var jq = window.jQuery;
+        var done = false;
+        var quietTimer = 0;
+        var capTimer = 0;
+        function finish() {
+            if (done) return;
+            done = true;
+            window.clearTimeout(quietTimer);
+            window.clearTimeout(capTimer);
+            if (jq) jq(document).off('ajaxSend', onSend).off('ajaxStop', onStop);
+            // The field is looked up again: PCM may have rebuilt the form.
+            var field = document.getElementById(fieldId);
+            var form = field && field.form;
+            if (!form) return;
+            recheckForm(field);
+            var button = findSaveButton(form);
+            if (!button) {
+                console.warn('[PCM Assign Buttons] Could not find the Attributes Save button.');
+                return;
+            }
+            if (!button.disabled) button.click();
+        }
+        function arm() {
+            window.clearTimeout(quietTimer);
+            quietTimer = window.setTimeout(function () {
+                if (!jq || !jq.active) finish();
+            }, SAVE_QUIET_MS);
+        }
+        function onSend() { window.clearTimeout(quietTimer); }
+        function onStop() { arm(); }
+        if (jq) jq(document).on('ajaxSend', onSend).on('ajaxStop', onStop);
+        capTimer = window.setTimeout(finish, SAVE_MAX_WAIT_MS);
+        arm();
     }
 
     function updateStates() {
@@ -166,7 +222,7 @@
         var meTitle = !me ? 'Could not find who you are (no profile picture in the top bar)'
             : !meListed ? 'You are not in the Assigned To list of the selected team'
             : !meAvailable ? 'Already assigned to you'
-            : 'Assign the ticket to you (then press Save)';
+            : 'Assign the ticket to you' + (SAVE_RIGHT_AWAY ? ' and save' : ' (then press Save)');
         if (meButton.title !== meTitle) meButton.title = meTitle;
 
         var blankListed = !!optionByValue(parts.select, '');
@@ -174,7 +230,7 @@
         if (blankButton.disabled === blankAvailable) blankButton.disabled = !blankAvailable;
         var blankTitle = !blankListed ? 'No empty choice in the Assigned To list'
             : !blankAvailable ? 'Already unassigned'
-            : 'Clear Assigned To (then press Save)';
+            : 'Clear Assigned To' + (SAVE_RIGHT_AWAY ? ' and save' : ' (then press Save)');
         if (blankButton.title !== blankTitle) blankButton.title = blankTitle;
     }
 
