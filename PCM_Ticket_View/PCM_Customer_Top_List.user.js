@@ -1,6 +1,6 @@
 // @file_name = PCM_Customer_Top_List.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-11-02
+// @version = 1.4_2026-11-02
 // @created = 2026-11-02 12:03
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails and ticket counts are read from the page at runtime and kept only in this browser's localStorage, never written here.
 // @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
@@ -8,8 +8,8 @@
 // ==UserScript==
 // @name         PCM Customer Top List
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-11-02
-// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days and all time. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in this browser only, one entry per customer by the profile id from the name link (customers without one are not saved); each name links to the profile. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
+// @version      1.4_2026-11-02
+// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days and all time. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in this browser only, one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile. Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
 // @run-at       document-start
@@ -25,6 +25,8 @@
     // USER SETTINGS
     var TOP = 50;
     var RECENT_DAYS = 30;
+    // Customers with fewer tickets than this (all time) are not saved.
+    var MIN_TICKETS = 5;
     var BUTTON_TEXT = 'Top';
 
     // INTERNAL SETTINGS
@@ -47,6 +49,7 @@
     var STYLE_ID = 'pcm-top-customers-style';
     var STORE_KEY = 'pcmCustomerTopList';
     var SHARED_KEY = 'pcmCustomerTicketLists';
+    var BIG_KEY = 'pcmCustomerBigCounts';
     var CI_ID = 'wid-customer-intelligence';
     var NAME_ID = 'cip-customer-name';
     var EMAIL_ID = 'cip-customer-email';
@@ -106,7 +109,9 @@
     ].join('\n'));
 
     // STORAGE
-    // { customers: { profile id: { n: name, t: total, r: [ticket times, last 30 days], s: saved } } }
+    // { customers: { profile id: { n: name, e: email, t: total, r: [ticket times, last 30 days], s: saved } } }
+    // The email (lower case) links an entry to the full count PCM Customer
+    // Ticket Count keeps for customers with 500 tickets or more.
     // Only customers with a profile id are kept, so one customer is always
     // one entry; anything else (entries without an id) is dropped on load.
     function load() {
@@ -114,18 +119,27 @@
         var customers = {};
         if (data && data.customers) {
             Object.keys(data.customers).forEach(function (key) {
-                if (/^\d+$/.test(key)) customers[key] = data.customers[key];
+                var c = data.customers[key];
+                if (/^\d+$/.test(key) && c && (c.t || 0) >= MIN_TICKETS) customers[key] = c;
             });
         }
         return { customers: customers };
     }
 
-    function save(id, name, total, times) {
+    function save(id, name, email, total, times) {
         var data = load();
         var now = Date.now();
         var since = now - RECENT_DAYS * DAY_MS;
+        if (total < MIN_TICKETS) {
+            if (data.customers[id]) {
+                delete data.customers[id];
+                D.writeJson(STORE_KEY, data);
+            }
+            return;
+        }
         data.customers[id] = {
             n: name,
+            e: email,
             t: total,
             r: times.filter(function (ts) { return ts >= since; }),
             s: now
@@ -233,7 +247,7 @@
             checking = '';
             if (!text) return;
             var result = readTickets(text);
-            save(id, name || 'Customer ' + id, result.total, result.times);
+            save(id, name || 'Customer ' + id, email.toLowerCase(), result.total, result.times);
             savedFor = id;
         });
     }
@@ -257,13 +271,17 @@
     // THE LISTS
     function lists() {
         var customers = load().customers;
+        var big = D.readJson(BIG_KEY, {}) || {};
         var since = Date.now() - RECENT_DAYS * DAY_MS;
         var all = Object.keys(customers).map(function (id) {
             var c = customers[id];
+            var full = c.e && big[c.e];
+            var useFull = !!(full && full.n > (c.t || 0));
             return {
                 id: id,
                 name: c.n || 'Customer ' + id,
-                total: c.t || 0,
+                total: useFull ? full.n : (c.t || 0),
+                capped: useFull ? !!full.c : (c.t || 0) >= PER_PAGE,
                 recent: (c.r || []).filter(function (ts) { return ts >= since; }).length
             };
         });
@@ -280,7 +298,7 @@
             return '<div class="pcm-tl-empty">No customers yet. The list fills as you open tickets.</div>';
         }
         return '<table>' + items.map(function (c, i) {
-            var count = key === 'total' && c.total >= PER_PAGE ? PER_PAGE + '+' : String(c[key]);
+            var count = Number(c[key]).toLocaleString('en-GB') + (key === 'total' && c.capped ? '+' : '');
             var name = '<a href="/customers/' + c.id + '/edit" target="_blank" title="Open the customer\'s profile">' +
                 D.escapeHtml(c.name) + '</a>';
             return '<tr><td class="pcm-tl-rank">' + (i + 1) + '</td><td>' + name +
@@ -300,7 +318,7 @@
             '>All time</button></div>' +
             '<div class="pcm-tl-body">' + rowsHtml(data[tab], tab) + '</div>' +
             '<div class="pcm-tl-foot"><span>From the ' + data.known + (data.known === 1 ? ' customer' : ' customers') +
-            ' you have opened in this browser</span></div>';
+            ' with ' + MIN_TICKETS + ' or more tickets you have opened in this browser</span></div>';
     }
 
     function closePanel() {
