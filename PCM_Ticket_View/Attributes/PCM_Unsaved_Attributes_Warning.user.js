@@ -1,13 +1,13 @@
 // @file_name = PCM_Unsaved_Attributes_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.4_2026-10-14
+// @version = 1.5_2026-11-02
 // @created = 2026-09-04 15:43
 
 // ==UserScript==
 // @name         PCM Unsaved Attributes Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-10-14
-// @description  Snapshot-based unsaved change detection for the ticket Attributes widget, built on the shared library's createUnsavedWatcher engine (lib 2.0). Highlights changed fields and dropdowns (including the Chosen-based Team select, where the ring lands on the visible container) and shows a warning next to the Attributes Save button. Saving in Attributes clears only this widget's warning. Colour, mode, and text are settings at the top. Since 1.3, SELF_SAVING_BUTTONS treats a real click on a header control that persists an Attributes value by itself (Assign To Me) as a save: the baseline is rebased once the new value lands, so the field is not left marked unsaved.
+// @version      1.5_2026-11-02
+// @description  Snapshot-based unsaved change detection for the ticket Attributes widget, built on the shared library's createUnsavedWatcher engine (lib 2.0). Highlights changed fields and dropdowns (including the Chosen-based Team select, where the ring lands on the visible container) and shows a warning next to the Attributes Save button. Saving in Attributes clears only this widget's warning. Colour, mode, and text are settings at the top. Since 1.3, SELF_SAVING_BUTTONS treats a real click on a header control that persists an Attributes value by itself (Assign To Me) as a save: the baseline is rebased once the new value lands, so the field is not left marked unsaved. Since 1.5, a save pressed by PCM Assign Buttons or PCM Team Quick Select (announced with the pcm-attributes-save event) also counts as a save.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -198,6 +198,21 @@
     }, true);
   }
 
+  // SAVES PRESSED BY OTHER SCRIPTS
+  // PCM Assign Buttons and PCM Team Quick Select press Save themselves.
+  // Their click is not a real one, so the rule above ignores it; instead
+  // they announce the save with this event just before pressing Save,
+  // and the warning takes the current values as saved, the same as for
+  // a real click on Save.
+  const SAVE_EVENT = 'pcm-attributes-save';
+
+  function installScriptSaves() {
+    document.addEventListener(SAVE_EVENT, function () {
+      watcher.rebase();
+    });
+  }
+
   watcher.start();
   installSelfSavingButtons();
+  installScriptSaves();
 })();
