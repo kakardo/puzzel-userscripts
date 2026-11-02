@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 3.6_2026-11-02
+// @version = 3.7_2026-11-02
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.6_2026-11-02
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. A template or dropdown can set fontSize for its text. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      3.7_2026-11-02
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the FollowUp and Password menus are split into English and Svenska). A template or dropdown can set fontSize for its text. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -32,6 +32,9 @@
      *                                 fills its own variables
      *   { label, color, items: [...] } a dropdown menu; items are entries
      *                                 of either kind above
+     * Dropdown entries can have group: entries with the same group are
+     * listed together under that heading (in the order the groups first
+     * appear), so a dropdown can be split by language with short names.
      * Own templates and dropdowns can also have fontSize (in px, as in
      * the editor's size menu): the inserted text gets that size. Set on a
      * dropdown it applies to all its entries, unless an entry has its own.
@@ -95,7 +98,7 @@
         // the user's behalf (an admin or partner).
         { label: 'Password', color: COLORS.password, items: [
             {
-                label: 'Reset (you)',
+                label: 'Reset (you)', group: 'English',
                 text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
                 'It appears that you are unable to log in because your account has been temporarily locked after ' +
                 'multiple failed login attempts.\n\n' +
@@ -107,7 +110,7 @@
                 'Have a great day!'
             },
             {
-                label: 'Reset (they)',
+                label: 'Reset (they)', group: 'English',
                 text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
                 'It appears that they are unable to log in because their account has been temporarily locked after ' +
                 'multiple failed login attempts.\n\n' +
@@ -119,7 +122,7 @@
                 'Have a great day!'
             },
             {
-                label: 'Reset (SE)',
+                label: 'Reset', group: 'Svenska',
                 text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel Support.\n\n' +
                 'Det verkar som att du inte kan logga in eftersom kontot har låsts efter flera misslyckade ' +
                 'inloggningsförsök.\n\n' +
@@ -204,11 +207,11 @@
         // A dropdown: own templates and PCM templates mixed, in the order
         // they are used (check in, close without reply, hand to partner).
         { label: 'FollowUp', color: COLORS.closing, items: [
-            { label: 'CheckIn', text: 'Hello {firstName},\n\nJust checking in.\n\n' },
-            { label: 'NoReplyENG', templateId: 8495 },
-            { label: 'NoReplySWE', templateId: 8448 },
+            { label: 'Check in', group: 'English', text: 'Hello {firstName},\n\nJust checking in.\n\n' },
+            { label: 'No reply', group: 'English', templateId: 8495 },
+            { label: 'No reply', group: 'Svenska', templateId: 8448 },
             {
-                label: 'PartnerENG',
+                label: 'Partner', group: 'English',
                 text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
                 'Your Puzzel services are managed by {partner}, so all support requests need to go through ' +
                 '{partner} support. They can then raise the case with us on your behalf if needed.\n\n' +
@@ -216,7 +219,7 @@
                 'contacted Puzzel Support directly in the past, and we appreciate your understanding.'
             },
             {
-                label: 'PartnerSWE',
+                label: 'Partner', group: 'Svenska',
                 text: 'Hej {firstName},\n\nTack för att du kontaktar oss. Vi vill informera dig om att dina ' +
                 'Puzzel-tjänster hanteras av {partner}, och att du därför behöver kontakta dem direkt ' +
                 'för frågor eller supportärenden som rör Puzzel.\n\n' +
@@ -634,11 +637,24 @@
         head.value = '';
         select.appendChild(head);
 
+        // Grouped entries go under an optgroup heading per group, groups
+        // in the order they first appear; the value stays the index into
+        // entry.items, so the order in the list does not matter.
+        var groups = {};
         entry.items.forEach(function (item, index) {
             var option = document.createElement('option');
             option.textContent = item.label;
             option.value = String(index);
-            select.appendChild(option);
+            if (!item.group) {
+                select.appendChild(option);
+                return;
+            }
+            if (!groups[item.group]) {
+                groups[item.group] = document.createElement('optgroup');
+                groups[item.group].label = item.group;
+                select.appendChild(groups[item.group]);
+            }
+            groups[item.group].appendChild(option);
         });
 
         select.addEventListener('change', function () {
