@@ -1,13 +1,13 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 3.5_2026-10-29
+// @version = 3.6_2026-11-02
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.5_2026-10-29
+// @version      3.6_2026-11-02
 // @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. A template or dropdown can set fontSize for its text. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -214,6 +214,14 @@
                 '{partner} support. They can then raise the case with us on your behalf if needed.\n\n' +
                 'We are sorry that we cannot help you directly with this request. We understand that you may have ' +
                 'contacted Puzzel Support directly in the past, and we appreciate your understanding.'
+            },
+            {
+                label: 'PartnerSWE',
+                text: 'Hej {firstName},\n\nTack för att du kontaktar oss. Vi vill informera dig om att dina ' +
+                'Puzzel-tjänster hanteras av {partner}, och att du därför behöver kontakta dem direkt ' +
+                'för frågor eller supportärenden som rör Puzzel.\n\n' +
+                'De kan sedan vid behov ta upp ärendet med oss för din räkning.\n\n' +
+                'Tack för din förståelse, och vi önskar dig en fortsatt bra dag!'
             }
         ] }
     ];
