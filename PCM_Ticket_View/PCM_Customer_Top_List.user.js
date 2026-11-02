@@ -1,17 +1,18 @@
 // @file_name = PCM_Customer_Top_List.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-11-02
+// @version = 1.2_2026-11-02
 // @created = 2026-11-02 12:03
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails and ticket counts are read from the page at runtime and kept only in this browser's localStorage, never written here.
+// @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
 
 // ==UserScript==
 // @name         PCM Customer Top List
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-11-02
-// @description  Adds a "Top 50" button to PCM's top bar, right of Help and in the same style, that opens two lists of the customers with the most tickets: the last 30 days and all time. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in this browser only, one entry per customer by the profile id from the name link (customers without one are not saved); each name links to the profile. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
+// @version      1.2_2026-11-02
+// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days and all time. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in this browser only, one entry per customer by the profile id from the name link (customers without one are not saved); each name links to the profile. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
-// @run-at       document-idle
+// @run-at       document-start
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Customer_Top_List.user.js
@@ -24,11 +25,11 @@
     // USER SETTINGS
     var TOP = 50;
     var RECENT_DAYS = 30;
-    var BUTTON_TEXT = 'Top 50';
+    var BUTTON_TEXT = 'Top';
 
     // INTERNAL SETTINGS
     var D = window.PCM_DOM;
-    if (!D || !D.bootUntil || !D.createVisibilityGate || !D.installNavigationHooks || !D.ensureStyleTag ||
+    if (!D || !D.createVisibilityGate || !D.installNavigationHooks ||
         !D.readJson || !D.writeJson || !D.escapeHtml) {
         console.error('[PCM Customer Top List] PCM_DOM shared helpers are missing (lib 2.0 or newer required).');
         return;
@@ -56,8 +57,20 @@
     var EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
     var TICKET_PAGE_RE = /^\/tickets\/\d+/;
 
-    D.ensureStyleTag(STYLE_ID, [
+    // At document-start there may be no <head> yet (the shared
+    // ensureStyleTag needs one), so the style goes to <html> if needed.
+    function addStyle(id, css) {
+        if (document.getElementById(id)) return;
+        var style = document.createElement('style');
+        style.id = id;
+        style.textContent = css;
+        (document.head || document.documentElement).appendChild(style);
+    }
+
+    addStyle(STYLE_ID, [
         '#' + BUTTON_ID + ' svg { fill: currentColor; }',
+        '@keyframes pcm-top-customers-in { from { opacity: 0; } to { opacity: 1; } }',
+        '#' + BUTTON_ID + ' { animation: pcm-top-customers-in .2s ease-out; }',
         '#' + PANEL_ID + ' {',
         '    position: fixed;',
         '    z-index: 2000;',
@@ -333,10 +346,36 @@
     var TROPHY = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
         '<path d="M18 2H6v2H2v3a5 5 0 0 0 4.6 5A6 6 0 0 0 11 15.9V19H7v3h10v-3h-4v-3.1A6 6 0 0 0 17.4 12 5 5 0 0 0 22 7V4h-4V2zM4 7V6h2v3.8A3 3 0 0 1 4 7zm16 0a3 3 0 0 1-2 2.8V6h2v1z"/></svg>';
 
+    // The icon copies the size of Help's icon. While the page loads PCM's
+    // stylesheet may not be applied yet, so it is synced again when the
+    // page is ready and loaded; it only writes when a value differs.
+    var ICON_PROPS = ['display', 'width', 'height', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'verticalAlign'];
+
+    function syncIcon() {
+        var help = document.querySelector(HELP);
+        var icon = help && help.querySelector('a > i');
+        var svg = document.querySelector('#' + BUTTON_ID + ' svg');
+        if (!svg) return;
+        var wanted = {};
+        if (icon) {
+            var css = window.getComputedStyle(icon);
+            ICON_PROPS.forEach(function (prop) { wanted[prop] = css[prop]; });
+            if (wanted.display === 'inline') wanted.display = 'inline-block';
+        }
+        if (!parseFloat(wanted.width)) {
+            wanted.width = '24px';
+            wanted.height = '24px';
+        }
+        Object.keys(wanted).forEach(function (prop) {
+            if (svg.style[prop] !== wanted[prop]) svg.style[prop] = wanted[prop];
+        });
+    }
+
+    // Placed as soon as Help and its icon are in the page.
     function ensureButton() {
         if (document.getElementById(BUTTON_ID)) return true;
         var help = document.querySelector(HELP);
-        if (!help || !help.parentNode) return false;
+        if (!help || !help.parentNode || !help.querySelector('a > i')) return false;
         var li = document.createElement('li');
         li.className = help.className;
         li.id = BUTTON_ID;
@@ -344,17 +383,6 @@
         link.href = '#';
         link.title = 'Customers with the most tickets (from the customers you have opened)';
         link.innerHTML = TROPHY + ' <span class="menu-item-parent">' + D.escapeHtml(BUTTON_TEXT) + '</span>';
-        var icon = help.querySelector('a > i');
-        var svg = link.querySelector('svg');
-        if (icon) {
-            var css = window.getComputedStyle(icon);
-            ['display', 'width', 'height', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'verticalAlign']
-                .forEach(function (prop) { svg.style[prop] = css[prop]; });
-            if (css.display === 'inline') svg.style.display = 'inline-block';
-            if (!parseFloat(css.width)) svg.style.width = svg.style.height = '24px';
-        } else {
-            svg.style.width = svg.style.height = '24px';
-        }
         link.addEventListener('click', function (event) {
             event.preventDefault();
             if (document.getElementById(PANEL_ID)) closePanel();
@@ -362,16 +390,38 @@
         });
         li.appendChild(link);
         help.parentNode.insertBefore(li, help.nextSibling);
+        syncIcon();
         return true;
     }
 
     // BOOT
+    // While the page is being parsed, every batch of new nodes is checked
+    // for Help (one id lookup); the watcher stops once the button is in or
+    // the page is parsed, whichever comes first.
+    if (!ensureButton()) {
+        var early = new MutationObserver(function () {
+            if (ensureButton()) early.disconnect();
+        });
+        early.observe(document.documentElement, { childList: true, subtree: true });
+        document.addEventListener('DOMContentLoaded', function () {
+            early.disconnect();
+            ensureButton();
+        }, { once: true });
+    }
+
+    function whenReady(fn) {
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
+        else fn();
+    }
+
+    whenReady(function () {
+        syncIcon();
+        collect();
+    });
+    window.addEventListener('load', syncIcon, { once: true });
+
     D.installNavigationHooks(function () {
         ensureButton();
         gate.schedule();
-    });
-    D.bootUntil(function () { return !!document.querySelector(HELP); }, function () {
-        ensureButton();
-        collect();
     });
 })();
