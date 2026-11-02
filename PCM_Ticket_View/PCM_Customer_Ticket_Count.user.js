@@ -1,14 +1,14 @@
 // @file_name = PCM_Customer_Ticket_Count.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-11-02
+// @version = 1.1_2026-11-02
 // @created = 2026-11-02 11:51
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The customer's email is read from the page at runtime (only to ask PCM for the ticket list), never written here.
 
 // ==UserScript==
 // @name         PCM Customer Ticket Count
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-11-02
-// @description  Shows how many tickets the customer has in the Customer Tickets heading of Customer Intelligence, as a bold coloured "(110)", without opening the section. The number comes from the same list PCM loads when you open Customer Tickets, fetched once per customer in the background with room for 500 tickets and only read, never run (500 or more shows as "500+"). The request is shared with PCM Customer ID Reminder, so the two scripts never ask twice. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      1.1_2026-11-02
+// @description  Shows how many tickets the customer has in the Customer Tickets heading of Customer Intelligence, as a bold coloured "(110)", without opening the section. The number comes from the same list PCM loads when you open Customer Tickets, fetched once per customer in the background with room for 500 tickets and only read, never run (500 or more shows as "500+"). The request is shared with PCM Customer ID Reminder and PCM Customer Top List, so they never ask twice. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -43,7 +43,7 @@
     var COUNT_ID = 'pcm-customer-ticket-count';
     var STYLE_ID = 'pcm-customer-ticket-count-style';
     var PER_PAGE = 500;
-    var SHARED_KEY = 'pcmCustomerTicketCounts';
+    var SHARED_KEY = 'pcmCustomerTicketLists';
     var SCAN_DELAY_MS = 300;
     var EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 
@@ -62,9 +62,10 @@
     }
 
     // COUNTING TICKETS
-    // One request per customer per page view, kept on the page so PCM
-    // Customer ID Reminder reuses it (same key, same request).
-    function countTickets(email) {
+    // One request per customer per page view, kept on the page as the
+    // answer's text so PCM Customer ID Reminder and PCM Customer Top List
+    // reuse it (same key, same request); each reads what it needs.
+    function ticketList(email) {
         var shared = window[SHARED_KEY] = window[SHARED_KEY] || {};
         if (shared[email]) return shared[email];
         var url = '/customers/tickets_table?search%5Bcustomer_email%5D=' + encodeURIComponent(email) +
@@ -75,17 +76,22 @@
         }).then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status);
             return response.text();
-        }).then(function (text) {
+        }).catch(function () {
+            delete shared[email];
+            return '';
+        });
+        return shared[email];
+    }
+
+    function countTickets(email) {
+        return ticketList(email).then(function (text) {
+            if (!text) return -1;
             var seen = {};
             var re = /data-ticket-ref=\\?["'](\d+)/g;
             var match;
             while ((match = re.exec(text))) seen[match[1]] = true;
             return Object.keys(seen).length;
-        }, function () {
-            delete shared[email];
-            return -1;
         });
-        return shared[email];
     }
 
     // THE NUMBER

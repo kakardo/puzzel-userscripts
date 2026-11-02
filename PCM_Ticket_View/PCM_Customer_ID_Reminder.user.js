@@ -1,14 +1,14 @@
 // @file_name = PCM_Customer_ID_Reminder.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-11-02
+// @version = 1.4_2026-11-02
 // @created = 2026-11-02 11:05
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The customer's email is read from the page at runtime (only to ask PCM for the ticket count), never written here.
 
 // ==UserScript==
 // @name         PCM Customer ID Reminder
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-11-02
-// @description  Reminds you to add the customer ID to a customer's profile. When the profile has an ID, PCM shows an Organisations section in Customer Intelligence; when that section is missing, the script counts the customer's tickets (the same list PCM loads when you open Customer Tickets, fetched once in the background with room for 500 tickets and only read, never run; the request is shared with PCM Customer Ticket Count) and, at 3 or more tickets, shows a red "(Reminder: add customer ID)" after the customer's name; its tooltip gives the number of tickets. Nothing is fetched when the ID is there. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      1.4_2026-11-02
+// @description  Reminds you to add the customer ID to a customer's profile. When the profile has an ID, PCM shows an Organisations section in Customer Intelligence; when that section is missing, the script counts the customer's tickets (the same list PCM loads when you open Customer Tickets, fetched once in the background with room for 500 tickets and only read, never run; the request is shared with PCM Customer Ticket Count and PCM Customer Top List) and, at 3 or more tickets, shows a red "(Reminder: add customer ID)" after the customer's name; its tooltip gives the number of tickets. Nothing is fetched when the ID is there. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -47,7 +47,7 @@
     var MARK_ID = 'pcm-customer-id-reminder';
     var STYLE_ID = 'pcm-customer-id-reminder-style';
     var PER_PAGE = 500;
-    var SHARED_KEY = 'pcmCustomerTicketCounts';
+    var SHARED_KEY = 'pcmCustomerTicketLists';
     var SCAN_DELAY_MS = 300;
 
     D.ensureStyleTag(STYLE_ID, [
@@ -86,10 +86,11 @@
     }
 
     // COUNTING TICKETS
-    // One request per customer per page view, kept on the page so PCM
-    // Customer Ticket Count reuses it (same key, same request). The answer
-    // is read as text and the different ticket numbers in it are counted.
-    function countTickets(email) {
+    // One request per customer per page view, kept on the page as the
+    // answer's text so PCM Customer Ticket Count and PCM Customer Top List
+    // reuse it (same key, same request). The text is only read: the
+    // different ticket numbers in it are counted.
+    function ticketList(email) {
         var shared = window[SHARED_KEY] = window[SHARED_KEY] || {};
         if (shared[email]) return shared[email];
         var url = '/customers/tickets_table?search%5Bcustomer_email%5D=' + encodeURIComponent(email) +
@@ -100,17 +101,22 @@
         }).then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status);
             return response.text();
-        }).then(function (text) {
+        }).catch(function () {
+            delete shared[email];
+            return '';
+        });
+        return shared[email];
+    }
+
+    function countTickets(email) {
+        return ticketList(email).then(function (text) {
+            if (!text) return -1;
             var seen = {};
             var re = /data-ticket-ref=\\?["'](\d+)/g;
             var match;
             while ((match = re.exec(text))) seen[match[1]] = true;
             return Object.keys(seen).length;
-        }, function () {
-            delete shared[email];
-            return -1;
         });
-        return shared[email];
     }
 
     // THE MARKER
