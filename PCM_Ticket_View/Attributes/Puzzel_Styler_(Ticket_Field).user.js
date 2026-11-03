@@ -1,13 +1,13 @@
 // @file_name = Puzzel_Styler_(Ticket_Field).user.js
 // @author = Kardo Rostam
-// @version = 4.3_2026-11-03
+// @version = 4.4_2026-11-03
 // @created = 2026-03-31 00:00
 
 // ==UserScript==
 // @name         Puzzel Styler (Ticket Field)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.3_2026-11-03
-// @description  Highlights Assigned-To, Status and Priority fields with safer refresh after programmatic updates and scroll return. Priority uses the same colours as the priority badges in the tickets list (Junk grey, Lowest light blue, Low blue, Normal green, High orange, Highest red), for the field and for each entry in its open list; in current Chrome and Edge the open list shows each entry as a rounded colour block, like the Priority search in the tickets list.
+// @version      4.4_2026-11-03
+// @description  Highlights Assigned-To, Status and Priority fields with safer refresh after programmatic updates and scroll return. Priority uses the same colours as the priority badges in the tickets list (Junk grey, Lowest light blue, Low blue, Normal green, High orange, Highest red), for the field and for each entry in its open list. A click on Priority opens the script's own list in the same style as the Priority search in the tickets list (rounded colour blocks, the current one faded, a white ring under the mouse); a pick sets the field like a pick by hand, and the keyboard keeps the browser's own behaviour.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -268,44 +268,35 @@
                 box-shadow: none !important;
             }
 
-            /* Open Priority list in the same style as the Priority search
-               in the tickets list: each entry a rounded block in its own
-               colour with white bold text, a white ring on the entry under
-               the mouse. Uses the browser's customisable dropdown
-               (appearance: base-select, current Chrome and Edge); other
-               browsers ignore it and keep the coloured entries. The
-               browser's own arrow and tick are hidden: SmartAdmin draws
-               the arrow. */
-            select[data-pfs-role="priority"],
-            select[data-pfs-role="priority"]::picker(select) {
-                appearance: base-select;
-            }
-            select[data-pfs-role="priority"]::picker-icon {
-                display: none;
-            }
-            select[data-pfs-role="priority"]::picker(select) {
+            /* The script's own Priority list (see PRIORITY LIST below), in
+               the same style as the Priority search in the tickets list. */
+            #pfs-priority-list {
+                position: fixed;
+                z-index: 3000;
+                box-sizing: border-box;
                 padding: 3px 0;
                 border: 1px solid rgba(0,0,0,.2);
                 border-radius: 4px;
                 background: #ffffff;
                 box-shadow: 0 8px 20px rgba(0,0,0,.25);
+                font-size: 13px;
             }
-            select[data-pfs-role="priority"] option {
+            #pfs-priority-list .pfs-prio-item {
                 margin: 2px 4px;
                 padding: 5px 10px;
                 border-radius: 4px;
                 color: #ffffff;
                 font-weight: 700;
                 text-shadow: 0 1px 1px rgba(0,0,0,.35);
+                cursor: pointer;
+                user-select: none;
             }
-            select[data-pfs-role="priority"] option::checkmark {
-                display: none;
-            }
-            select[data-pfs-role="priority"] option:hover,
-            select[data-pfs-role="priority"] option:focus-visible {
+            #pfs-priority-list .pfs-prio-item:hover {
                 filter: brightness(1.08);
                 box-shadow: inset 0 0 0 2px rgba(255,255,255,.9);
-                outline: none;
+            }
+            #pfs-priority-list .pfs-prio-item.pfs-current {
+                opacity: .4;
             }
         `,
         fields: [
@@ -323,6 +314,101 @@
             resetStyledSelect(roleName, select);
         }
     });
+
+    // PRIORITY LIST
+    // The browser's own dropdown cannot show rounded entries, fade the
+    // current one or ring the one under the mouse, so a press on the
+    // Priority field opens the script's own list instead. A pick sets the
+    // field the way picking by hand does (one change event, then PCM is
+    // asked to re-check the form), so PCM and the unsaved warning see it.
+    // The keyboard keeps the browser's own behaviour. Before PCM has
+    // finished preparing the form (the first moment after a ticket
+    // opens) the browser's own list is used, since a change made then is
+    // recorded by PCM as the saved value. Listeners for closing the list
+    // exist only while it is open.
+    const LIST_ID = 'pfs-priority-list';
+
+    function prioritySelectFrom(target) {
+        const select = target && target.closest ? target.closest('select') : null;
+        return select && select.matches(PRIORITY_SELECTOR) ? select : null;
+    }
+
+    function formReady(select) {
+        const D = window.PCM_DOM;
+        return !D || typeof D.formReady !== 'function' || D.formReady(select);
+    }
+
+    function closeList() {
+        const list = document.getElementById(LIST_ID);
+        if (list) list.remove();
+        document.removeEventListener('mousedown', onOutside, true);
+        document.removeEventListener('keydown', onListKey, true);
+        window.removeEventListener('scroll', closeList, true);
+        window.removeEventListener('resize', closeList, true);
+    }
+
+    function onOutside(event) {
+        const list = document.getElementById(LIST_ID);
+        if (list && !list.contains(event.target) && !prioritySelectFrom(event.target)) closeList();
+    }
+
+    function onListKey(event) {
+        if (event.key === 'Escape' || event.key === 'Tab') closeList();
+    }
+
+    function pick(select, value) {
+        closeList();
+        if (select.value === value) return;
+        select.value = value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        const D = window.PCM_DOM;
+        if (D && typeof D.recheckForm === 'function') D.recheckForm(select);
+    }
+
+    function openList(select) {
+        closeList();
+        const box = select.getBoundingClientRect();
+        const list = document.createElement('div');
+        list.id = LIST_ID;
+        list.style.left = Math.round(box.left) + 'px';
+        list.style.top = Math.round(box.bottom + 2) + 'px';
+        list.style.minWidth = Math.round(box.width) + 'px';
+
+        for (const option of select.options) {
+            if (option.disabled) continue;
+            const style = PRIORITY_STYLES[normalizeStatusKey(option.textContent)];
+            const item = document.createElement('div');
+            item.className = 'pfs-prio-item' + (option.value === select.value ? ' pfs-current' : '');
+            item.textContent = option.textContent.trim();
+            item.style.backgroundColor = style ? style.fill : '#9ea3b1';
+            item.addEventListener('mousedown', function (event) { event.preventDefault(); });
+            item.addEventListener('click', function () { pick(select, option.value); });
+            list.appendChild(item);
+        }
+
+        document.body.appendChild(list);
+
+        // Opens upwards when there is no room below.
+        const height = list.getBoundingClientRect().height;
+        if (box.bottom + 2 + height > window.innerHeight && box.top - 2 - height > 0) {
+            list.style.top = Math.round(box.top - 2 - height) + 'px';
+        }
+
+        document.addEventListener('mousedown', onOutside, true);
+        document.addEventListener('keydown', onListKey, true);
+        window.addEventListener('scroll', closeList, true);
+        window.addEventListener('resize', closeList, true);
+    }
+
+    document.addEventListener('mousedown', function (event) {
+        if (event.button !== 0) return;
+        const select = prioritySelectFrom(event.target);
+        if (!select || select.disabled || !formReady(select)) return;
+        event.preventDefault();
+        select.focus();
+        if (document.getElementById(LIST_ID)) closeList();
+        else openList(select);
+    }, true);
 
     let viewportRefreshTimer = 0;
 
