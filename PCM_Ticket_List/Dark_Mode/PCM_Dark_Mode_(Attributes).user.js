@@ -1,13 +1,13 @@
 // @file_name = PCM_Dark_Mode_(Attributes).user.js
 // @author = Kardo Rostam
-// @version = 5.9_2026-11-03
+// @version = 6.0_2026-11-03
 // @created = 2026-03-27 (v4.5)
 // @note = Follows the dark mode toggle owned by PCM Dark Mode (Ticket List): its data-pz-dark="on"/"off" mark on the tickets widget decides light or dark here. Install both; on its own this script falls back to its own stored value, which defaults to dark.
 
 // ==UserScript==
 // @name         PCM Dark Mode (Attributes)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      5.9_2026-11-03
+// @version      6.0_2026-11-03
 // @description  Uses the shared PCM_DOM library for boot/retry and style injection. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the document-wide XPath search only runs when the cheap ID lookup fails. Keeps the working Attributes behavior.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -401,18 +401,21 @@
  }
 
  /* Auto-submit ON/OFF switch in the header (SmartAdmin onoffswitch):
-    the OFF side and the knob are white by default. The blue ON side and
-    the mark in the knob keep PCM's colours. */
+    the OFF side is white by default. Dark track with soft text; the
+    knob stays light (as dark-theme switches usually do), so the red mark
+    in it keeps its contrast. The blue ON side keeps PCM's colours. */
  .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] .onoffswitch-label {
   border-color: var(--pz-border-strong) !important;
  }
  .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] .onoffswitch-inner::after {
   background: var(--pz-surface-3) !important;
-  color: var(--pz-text-muted) !important;
+  color: var(--pz-text-faint) !important;
+  font-weight: 600 !important;
  }
  .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] .onoffswitch-switch {
-  background: var(--pz-surface) !important;
-  border-color: var(--pz-border-strong) !important;
+  background: #d9dde5 !important;
+  border-color: transparent !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,.4) !important;
  }
 
 /* ===================== FIELD BOX UNIFY (THE ASK) ===================== */
