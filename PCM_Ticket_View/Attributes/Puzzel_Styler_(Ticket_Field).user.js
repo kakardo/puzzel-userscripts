@@ -1,13 +1,13 @@
 // @file_name = Puzzel_Styler_(Ticket_Field).user.js
 // @author = Kardo Rostam
-// @version = 4.0_2026-09-04
+// @version = 4.3_2026-11-03
 // @created = 2026-03-31 00:00
 
 // ==UserScript==
 // @name         Puzzel Styler (Ticket Field)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.0_2026-09-04
-// @description  Highlights Assigned-To and Status fields with safer refresh after programmatic updates and scroll return.
+// @version      4.3_2026-11-03
+// @description  Highlights Assigned-To, Status and Priority fields with safer refresh after programmatic updates and scroll return. Priority uses the same colours as the priority badges in the tickets list (Junk grey, Lowest light blue, Low blue, Normal green, High orange, Highest red), for the field and for each entry in its open list; in current Chrome and Edge the open list shows each entry as a rounded colour block, like the Priority search in the tickets list.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -32,6 +32,21 @@
         error:    { key: 'error',    fill: '#E04343', edge: '#b03535', text: '#ffffff', bold: true, role: 'status' }
     };
 
+    // PCM's own priority badge colours from the tickets list
+    // (label-priority-*), with a darker ring.
+    const PRIORITY_STYLES = {
+        junk:    { key: 'junk',    fill: '#9ea3b1', edge: '#7e828e', text: '#ffffff', bold: true, role: 'priority' },
+        lowest:  { key: 'lowest',  fill: '#b6c1f8', edge: '#919ac6', text: '#ffffff', bold: true, role: 'priority' },
+        low:     { key: 'low',     fill: '#879af4', edge: '#6c7bc3', text: '#ffffff', bold: true, role: 'priority' },
+        normal:  { key: 'normal',  fill: '#85d263', edge: '#6aa84f', text: '#ffffff', bold: true, role: 'priority' },
+        high:    { key: 'high',    fill: '#ff9900', edge: '#cc7a00', text: '#ffffff', bold: true, role: 'priority' },
+        highest: { key: 'highest', fill: '#f73633', edge: '#c62b29', text: '#ffffff', bold: true, role: 'priority' }
+    };
+
+    // The Priority dropdown of the Attributes form, by the names PCM uses
+    // for its ticket fields (the Status one is #ticket_status).
+    const PRIORITY_SELECTOR = '#ticket_priority, #ticket_priority_id, select[name="ticket[priority]"], select[name="ticket[priority_id]"]';
+
     function styledWrapper(select) {
         return select && select.closest ? select.closest('label.select') : null;
     }
@@ -50,12 +65,31 @@
         }
     }
 
+    // The open Priority list would otherwise take the field's own colour
+    // for every entry; each entry gets its own priority colour instead.
+    // Written only when an entry's colour differs.
+    function stylePriorityOptions(roleName, select) {
+        if (roleName !== 'priority' || !select || !select.options) return;
+
+        for (const option of select.options) {
+            const style = PRIORITY_STYLES[normalizeStatusKey(option.textContent)];
+            const fill = style ? style.fill : '';
+            const text = style ? style.text : '';
+            if (option.dataset.pfsFill === fill) continue;
+            option.dataset.pfsFill = fill;
+            option.style.backgroundColor = fill;
+            option.style.color = text;
+            option.style.fontWeight = style ? '700' : '';
+        }
+    }
+
     function resetStyledSelect(roleName, select) {
         if (!select) return;
 
         // The list highlight stays even when the field itself is unstyled;
         // that is exactly when the entry needs to be findable.
         styleTargetOptions(roleName, select);
+        stylePriorityOptions(roleName, select);
 
         const wrap = styledWrapper(select);
         if (wrap) {
@@ -93,6 +127,7 @@
         if (!select || !state) return;
 
         styleTargetOptions(roleName, select);
+        stylePriorityOptions(roleName, select);
 
         // SmartAdmin's label.select wrapper paints its arrow element over the
         // select's right edge, cutting the ring. The ring is drawn on the
@@ -167,6 +202,10 @@
             return STATUS_STYLES[stateKey] || null;
         }
 
+        if (roleName === 'priority') {
+            return PRIORITY_STYLES[normalizeStatusKey(getSelectedOptionText(select))] || null;
+        }
+
         return null;
     }
 
@@ -185,7 +224,11 @@
             #ticket_status[data-pfs-styled="true"],
             #ticket_status[data-pfs-styled="true"]:hover,
             #ticket_status[data-pfs-styled="true"]:focus,
-            #ticket_status[data-pfs-styled="true"]:active {
+            #ticket_status[data-pfs-styled="true"]:active,
+            select[data-pfs-role="priority"][data-pfs-styled="true"],
+            select[data-pfs-role="priority"][data-pfs-styled="true"]:hover,
+            select[data-pfs-role="priority"][data-pfs-styled="true"]:focus,
+            select[data-pfs-role="priority"][data-pfs-styled="true"]:active {
                 outline: none !important;
                 border-radius: 0 !important;
                 box-shadow: 0 0 0 2px var(--pfs-edge-color) !important;
@@ -217,13 +260,58 @@
             label.select.pfs-styled-wrap #ticket_status[data-pfs-styled="true"],
             label.select.pfs-styled-wrap #ticket_status[data-pfs-styled="true"]:hover,
             label.select.pfs-styled-wrap #ticket_status[data-pfs-styled="true"]:focus,
-            label.select.pfs-styled-wrap #ticket_status[data-pfs-styled="true"]:active {
+            label.select.pfs-styled-wrap #ticket_status[data-pfs-styled="true"]:active,
+            label.select.pfs-styled-wrap select[data-pfs-role="priority"][data-pfs-styled="true"],
+            label.select.pfs-styled-wrap select[data-pfs-role="priority"][data-pfs-styled="true"]:hover,
+            label.select.pfs-styled-wrap select[data-pfs-role="priority"][data-pfs-styled="true"]:focus,
+            label.select.pfs-styled-wrap select[data-pfs-role="priority"][data-pfs-styled="true"]:active {
                 box-shadow: none !important;
+            }
+
+            /* Open Priority list in the same style as the Priority search
+               in the tickets list: each entry a rounded block in its own
+               colour with white bold text, a white ring on the entry under
+               the mouse. Uses the browser's customisable dropdown
+               (appearance: base-select, current Chrome and Edge); other
+               browsers ignore it and keep the coloured entries. The
+               browser's own arrow and tick are hidden: SmartAdmin draws
+               the arrow. */
+            select[data-pfs-role="priority"],
+            select[data-pfs-role="priority"]::picker(select) {
+                appearance: base-select;
+            }
+            select[data-pfs-role="priority"]::picker-icon {
+                display: none;
+            }
+            select[data-pfs-role="priority"]::picker(select) {
+                padding: 3px 0;
+                border: 1px solid rgba(0,0,0,.2);
+                border-radius: 4px;
+                background: #ffffff;
+                box-shadow: 0 8px 20px rgba(0,0,0,.25);
+            }
+            select[data-pfs-role="priority"] option {
+                margin: 2px 4px;
+                padding: 5px 10px;
+                border-radius: 4px;
+                color: #ffffff;
+                font-weight: 700;
+                text-shadow: 0 1px 1px rgba(0,0,0,.35);
+            }
+            select[data-pfs-role="priority"] option::checkmark {
+                display: none;
+            }
+            select[data-pfs-role="priority"] option:hover,
+            select[data-pfs-role="priority"] option:focus-visible {
+                filter: brightness(1.08);
+                box-shadow: inset 0 0 0 2px rgba(255,255,255,.9);
+                outline: none;
             }
         `,
         fields: [
             { key: 'assigned', selector: '#user-select' },
-            { key: 'status', selector: '#ticket_status' }
+            { key: 'status', selector: '#ticket_status' },
+            { key: 'priority', selector: PRIORITY_SELECTOR }
         ],
         getState: function(roleName, select) {
             return getFieldState(roleName, select);

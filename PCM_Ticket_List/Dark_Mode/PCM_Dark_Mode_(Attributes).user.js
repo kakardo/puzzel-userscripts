@@ -1,14 +1,14 @@
 // @file_name = PCM_Dark_Mode_(Attributes).user.js
 // @author = Kardo Rostam
-// @version = 6.0_2026-11-03
+// @version = 6.2_2026-11-03
 // @created = 2026-03-27 (v4.5)
 // @note = Follows the dark mode toggle owned by PCM Dark Mode (Ticket List): its data-pz-dark="on"/"off" mark on the tickets widget decides light or dark here. Install both; on its own this script falls back to its own stored value, which defaults to dark.
 
 // ==UserScript==
 // @name         PCM Dark Mode (Attributes)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.0_2026-11-03
-// @description  Uses the shared PCM_DOM library for boot/retry and style injection. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the document-wide XPath search only runs when the cheap ID lookup fails. Keeps the working Attributes behavior.
+// @version      6.2_2026-11-03
+// @description  Uses the shared PCM_DOM library for boot/retry and style injection. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the document-wide XPath search only runs when the cheap ID lookup fails. Keeps the working Attributes behavior. Status and Priority chips and dropdown options are colour coded in both modes; Priority uses the same colours as the priority badges in the tickets list.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -51,6 +51,21 @@
     'pz-status-closed',
     'pz-status-error',
     'pz-status-generic'
+  ];
+
+  // Priority: PCM's own badge colours from the tickets list
+  // (label-priority-*). The Chosen box is found by id, or as the Chosen
+  // box under the "Priority:" label, and marked with PRIO_MARK.
+  const PRIORITY_SELECT_ID = 'ticket_search_priority_id';
+  const PRIO_MARK = 'pz-prio-chosen';
+  const PRIORITY_CLASSES = [
+    'pz-prio-junk',
+    'pz-prio-lowest',
+    'pz-prio-low',
+    'pz-prio-normal',
+    'pz-prio-high',
+    'pz-prio-highest',
+    'pz-prio-generic'
   ];
 
   const APPLY_DEBOUNCE_MS = 80;
@@ -149,6 +164,46 @@
     if (!el.classList.contains(cls)) el.classList.add(cls);
   }
 
+  function prioClassFor(label) {
+    const t = normalizeStatusLabel(label);
+    const cls = 'pz-prio-' + t;
+    return PRIORITY_CLASSES.includes(cls) ? cls : 'pz-prio-generic';
+  }
+
+  function setPrioClass(el, cls) {
+    const current = PRIORITY_CLASSES.find(name => el.classList.contains(name));
+    if (current === cls) return;
+    if (current) el.classList.remove(current);
+    if (!el.classList.contains(cls)) el.classList.add(cls);
+  }
+
+  function findPriorityChosen() {
+    const byId = document.getElementById(PRIORITY_SELECT_ID + '_chosen');
+    if (byId) return byId;
+    const root = findRoot();
+    if (!root) return null;
+    const label = Array.from(root.querySelectorAll('label')).find(el =>
+      /^priority:?$/i.test((el.textContent || '').trim())
+    );
+    const section = label && (label.closest('section, .form-group, [class*="col"]') || label.parentElement);
+    return section ? section.querySelector('.chosen-container') : null;
+  }
+
+  function colorizePriorityChosen() {
+    const chosen = findPriorityChosen();
+    if (!chosen) return;
+    if (!chosen.classList.contains(PRIO_MARK)) chosen.classList.add(PRIO_MARK);
+
+    chosen.querySelectorAll('li.search-choice').forEach(li => {
+      const span = li.querySelector('span');
+      setPrioClass(li, prioClassFor(span ? span.textContent : ''));
+    });
+
+    chosen.querySelectorAll('.chosen-results li').forEach(li => {
+      setPrioClass(li, prioClassFor(li.textContent || ''));
+    });
+  }
+
   function colorizeStatusChosen() {
     const chosen = document.getElementById(STATUS_SELECT_ID + '_chosen');
     if (!chosen) return;
@@ -184,6 +239,22 @@
     return statusObserver;
   }
 
+  let priorityObserver = null;
+  let priorityObservedNode = null;
+
+  function observePriorityChosen() {
+    const chosen = findPriorityChosen();
+    if (!chosen) return null;
+    if (priorityObserver && priorityObservedNode === chosen) return priorityObserver;
+
+    if (priorityObserver) priorityObserver.disconnect();
+
+    priorityObservedNode = chosen;
+    priorityObserver = new MutationObserver(() => setTimeout(colorizePriorityChosen, 0));
+    priorityObserver.observe(chosen, { childList: true, subtree: true });
+    return priorityObserver;
+  }
+
   function apply() {
     const on = isDark();
     const root = findRoot();
@@ -207,6 +278,9 @@
     // Status chips are coloured in both modes.
     observeStatusChosen();
     setTimeout(colorizeStatusChosen, 0);
+    // Priority chips are coloured in both modes too.
+    observePriorityChosen();
+    setTimeout(colorizePriorityChosen, 0);
 
     observeTicketsWidget();
   }
@@ -511,7 +585,7 @@
     }
 
     /* Selected items (non-status): match others */
-    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] .chosen-container:not(#${STATUS_SELECT_ID}_chosen) .chosen-results li.result-selected {
+    .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] .chosen-container:not(#${STATUS_SELECT_ID}_chosen):not(.${PRIO_MARK}) .chosen-results li.result-selected {
       background: var(--pz-selected) !important;
       border-left: 4px solid rgba(230,233,239,0.55);
     }
@@ -608,6 +682,83 @@
     #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-resolved{ border-left-color: var(--pz-st-resolved, #f59e0b);background: rgba(245,158,11,0.22) !important; }
     #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-closed  { border-left-color: var(--pz-st-closed, #4b5563);  background: rgba(75,85,99,0.22) !important; }
     #${STATUS_SELECT_ID}_chosen .chosen-results li.pz-status-error   { border-left-color: var(--pz-st-error, #d32f2f);   background: rgba(211,47,47,0.22) !important; }
+
+    /* ===================== PRIORITY BOX ===================== */
+    /* Same chip shape and dropdown stripes as Status, in BOTH modes, with
+       PCM's own priority badge colours (label-priority-*). */
+    .${PRIO_MARK} .chosen-choices li.search-choice {
+      position: relative !important;
+      padding: 3px 22px 3px 8px !important;
+      border-radius: 4px !important;
+      margin: 3px 4px 3px 0 !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      line-height: 16px !important;
+      letter-spacing: .3px !important;
+      text-transform: uppercase !important;
+      border: 1px solid rgba(0,0,0,.12) !important;
+      background-image: none !important;
+      box-shadow: none !important;
+      color: #fff !important;
+    }
+    .${PRIO_MARK} .chosen-choices li.search-choice.pz-prio-junk    { background: #9ea3b1 !important; }
+    .${PRIO_MARK} .chosen-choices li.search-choice.pz-prio-lowest  { background: #b6c1f8 !important; }
+    .${PRIO_MARK} .chosen-choices li.search-choice.pz-prio-low     { background: #879af4 !important; }
+    .${PRIO_MARK} .chosen-choices li.search-choice.pz-prio-normal  { background: #85d263 !important; }
+    .${PRIO_MARK} .chosen-choices li.search-choice.pz-prio-high    { background: #ff9900 !important; }
+    .${PRIO_MARK} .chosen-choices li.search-choice.pz-prio-highest { background: #f73633 !important; }
+
+    .${PRIO_MARK} .chosen-choices li.search-choice .search-choice-close {
+      position: absolute !important;
+      right: 5px !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+      width: 14px !important;
+      height: 14px !important;
+      line-height: 14px !important;
+      background: none !important;
+      opacity: 1 !important;
+    }
+    .${PRIO_MARK} .chosen-choices li.search-choice .search-choice-close::before {
+      content: "×";
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      line-height: 14px;
+      text-align: center;
+      font-weight: 900;
+      font-size: 14px;
+      color: rgba(255,255,255,0.95);
+    }
+
+    /* Dropdown options: each one filled with its own colour and white bold
+       text (a faint tint was hard to read on the dark background). The
+       doubled classes outweigh the general dark mode option rules,
+       including the hover colour. Hover: brighter with a white edge.
+       Already chosen: dimmed, as Chosen means it (no grey stripe, which
+       looked like Junk). */
+    html .${PRIO_MARK}.${PRIO_MARK}.chosen-container .chosen-results li[class*="pz-prio-"][class*="pz-prio-"] {
+      border-left: 0 !important;
+      margin: 1px 4px !important;
+      padding: 5px 10px !important;
+      border-radius: 4px !important;
+      color: #fff !important;
+      font-weight: 700 !important;
+      text-shadow: 0 1px 1px rgba(0,0,0,.35) !important;
+    }
+    html .${PRIO_MARK}.${PRIO_MARK}.chosen-container .chosen-results li.pz-prio-junk.pz-prio-junk       { background: #9ea3b1 !important; }
+    html .${PRIO_MARK}.${PRIO_MARK}.chosen-container .chosen-results li.pz-prio-lowest.pz-prio-lowest   { background: #b6c1f8 !important; }
+    html .${PRIO_MARK}.${PRIO_MARK}.chosen-container .chosen-results li.pz-prio-low.pz-prio-low         { background: #879af4 !important; }
+    html .${PRIO_MARK}.${PRIO_MARK}.chosen-container .chosen-results li.pz-prio-normal.pz-prio-normal   { background: #85d263 !important; }
+    html .${PRIO_MARK}.${PRIO_MARK}.chosen-container .chosen-results li.pz-prio-high.pz-prio-high       { background: #ff9900 !important; }
+    html .${PRIO_MARK}.${PRIO_MARK}.chosen-container .chosen-results li.pz-prio-highest.pz-prio-highest { background: #f73633 !important; }
+    html .${PRIO_MARK}.${PRIO_MARK}.chosen-container .chosen-results li[class*="pz-prio-"].highlighted {
+      filter: brightness(1.12);
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.85) !important;
+    }
+    html .${PRIO_MARK}.${PRIO_MARK}.chosen-container .chosen-results li[class*="pz-prio-"].result-selected {
+      opacity: .4;
+    }
 
     /* Status control: no blue border when expanded */
     .${SCOPE_CLASS}[${SCOPE_ATTR}="on"] #${STATUS_SELECT_ID}_chosen.chosen-container-active,
