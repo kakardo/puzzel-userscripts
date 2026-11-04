@@ -47,8 +47,8 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
 - `PCM_Ticket_List/`: scripts for the ticket list page (`/tickets`) and dashboard (`/`):
   - `PCM_Auto_Refresh`: auto-reloads the page on an interval with a countdown ring UI. Standalone and light by default; turns dark with the toggle in `PCM_Dark_Mode_(Ticket_List)` when that script is installed (optional link, not a dependency).
   - `PCM_New_Ticket_Notifier`: alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
-  - `PCM_Hide_Columns`: Hide Columns button with a checkbox panel per column; localStorage persistence with a FORCE_HIDDEN override at the top. Standalone, drives the DataTables API.
-  - `PCM_Compact_View`: Compact toggle left of Hide Columns; tight cell padding, table shrinks to content, Subject clamped to a configurable line count, times shortened (s/m/h/d/w/mo/y, "less than a minute" to <1m). Uses the shared DOM library.
+  - `PCM_Hide_Columns`: Hide Columns button with a checkbox panel per column; localStorage persistence with a backup in Tampermonkey storage (restored after a cleared cache) with a FORCE_HIDDEN override at the top. Standalone, drives the DataTables API.
+  - `PCM_Compact_View`: Compact toggle left of Hide Columns (settings backed up in Tampermonkey storage, restored after a cleared cache); tight cell padding, table shrinks to content, Subject clamped to a configurable line count, times shortened (s/m/h/d/w/mo/y, "less than a minute" to <1m). Uses the shared DOM library.
   - `PCM_Selected_Row_Highlight`: makes selected rows (round checkbox) clear in light and dark mode with a coloured left band, bold coloured text and a tint laid over the row's own colour, so SLA colours still show. Standalone, pure CSS; dark colours follow the toggle in `PCM_Dark_Mode_(Ticket_List)`.
   - `PCM_Last_Activity_Sort`: makes the Last Activity column sortable (server-side, so the whole list is sorted) and keeps that sort across reloads. Standalone, drives the DataTables API.
   - `PCM_Ticket_Search_New_Tab`: a small arrow button next to the top bar's Ticket # field (or Ctrl+Enter / Shift+Enter in it) opens that ticket in a new tab (plain Enter as before, or always a new tab with ALWAYS_NEW_TAB). The arrow sits inside the field's right edge, so the field never moves, and fades in while the field has focus and something is typed, so it never covers the text. Runs on every PCM page from document-start. Standalone, one key listener.
@@ -92,7 +92,7 @@ Current status:
 | PCM Dark Mode (Ticket List) | No | Mostly CSS plus a small toggle; marginal benefit |
 | PCM Dark Mode (Ticket, Org, Customer Background) | No | Pure CSS |
 | PCM_Auto_Refresh | No | Timer core, reloads the page every interval; must stay dependency-free |
-| PCM_Hide_Columns | No | Drives the DataTables API, event-driven via init.dt; no DOM watching to share |
+| PCM_Hide_Columns | No | Drives the DataTables API (through unsafeWindow, it has Tampermonkey storage grants), event-driven via init.dt; no DOM watching to share |
 | PCM_Compact_View | Yes | `bootUntil`, `ensureStyleTag`, `createVisibilityGate`; rewrites cells per draw so the visibility gate matters |
 | PCM_Selected_Row_Highlight | No | Pure CSS on the `selected` class DataTables sets |
 | PCM_Last_Activity_Sort | No | Drives the DataTables API, event-driven via init.dt and order.dt; no DOM watching to share |

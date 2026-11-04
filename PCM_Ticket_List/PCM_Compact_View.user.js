@@ -1,20 +1,23 @@
 // @file_name = PCM_Compact_View.user.js
 // @author = Kardo Rostam
-// @version = 1.5_2026-10-01
+// @version = 1.6_2026-11-04
 // @created = 2026-08-28 09:04
 
 // ==UserScript==
 // @name         PCM Compact View
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.5_2026-10-01
-// @description  Compact settings menu for the tickets list, left of Hide Columns. Tightens cell padding and status badges, releases column widths so empty columns collapse, clamps Subject to a configurable MAX line count, and shortens times: minutes to m, hours to h, days to d, years to y, and "less than a minute" to <1m. All settings live in the menu and persist in localStorage; reapplies on every DataTables draw.
+// @version      1.6_2026-11-04
+// @description  Compact settings menu for the tickets list, left of Hide Columns. Tightens cell padding and status badges, releases column widths so empty columns collapse, clamps Subject to a configurable MAX line count, and shortens times: minutes to m, hours to h, days to d, years to y, and "less than a minute" to <1m. All settings live in the menu and persist in localStorage; reapplies on every DataTables draw. Settings are kept in localStorage with a backup in Tampermonkey's own storage, restored after a cleared browser cache.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
 // @match        https://puzzel.cm.puzzel.com/tickets?*
 // @run-at       document-idle
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
-// @grant        none
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_deleteValue
+// @grant        unsafeWindow
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Compact_View.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Compact_View.user.js
 // ==/UserScript==
@@ -65,6 +68,52 @@
     // Soft protocol: same storage list PCM_Hide_Columns reads, so both
     // scripts agree on hidden columns without depending on each other.
     var HIDDEN_COLUMNS_LIST_KEY = 'pcm-hidden-columns';
+
+    // BACKUP IN TAMPERMONKEY STORAGE
+    // The settings live in localStorage, where other scripts can read them
+    // too (Hide Columns and Compact View share the hidden columns list).
+    // Every write is also copied to Tampermonkey's own storage, which
+    // survives a cleared browser cache and is part of Tampermonkey's
+    // export. At start, a setting missing from localStorage (cache
+    // cleared) is restored from that copy; one that is there refreshes it.
+    var PAGE = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+    function backupSet(key, value) {
+        try { GM_setValue(key, value); } catch (_) { /* backup is a courtesy */ }
+    }
+
+    function backupRemove(key) {
+        try { GM_deleteValue(key); } catch (_) { /* backup is a courtesy */ }
+    }
+
+    function restoreFromBackup(keys) {
+        keys.forEach(function (key) {
+            try {
+                var current = localStorage.getItem(key);
+                if (current === null) {
+                    var saved = GM_getValue(key, null);
+                    if (typeof saved === 'string') localStorage.setItem(key, saved);
+                } else {
+                    backupSet(key, current);
+                }
+            } catch (_) { /* storage blocked: run with defaults */ }
+        });
+    }
+
+    function store(key, value) {
+        localStorage.setItem(key, value);
+        backupSet(key, value);
+    }
+
+    function unstore(key) {
+        localStorage.removeItem(key);
+        backupRemove(key);
+    }
+
+    // Compact View's own settings. The hidden columns list belongs to Hide
+    // Columns, which backs it up itself.
+    restoreFromBackup([ON_KEY, LINES_KEY, PAD_KEY, BADGE_PAD_KEY, ROUND_KEY, AVATAR_ROWS_KEY,
+        STATUS_IN_SUBJECT_KEY, STATUS_OWNED_KEY, PILL_PLACEMENT_KEY]);
     var MINI_STATUS_CLASS = 'pcm-mini-status';
     var ROUND_CLASS = 'pcm-round-avatars';
     var TIGHT_CELL_CLASS = 'pcm-tight-cell';
@@ -164,7 +213,7 @@
     }
 
     function setOn(value) {
-        localStorage.setItem(ON_KEY, value ? 'on' : 'off');
+        store(ON_KEY, value ? 'on' : 'off');
     }
 
     function storedInt(key, fallback, min, max) {
@@ -204,7 +253,7 @@
     }
 
     function getApi() {
-        var $ = window.jQuery;
+        var $ = PAGE.jQuery;
         if (!$ || !$.fn || !$.fn.dataTable) return null;
         var nodes = $.fn.dataTable.tables();
         if (!nodes || !nodes.length) return null;
@@ -328,12 +377,12 @@
 
         if (wantHidden) {
             if (column.visible()) {
-                localStorage.setItem(STATUS_OWNED_KEY, 'on');
+                store(STATUS_OWNED_KEY, 'on');
                 setSharedHiddenListEntry(true);
                 column.visible(false);
             }
         } else if (localStorage.getItem(STATUS_OWNED_KEY) === 'on') {
-            localStorage.removeItem(STATUS_OWNED_KEY);
+            unstore(STATUS_OWNED_KEY);
             setSharedHiddenListEntry(false);
             if (!column.visible()) column.visible(true);
         }
@@ -569,19 +618,19 @@
         panel.appendChild(toggleRow);
 
         panel.appendChild(numberRow('Subject max rows', subjectLines(), 1, 10, function (value) {
-            localStorage.setItem(LINES_KEY, String(value));
+            store(LINES_KEY, String(value));
         }));
 
         panel.appendChild(numberRow('Row spacing (px)', rowPadding(), 0, 16, function (value) {
-            localStorage.setItem(PAD_KEY, String(value));
+            store(PAD_KEY, String(value));
         }));
 
         panel.appendChild(numberRow('Badge cell spacing (px)', badgePadding(), 0, 16, function (value) {
-            localStorage.setItem(BADGE_PAD_KEY, String(value));
+            store(BADGE_PAD_KEY, String(value));
         }));
 
         panel.appendChild(numberRow('Portrait height (rows)', avatarRows(), 1, 10, function (value) {
-            localStorage.setItem(AVATAR_ROWS_KEY, String(value));
+            store(AVATAR_ROWS_KEY, String(value));
         }));
 
         var mirrorRow = document.createElement('label');
@@ -591,7 +640,7 @@
         mirrorToggle.type = 'checkbox';
         mirrorToggle.checked = statusInSubject();
         mirrorToggle.addEventListener('change', function () {
-            localStorage.setItem(STATUS_IN_SUBJECT_KEY, mirrorToggle.checked ? 'on' : 'off');
+            store(STATUS_IN_SUBJECT_KEY, mirrorToggle.checked ? 'on' : 'off');
             applyGate.schedule(0);
         });
         mirrorRow.appendChild(mirrorText);
@@ -612,7 +661,7 @@
         placementSelect.style.cssText = 'background:rgba(255,255,255,0.08); color:inherit;' +
             ' border:1px solid rgba(255,255,255,0.25); border-radius:3px; padding:2px 4px;';
         placementSelect.addEventListener('change', function () {
-            localStorage.setItem(PILL_PLACEMENT_KEY, placementSelect.value);
+            store(PILL_PLACEMENT_KEY, placementSelect.value);
             removeMiniStatuses(); // placement moved: rebuild cleanly
             applyGate.schedule(0);
         });
@@ -627,7 +676,7 @@
         roundToggle.type = 'checkbox';
         roundToggle.checked = roundAvatars();
         roundToggle.addEventListener('change', function () {
-            localStorage.setItem(ROUND_KEY, roundToggle.checked ? 'on' : 'off');
+            store(ROUND_KEY, roundToggle.checked ? 'on' : 'off');
             applyGate.schedule(0);
         });
         roundRow.appendChild(roundText);
@@ -685,7 +734,7 @@
     }
 
     function hookRedraws() {
-        var $ = window.jQuery;
+        var $ = PAGE.jQuery;
         if (!$ || !$.fn || !$.fn.dataTable) return;
         // Event-driven: every redraw (auto refresh, sorting, paging) reapplies.
         $(document).on('draw.dt init.dt', function () {

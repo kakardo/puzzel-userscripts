@@ -1,19 +1,22 @@
 // @file_name = PCM_Hide_Columns.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-08-28
+// @version = 1.3_2026-11-04
 // @created = 2026-08-28 08:30
 
 // ==UserScript==
 // @name         PCM Hide Columns
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-08-28
-// @description  Adds a Hide Columns button beside Reset Column Sorting with a checkbox panel per column. Hidden columns persist in localStorage; FORCE_HIDDEN at the top overrides both and shows as locked in the panel. The panel can copy the current hidden set as a ready-to-paste FORCE_HIDDEN line. Event-driven: reapplies on DataTables re-init, no polling.
+// @version      1.3_2026-11-04
+// @description  Adds a Hide Columns button beside Reset Column Sorting with a checkbox panel per column. Hidden columns persist in localStorage, with a backup in Tampermonkey's own storage that restores them after a cleared browser cache; FORCE_HIDDEN at the top overrides both and shows as locked in the panel. The panel can copy the current hidden set as a ready-to-paste FORCE_HIDDEN line. Event-driven: reapplies on DataTables re-init, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
 // @match        https://puzzel.cm.puzzel.com/tickets?*
 // @run-at       document-idle
-// @grant        none
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_deleteValue
+// @grant        unsafeWindow
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Hide_Columns.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Hide_Columns.user.js
 // ==/UserScript==
@@ -35,13 +38,56 @@
      * INTERNAL SETTINGS
      ******************************************************************/
     var STORAGE_KEY = 'pcm-hidden-columns';
+
+    // BACKUP IN TAMPERMONKEY STORAGE
+    // The settings live in localStorage, where other scripts can read them
+    // too (Hide Columns and Compact View share the hidden columns list).
+    // Every write is also copied to Tampermonkey's own storage, which
+    // survives a cleared browser cache and is part of Tampermonkey's
+    // export. At start, a setting missing from localStorage (cache
+    // cleared) is restored from that copy; one that is there refreshes it.
+    var PAGE = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+    function backupSet(key, value) {
+        try { GM_setValue(key, value); } catch (_) { /* backup is a courtesy */ }
+    }
+
+    function backupRemove(key) {
+        try { GM_deleteValue(key); } catch (_) { /* backup is a courtesy */ }
+    }
+
+    function restoreFromBackup(keys) {
+        keys.forEach(function (key) {
+            try {
+                var current = localStorage.getItem(key);
+                if (current === null) {
+                    var saved = GM_getValue(key, null);
+                    if (typeof saved === 'string') localStorage.setItem(key, saved);
+                } else {
+                    backupSet(key, current);
+                }
+            } catch (_) { /* storage blocked: run with defaults */ }
+        });
+    }
+
+    function store(key, value) {
+        localStorage.setItem(key, value);
+        backupSet(key, value);
+    }
+
+    function unstore(key) {
+        localStorage.removeItem(key);
+        backupRemove(key);
+    }
+
+    restoreFromBackup([STORAGE_KEY]);
     var BUTTON_ID = 'pcm-hide-columns-btn';
     var PANEL_ID = 'pcm-hide-columns-panel';
     var BOOT_MAX_TRIES = 40;
     var BOOT_INTERVAL_MS = 500;
 
     function getApi() {
-        var $ = window.jQuery;
+        var $ = PAGE.jQuery;
         if (!$ || !$.fn || !$.fn.dataTable) return null;
         var nodes = $.fn.dataTable.tables();
         if (!nodes || !nodes.length) return null;
@@ -73,7 +119,7 @@
     }
 
     function saveStored(list) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        store(STORAGE_KEY, JSON.stringify(list));
     }
 
     // Map of label -> 'forced' or 'user'. FORCE_HIDDEN wins over localStorage.
@@ -270,7 +316,7 @@
     }
 
     function hookReinit() {
-        var $ = window.jQuery;
+        var $ = PAGE.jQuery;
         if (!$ || !$.fn || !$.fn.dataTable) return;
         // Event-driven reapply: fires when the table is reinitialised. The
         // Auto Refresh soft reload keeps the DataTable instance alive, so
