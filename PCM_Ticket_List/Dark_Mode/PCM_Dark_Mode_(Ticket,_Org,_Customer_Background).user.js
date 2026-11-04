@@ -1,13 +1,13 @@
 // @file_name = PCM_Dark_Mode_(Ticket,_Org,_Customer_Background).user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-08-27
+// @version = 1.4_2026-11-04
 // @created = 2026-03-25 (v1.1)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket, Org, Customer Background)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-08-27
-// @description  Paints only the page background black on ticket detail pages, customers, and organisations pages.
+// @version      1.4_2026-11-04
+// @description  Paints only the page background black on ticket detail pages, customers, and organisations pages. Follows the dark mode toggle of PCM Dark Mode (Ticket List), which is shown on these pages too: switched off, the pages stay light. Without that script the background is always dark.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @match        https://puzzel.cm.puzzel.com/customers*
@@ -21,48 +21,53 @@
 (() => {
   'use strict';
 
+  // Follows the dark mode toggle of PCM Dark Mode (Ticket List): it marks
+  // the page data-pz-dark-mode="on" or "off" on every PCM page. The
+  // background is dark unless the mark says off, so without that script
+  // installed it stays dark as before.
+  const ON = 'html:not([data-pz-dark-mode="off"])';
+
   GM_addStyle(`
-    html,
-    body,
-    #main,
-    #content,
-    .page-content,
-    section#widget-grid,
-    .page-footer,
-    footer {
+    ${ON},
+    ${ON} body,
+    ${ON} #main,
+    ${ON} #content,
+    ${ON} .page-content,
+    ${ON} section#widget-grid,
+    ${ON} .page-footer,
+    ${ON} footer {
       background: #000000 !important;
       background-image: none !important;
     }
-
-    body::before,
-    body::after,
-    #main::before,
-    #main::after,
-    #content::before,
-    #content::after {
+    ${ON} body::before,
+    ${ON} body::after,
+    ${ON} #main::before,
+    ${ON} #main::after,
+    ${ON} #content::before,
+    ${ON} #content::after {
       background: transparent !important;
       background-image: none !important;
     }
 
     /* Keep actual modules/panels untouched so information is never covered */
-    .jarviswidget,
-    .jarviswidget > div,
-    .widget-body,
-    .widget-body-color,
-    .panel,
-    .panel-body,
-    .panel-content,
-    .panel-container,
-    .panel-grid,
-    .module,
-    .module-content,
-    .smart-form,
-    .tab-content,
-    .form-horizontal,
-    .form-group,
-    .row,
-    .col,
-    [class*="col-"] {
+    ${ON} .jarviswidget,
+    ${ON} .jarviswidget > div,
+    ${ON} .widget-body,
+    ${ON} .widget-body-color,
+    ${ON} .panel,
+    ${ON} .panel-body,
+    ${ON} .panel-content,
+    ${ON} .panel-container,
+    ${ON} .panel-grid,
+    ${ON} .module,
+    ${ON} .module-content,
+    ${ON} .smart-form,
+    ${ON} .tab-content,
+    ${ON} .form-horizontal,
+    ${ON} .form-group,
+    ${ON} .row,
+    ${ON} .col,
+    ${ON} [class*="col-"] {
       background-image: initial !important;
     }
   `);

@@ -1,17 +1,20 @@
 // @file_name = PCM_Dark_Mode_(Ticket_List).user.js
 // @author = Kardo Rostam
-// @version = 7.0_2026-10-02
+// @version = 7.1_2026-11-04
 // @created = 2026-03-26 (v5.5)
 
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket List)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      7.0_2026-10-02
-// @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the observer rescopes from body to the table wrapper once DataTables renders. The on/off toggle sits in the top bar left of the profile picture (BUTTON_PLACEMENT), falling back to the bottom-right corner when the top bar is not found.
+// @version      7.1_2026-11-04
+// @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the observer rescopes from body to the table wrapper once DataTables renders. The on/off toggle sits in the top bar left of the profile picture (BUTTON_PLACEMENT), falling back to the bottom-right corner when the top bar is not found. The toggle is also shown on ticket, customer and organisation pages, where it marks the page data-pz-dark-mode on/off for PCM Dark Mode (Ticket, Org, Customer Background) to follow; no table work or observers run there.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
 // @match        https://puzzel.cm.puzzel.com/tickets
 // @match        https://puzzel.cm.puzzel.com/tickets?*
+// @match        https://puzzel.cm.puzzel.com/tickets/*
+// @match        https://puzzel.cm.puzzel.com/customers*
+// @match        https://puzzel.cm.puzzel.com/organisations*
 // @run-at       document-idle
 // @grant        GM_addStyle
 // @grant        GM_getValue
@@ -97,6 +100,25 @@
   let routeRetryTimer = null;
   let observedWrapper = null;
   let observingBody = false;
+
+  // The ticket list (/ and /tickets) gets the full dark mode. Ticket,
+  // customer and organisation pages only get the toggle and the mark
+  // below; their background is PCM Dark Mode (Ticket, Org, Customer
+  // Background), which follows the mark. No table search or observers run
+  // there.
+  const LIST_PAGE = /^\/(tickets\/?)?$/.test(location.pathname);
+  const MODE_ATTR = 'data-pz-dark-mode';
+
+  // data-pz-dark-mode="on" or "off" on <html>, on every page, set as soon
+  // as the script runs so a light page never flashes dark first.
+  function applyMode(on) {
+    const value = on ? 'on' : 'off';
+    if (document.documentElement.getAttribute(MODE_ATTR) !== value) {
+      document.documentElement.setAttribute(MODE_ATTR, value);
+    }
+  }
+
+  applyMode(isOn());
 
   // Created up here because apply() (via startDomObserver) can run during
   // boot, before the bottom of the IIFE is reached. scheduleApply is a
@@ -285,10 +307,12 @@
 
   function apply() {
     const on = isOn();
-    applyPageCanvas(on);
+    applyMode(on);
+    if (LIST_PAGE) applyPageCanvas(on);
     // Cheap when already placed; covers a top bar that renders late.
     ensureButton();
     updateButtonLabel();
+    if (!LIST_PAGE) return;
 
     const root = findRoot();
     if (!root) {
@@ -898,6 +922,8 @@
     if (tickBoot()) {
       tries++;
       if (tries >= MAX_TRIES) return;
+      // Other pages only need the toggle, which is placed by now.
+      if (!LIST_PAGE) return;
       if (!cachedRoot || !document.contains(cachedRoot)) {
         setTimeout(boot, INTERVAL);
       }
@@ -910,6 +936,7 @@
   // before this point in the file is reached. Its state lives at the top of
   // the IIFE with the other state variables for the same reason.
   function startDomObserver() {
+    if (!LIST_PAGE) return;
     const root = cachedRoot || findRoot();
     const tableWrap = root && root.querySelector ? root.querySelector(TABLE_WRAPPER_SELECTOR) : null;
 
