@@ -1,6 +1,6 @@
 // @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 2.4_2026-11-04
+// @version = 2.5_2026-11-04
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -48,7 +48,8 @@
       setNativeFieldValue asks it to re-check after every write; temporary
       accordions close reliably after their open animation (v2.3)
     - unsaved-change watcher: optional onEvaluate hook so a feature script
-      can adjust the warning from the changed fields (v2.4)
+      can adjust the warning from the changed fields (v2.4); a redraw right
+      after a change keeps the baseline only for the changed fields (v2.5)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -978,6 +979,11 @@
         };
 
         let baseline = new Map();
+        // Keys of the fields that got an input or change event since the
+        // last baseline (by hand or by a script). Since v2.5 a redraw right
+        // after a change keeps the baseline only for these; every other
+        // field takes the redrawn (loaded) value as saved.
+        let touchedKeys = new Set();
         let dirty = false;
         let fieldsObserver = null;
         let fieldsObserverRoot = null;
@@ -1036,6 +1042,7 @@
         function captureBaseline() {
             const root = config.findRoot();
             baseline = new Map();
+            touchedKeys = new Set();
             if (!root) return;
             keyedFields(root).forEach(function(entry) {
                 baseline.set(entry.key, fieldValue(entry.field));
@@ -1107,6 +1114,18 @@
 
         const rebaseGate = createVisibilityGate(rebase, rebaseDebounceMs);
 
+        function refreshUntouched() {
+            const root = config.findRoot();
+            if (root) {
+                keyedFields(root).forEach(function(entry) {
+                    if (!touchedKeys.has(entry.key)) baseline.set(entry.key, fieldValue(entry.field));
+                });
+            }
+            evaluate();
+        }
+
+        const refreshUntouchedGate = createVisibilityGate(refreshUntouched, rebaseDebounceMs);
+
         function mutationTouchesFields(mutations) {
             for (const mutation of mutations) {
                 const nodes = [...mutation.addedNodes, ...mutation.removedNodes];
@@ -1127,11 +1146,13 @@
             if (!fieldsObserver) {
                 fieldsObserver = new MutationObserver(function(mutations) {
                     if (!mutationTouchesFields(mutations)) return;
-                    // Swap caused by a recent change: keep the baseline,
-                    // re-evaluate. Swap with no recent change: app
-                    // refresh, rebase.
+                    // Swap right after a change: keep the baseline of the
+                    // changed fields, take the rest as loaded (v2.5; a
+                    // script's change at load, such as an autofill, no
+                    // longer keeps an outdated value for the other fields).
+                    // Swap with no recent change: app refresh, rebase.
                     if (Date.now() - lastFieldChangeAt < userRerenderWindowMs) {
-                        evaluateGate.schedule();
+                        refreshUntouchedGate.schedule();
                     } else {
                         rebaseGate.schedule();
                     }
@@ -1158,6 +1179,8 @@
                 const root = config.findRoot();
                 if (!root || !root.contains(event.target)) return;
                 lastFieldChangeAt = Date.now();
+                const entry = keyedFields(root).find(function(item) { return item.field === event.target; });
+                if (entry) touchedKeys.add(entry.key);
                 ensureFieldsObserver();
                 evaluateGate.schedule();
             };
@@ -1216,7 +1239,7 @@
     }
 
     global.PCM_DOM = {
-        LIB_VERSION: '2.4_2026-11-04',
+        LIB_VERSION: '2.5_2026-11-04',
         DEFAULT_CONFIG: assignDefined({}, DEFAULT_CONFIG),
         mergeConfig: mergeConfig,
         clearTimer: clearTimer,
