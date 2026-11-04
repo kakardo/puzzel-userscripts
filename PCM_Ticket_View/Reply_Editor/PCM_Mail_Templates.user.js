@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 4.3_2026-11-04
+// @version = 4.4_2026-11-04
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.3_2026-11-04
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the FollowUp and Password menus are split into English and Svenska). A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      4.4_2026-11-04
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the FollowUp and Password menus are split into English and Svenska). A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Names always get a capital first letter in each part ("anna-lena" becomes "Anna-Lena"). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -365,6 +365,15 @@
         return null;
     }
 
+    // A name as written in PCM, with a capital first letter in each part:
+    // "anna-lena smith" becomes "Anna-Lena Smith". The rest of each part
+    // is kept as it is ("McDonald" stays).
+    function capitaliseName(name) {
+        return String(name || '').replace(/(^|[\s-])(\p{Ll})/gu, function (match, before, letter) {
+            return before + letter.toUpperCase();
+        });
+    }
+
     function capitalise(word) {
         return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     }
@@ -466,6 +475,7 @@
             var email = recipientEmail(block, editable);
             fullName = email ? nameFromEmail(email) : null;
         }
+        fullName = fullName ? capitaliseName(fullName) : null;
         var values = {
             firstName: fullName ? fullName.split(' ')[0] : null,
             fullName: fullName,
@@ -723,6 +733,7 @@
             ticketInfo('customerName', 'pcm-ticket-customer-name');
         var emailEl = document.getElementById('cip-customer-email');
         var emailMatch = emailEl && (emailEl.textContent || '').match(EMAIL_RE);
+        name = name ? capitaliseName(name) : name;
         var firstName = name ? name.split(' ')[0] : null;
         return {
             'customer:name': firstName,
