@@ -1,6 +1,6 @@
 // @file_name = PCM_Customer_Top_List.user.js
 // @author = Kardo Rostam
-// @version = 1.5_2026-11-02
+// @version = 1.6_2026-11-04
 // @created = 2026-11-02 12:03
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails and ticket counts are read from the page at runtime and kept only in this browser's localStorage, never written here.
 // @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
@@ -8,13 +8,15 @@
 // ==UserScript==
 // @name         PCM Customer Top List
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.5_2026-11-02
-// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in this browser only, one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile. Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
+// @version      1.6_2026-11-04
+// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile. Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
 // @run-at       document-start
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
-// @grant        none
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        unsafeWindow
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Customer_Top_List.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Customer_Top_List.user.js
 // ==/UserScript==
@@ -115,8 +117,34 @@
     // Ticket Count keeps for customers with 500 tickets or more.
     // Only customers with a profile id are kept, so one customer is always
     // one entry; anything else (entries without an id) is dropped on load.
+    //
+    // Kept in Tampermonkey's own storage (GM_getValue/GM_setValue), which
+    // belongs to the extension: clearing the browser cache or the site's
+    // data does not touch it. The list used to live in the page's
+    // localStorage; what is still there is moved over once.
+    function readStore() {
+        var data = null;
+        try { data = GM_getValue(STORE_KEY, null); } catch (_) { data = null; }
+        if (data && data.customers) return data;
+        var old = D.readJson(STORE_KEY, null);
+        if (old && old.customers) {
+            writeStore(old);
+            try { window.localStorage.removeItem(STORE_KEY); } catch (_) { /* ignore */ }
+            return old;
+        }
+        return null;
+    }
+
+    function writeStore(data) {
+        try {
+            GM_setValue(STORE_KEY, data);
+        } catch (err) {
+            console.warn('[PCM Customer Top List] could not save the list', err);
+        }
+    }
+
     function load() {
-        var data = D.readJson(STORE_KEY, null);
+        var data = readStore();
         var customers = {};
         if (data && data.customers) {
             Object.keys(data.customers).forEach(function (key) {
@@ -134,7 +162,7 @@
         if (total < MIN_TICKETS) {
             if (data.customers[id]) {
                 delete data.customers[id];
-                D.writeJson(STORE_KEY, data);
+                writeStore(data);
             }
             return;
         }
@@ -150,14 +178,18 @@
             keys.sort(function (a, b) { return data.customers[a].s - data.customers[b].s; });
             keys.slice(0, keys.length - MAX_CUSTOMERS).forEach(function (key) { delete data.customers[key]; });
         }
-        D.writeJson(STORE_KEY, data);
+        writeStore(data);
     }
 
     // READING THE TICKET LIST
     // One request per customer per page view, shared with PCM Customer
     // Ticket Count and PCM Customer ID Reminder (same key, same request).
+    // The shared object lives on the page's own window (unsafeWindow: this
+    // script has grants, so its own window is Tampermonkey's sandbox).
+    var PAGE = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
     function ticketList(email) {
-        var shared = window[SHARED_KEY] = window[SHARED_KEY] || {};
+        var shared = PAGE[SHARED_KEY] = PAGE[SHARED_KEY] || {};
         if (shared[email]) return shared[email];
         var url = '/customers/tickets_table?search%5Bcustomer_email%5D=' + encodeURIComponent(email) +
             '&per_page=' + PER_PAGE + '&page=1';
