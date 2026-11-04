@@ -1,6 +1,6 @@
 // @file_name = PCM_Customer_Top_List.user.js
 // @author = Kardo Rostam
-// @version = 1.7_2026-11-04
+// @version = 1.8_2026-11-04
 // @created = 2026-11-02 12:03
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails and ticket counts are read from the page at runtime and kept only in this browser's localStorage, never written here.
 // @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
@@ -8,8 +8,8 @@
 // ==UserScript==
 // @name         PCM Customer Top List
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.7_2026-11-04
-// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top). The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile. Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
+// @version      1.8_2026-11-04
+// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top), each step under a heading in its own colour from red to blue. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile. Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
 // @run-at       document-start
@@ -32,6 +32,8 @@
     // The lists are split into steps by ticket count, highest first; each
     // step with customers gets a heading ("500+"), the rest "Under 20".
     var SCALE = [1000, 500, 200, 100, 50, 20];
+    // Heading colours per step, hot to cool; BAND_COLOURS[0] is "Under".
+    var BAND_COLOURS = { 1000: '#d32f2f', 500: '#ef6c00', 200: '#f9a825', 100: '#2e7d32', 50: '#00838f', 20: '#1e5bd8', 0: '#78808f' };
     var BUTTON_TEXT = 'Top';
 
     // INTERNAL SETTINGS
@@ -106,11 +108,15 @@
         '#' + PANEL_ID + ' tr:nth-child(even) td { background: #f5f7fa; }',
         '#' + PANEL_ID + ' td.pcm-tl-rank { width: 1%; color: #999; text-align: right; }',
         '#' + PANEL_ID + ' td.pcm-tl-count { width: 1%; text-align: right; font-weight: 700; color: #1e5bd8; }',
+        // Step headings: a tinted strip with a coloured left edge and bold
+        // text in the step's colour (the colour comes inline per step).
         '#' + PANEL_ID + ' tr.pcm-tl-band td {',
-        '    padding: 8px 10px 3px; background: none !important; border-top: 1px solid #e3e6ec;',
-        '    color: #7a8291; font-size: 11px; font-weight: 700; letter-spacing: .4px;',
+        '    padding: 5px 10px !important; border-left: 5px solid var(--pz-band);',
+        '    background: color-mix(in srgb, var(--pz-band) 14%, #fff) !important;',
+        '    color: var(--pz-band); font-size: 12px; font-weight: 800; letter-spacing: .5px;',
         '}',
-        '#' + PANEL_ID + ' tr.pcm-tl-band:first-child td { border-top: 0; padding-top: 4px; }',
+        '#' + PANEL_ID + ' tr.pcm-tl-band + tr td { padding-top: 5px; }',
+        '#' + PANEL_ID + ' tr:not(:first-child).pcm-tl-band td { border-top: 6px solid #fff; }',
         '#' + PANEL_ID + ' td.pcm-tl-share { width: 1%; padding-left: 0; text-align: right; color: #888; font-size: 11px; white-space: nowrap; }',
         '#' + PANEL_ID + ' .pcm-tl-empty { padding: 16px 10px; color: #777; }',
         '#' + PANEL_ID + ' .pcm-tl-foot {',
@@ -354,7 +360,8 @@
             var heading = '';
             if (step !== band) {
                 band = step;
-                heading = '<tr class="pcm-tl-band"><td colspan="' + columns + '">' +
+                heading = '<tr class="pcm-tl-band" style="--pz-band:' + (BAND_COLOURS[step] || BAND_COLOURS[0]) + '">' +
+                    '<td colspan="' + columns + '">' +
                     (step ? Number(step).toLocaleString('en-GB') + '+' : 'Under ' + SCALE[SCALE.length - 1]) +
                     '</td></tr>';
             }
