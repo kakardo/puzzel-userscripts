@@ -1,13 +1,13 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 4.1_2026-11-04
+// @version = 4.3_2026-11-04
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.1_2026-11-04
+// @version      4.3_2026-11-04
 // @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the FollowUp and Password menus are split into English and Svenska). A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -140,7 +140,7 @@
         ] },
         {
             label: 'IF', color: COLORS.handover,
-            text: 'Hello,\n\nThank you for contacting Puzzel Customer Care.\n\n' +
+            text: 'Hello {firstName},\n\nThank you for contacting Puzzel Customer Care.\n\n' +
             'I have reviewed your ticket and identified that this incident will require further investigation by our ' +
             'second line engineers.\n\nWe will contact you as soon as we have an update.'
         },
@@ -217,8 +217,21 @@
         // they are used (check in, close without reply, hand to partner).
         { label: 'FollowUp', color: COLORS.closing, items: [
             { label: 'Check in', group: 'English', text: 'Hello {firstName},\n\nJust checking in.\n\n' },
-            { label: 'No reply', group: 'English', templateId: 8495 },
-            { label: 'No reply', group: 'Svenska', templateId: 8448 },
+            // Were PCM's own templates 8495 and 8448, which greet with the
+            // full name; the same texts as own templates, by first name.
+            {
+                label: 'No reply', group: 'English',
+                text: 'Hi {firstName},\n\nAs we haven\'t heard any further following our previous reminders, we assume ' +
+                'no further assistance is required and we will therefore set this ticket to solved.\n' +
+                'However, if you require any further assistance with this ticket please reply to this email within ' +
+                '5 working days and it will automatically reopen.'
+            },
+            {
+                label: 'No reply', group: 'Svenska',
+                text: 'Hej {firstName},\n\nEftersom vi inte har hört från er sedan vårt senaste svar, kommer vi att sätta ' +
+                'detta ärende som löst. Om du behöver ytterligare hjälp med detta fall, vänligen svara på detta ' +
+                'meddelande inom 5 arbetsdagar så öppnas automatiskt igen.'
+            },
             {
                 label: 'Partner', group: 'English',
                 text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
