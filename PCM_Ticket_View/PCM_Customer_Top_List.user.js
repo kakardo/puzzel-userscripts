@@ -1,6 +1,6 @@
 // @file_name = PCM_Customer_Top_List.user.js
 // @author = Kardo Rostam
-// @version = 1.6_2026-11-04
+// @version = 1.7_2026-11-04
 // @created = 2026-11-02 12:03
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails and ticket counts are read from the page at runtime and kept only in this browser's localStorage, never written here.
 // @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
@@ -8,8 +8,8 @@
 // ==UserScript==
 // @name         PCM Customer Top List
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.6_2026-11-04
-// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile. Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
+// @version      1.7_2026-11-04
+// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top). The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile. Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
 // @run-at       document-start
@@ -29,6 +29,9 @@
     var RECENT_DAYS = 30;
     // Customers with fewer tickets than this (all time) are not saved.
     var MIN_TICKETS = 5;
+    // The lists are split into steps by ticket count, highest first; each
+    // step with customers gets a heading ("500+"), the rest "Under 20".
+    var SCALE = [1000, 500, 200, 100, 50, 20];
     var BUTTON_TEXT = 'Top';
 
     // INTERNAL SETTINGS
@@ -103,6 +106,11 @@
         '#' + PANEL_ID + ' tr:nth-child(even) td { background: #f5f7fa; }',
         '#' + PANEL_ID + ' td.pcm-tl-rank { width: 1%; color: #999; text-align: right; }',
         '#' + PANEL_ID + ' td.pcm-tl-count { width: 1%; text-align: right; font-weight: 700; color: #1e5bd8; }',
+        '#' + PANEL_ID + ' tr.pcm-tl-band td {',
+        '    padding: 8px 10px 3px; background: none !important; border-top: 1px solid #e3e6ec;',
+        '    color: #7a8291; font-size: 11px; font-weight: 700; letter-spacing: .4px;',
+        '}',
+        '#' + PANEL_ID + ' tr.pcm-tl-band:first-child td { border-top: 0; padding-top: 4px; }',
         '#' + PANEL_ID + ' td.pcm-tl-share { width: 1%; padding-left: 0; text-align: right; color: #888; font-size: 11px; white-space: nowrap; }',
         '#' + PANEL_ID + ' .pcm-tl-empty { padding: 16px 10px; color: #777; }',
         '#' + PANEL_ID + ' .pcm-tl-foot {',
@@ -326,11 +334,30 @@
         return { recent: top('recent'), total: top('total'), known: all.length };
     }
 
+    // The highest step the count reaches, or 0 below the lowest step.
+    function bandFor(count) {
+        for (var i = 0; i < SCALE.length; i += 1) {
+            if (count >= SCALE[i]) return SCALE[i];
+        }
+        return 0;
+    }
+
     function rowsHtml(items, key) {
         if (!items.length) {
             return '<div class="pcm-tl-empty">No customers yet. The list fills as you open tickets.</div>';
         }
+        var columns = key === 'recent' ? 4 : 3;
+        var band = null;
         return '<table>' + items.map(function (c, i) {
+            // A heading row each time the count drops into the next step.
+            var step = bandFor(c[key]);
+            var heading = '';
+            if (step !== band) {
+                band = step;
+                heading = '<tr class="pcm-tl-band"><td colspan="' + columns + '">' +
+                    (step ? Number(step).toLocaleString('en-GB') + '+' : 'Under ' + SCALE[SCALE.length - 1]) +
+                    '</td></tr>';
+            }
             var count = Number(c[key]).toLocaleString('en-GB') + (key === 'total' && c.capped ? '+' : '');
             var name = '<a href="/customers/' + c.id + '/edit" target="_blank" title="Open the customer\'s profile">' +
                 D.escapeHtml(c.name) + '</a>';
@@ -342,7 +369,7 @@
                 share = '<td class="pcm-tl-share" title="Share of all ' + Number(c.total).toLocaleString('en-GB') +
                     (c.capped ? '+' : '') + ' tickets">' + shown + '</td>';
             }
-            return '<tr><td class="pcm-tl-rank">' + (i + 1) + '</td><td>' + name +
+            return heading + '<tr><td class="pcm-tl-rank">' + (i + 1) + '</td><td>' + name +
                 '</td><td class="pcm-tl-count">' + count + '</td>' + share + '</tr>';
         }).join('') + '</table>';
     }
