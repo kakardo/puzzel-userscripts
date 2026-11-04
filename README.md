@@ -66,7 +66,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCC_Softphone_Status_Highlight`: colours the Softphone Online/Offline value in the header. Standalone.
   - `PCC_Request_Alert`: rings (and optionally notifies, flashes the tab title or the screen) when your status leaves Ready or a chat request arrives. Settings in the code and under the main menu. Standalone.
 - `All_Sites/`: general tools that run on any website, also outside Puzzel. Same rules as the other scripts:
-  - `Highlight_Same_Word`: highlights every other place the selected word or phrase appears on the page (whole words first, part of words when none match); Escape clears. Uses the CSS Custom Highlight API, so the page itself is never changed. Standalone, runs only when a selection is finished.
+  - `Highlight_Same_Word`: highlights every other place the selected word or phrase appears on the page (whole words first, part of words when none match), with marks beside the scroll bar showing where the matches are on the whole page; Escape clears. Uses the CSS Custom Highlight API, so the page itself is never changed. Standalone, runs only when a selection is finished.
 
 ## Design logic: one shared DOM library per application, not one per folder
 
