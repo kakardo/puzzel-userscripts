@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 3.7_2026-11-02
+// @version = 3.9_2026-11-04
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.7_2026-11-02
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the FollowUp and Password menus are split into English and Svenska). A template or dropdown can set fontSize for its text. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      3.9_2026-11-04
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the FollowUp and Password menus are split into English and Svenska). A template or dropdown can set fontSize for its text. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -228,6 +228,28 @@
             }
         ] }
     ];
+
+    // FILL BUTTON
+    // The last button in the bar fills PCM's own {{...}} variables in text
+    // pasted into the mail (for example a template copied from elsewhere),
+    // the way PCM fills them in its own templates. Known variables:
+    //   {{customer:name}}        the customer's first name (Customer
+    //                            Intelligence), for a personal greeting
+    //   {{customer:first_name}}  the same
+    //   {{customer:email}}       the customer's email (Customer Intelligence)
+    //   {{ticket:ticket_ref}}    the ticket number
+    // Anything else, or a value that cannot be found, stays as it is so it
+    // is easy to spot before sending.
+    // The same press also rewords phrases in the pasted text: each `from`
+    // becomes `to` (case and spacing in the mail do not matter).
+    var FILL_REWORDS = [
+        {
+            from: 'has been reviewed by our Change team and has been classified as',
+            to: 'has been reviewed and has been estimated as'
+        }
+    ];
+    var FILL_LABEL = 'Fill {{ }}';
+    var FILL_COLOR = '#455a64';
 
     // Email domains that are never the customer (skipped when the
     // fallback resolves the names from the reply block, so the From line
@@ -665,6 +687,97 @@
         return select;
     }
 
+    // FILLING {{...}} VARIABLES
+    // Values for PCM's variables, read from the ticket page.
+    function variableValues(container) {
+        var block = replyBlock(container);
+        var heading = document.getElementById('cip-customer-name');
+        var link = heading && heading.querySelector('a');
+        var name = D.cleanText((link || heading || {}).textContent || '') ||
+            ticketInfo('customerName', 'pcm-ticket-customer-name');
+        var emailEl = document.getElementById('cip-customer-email');
+        var emailMatch = emailEl && (emailEl.textContent || '').match(EMAIL_RE);
+        var firstName = name ? name.split(' ')[0] : null;
+        return {
+            'customer:name': firstName,
+            'customer:first_name': firstName,
+            'customer:email': emailMatch ? emailMatch[0] : null,
+            'ticket:ticket_ref': ticketNumber(block)
+        };
+    }
+
+    // The editor's original element (the one Summernote is bound to),
+    // found the same way as the shared library's editorAppendHtml.
+    function summernoteSource(container) {
+        var jq = window.jQuery;
+        var orig = container.previousElementSibling;
+        while (orig && !(jq && jq(orig).data && jq(orig).data('summernote'))) {
+            orig = orig.previousElementSibling;
+        }
+        return jq && orig ? jq(orig) : null;
+    }
+
+    // Replaces in the mail's HTML, so tables, colours and bold in the
+    // pasted text stay as they are; values are escaped. Through
+    // Summernote when possible, so PCM sees the change and saves the draft.
+    function fillVariables(container, btn) {
+        var editable = container.querySelector('.note-editable');
+        if (!editable) return;
+        var source = summernoteSource(container);
+        var html = source ? source.summernote('code') : editable.innerHTML;
+        var values = variableValues(container);
+        var esc = D.escapeHtml || function (v) {
+            return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        };
+        var filled = 0;
+        var left = 0;
+        var result = html.replace(/\{\{\s*([a-z_]+:[a-z_]+)\s*\}\}/gi, function (match, key) {
+            var value = values[key.toLowerCase()];
+            if (!value) {
+                left += 1;
+                return match;
+            }
+            filled += 1;
+            return esc(value);
+        });
+        // Spaces in a phrase match any run of spaces or &nbsp; in the HTML.
+        var reworded = 0;
+        FILL_REWORDS.forEach(function (rule) {
+            var pattern = rule.from.trim().split(/\s+/).map(function (word) {
+                return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }).join('(?:\\s|&nbsp;|\\u00a0)+');
+            result = result.replace(new RegExp(pattern, 'gi'), function () {
+                reworded += 1;
+                return esc(rule.to);
+            });
+        });
+        if (filled || reworded) {
+            if (source) {
+                source.summernote('code', result);
+            } else {
+                editable.innerHTML = result;
+                editable.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+        var message = !filled && !left && !reworded ? 'Nothing to fill'
+            : 'Filled ' + filled + (left ? ', ' + left + ' left' : '') + (reworded ? ', reworded' : '');
+        D.flashLabel(btn, message, 1500);
+    }
+
+    function makeFillButton(container) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-default btn-xs pcm-tpl-btn';
+        btn.textContent = FILL_LABEL;
+        btn.title = 'Fill PCM variables like {{customer:name}} and {{ticket:ticket_ref}} in the mail ' +
+            'with this ticket\'s values (unknown ones stay as they are)';
+        applyColor(btn, FILL_COLOR);
+        btn.addEventListener('click', function () {
+            fillVariables(container, btn);
+        });
+        return btn;
+    }
+
     function buildBar(container) {
         var bar = document.createElement('div');
         bar.className = BAR_CLASS;
@@ -676,6 +789,7 @@
                 bar.appendChild(makeButton(entry, container));
             }
         });
+        bar.appendChild(makeFillButton(container));
         container.parentNode.insertBefore(bar, container);
     }
 
