@@ -1,15 +1,15 @@
 // @file_name = PCM_Customer_Top_List.user.js
 // @author = Kardo Rostam
-// @version = 1.8_2026-11-04
+// @version = 2.0_2026-11-04
 // @created = 2026-11-02 12:03
-// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails and ticket counts are read from the page at runtime and kept only in this browser's localStorage, never written here.
+// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails, companies, account ids and ticket counts are read from the page at runtime and kept only in this browser's Tampermonkey storage, never written here.
 // @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
 
 // ==UserScript==
 // @name         PCM Customer Top List
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.8_2026-11-04
-// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top), each step under a heading in its own colour from red to blue. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile. Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
+// @version      2.0_2026-11-04
+// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top), each step under a heading in its own colour from red to blue. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile, with the account id and company after it on the same line (from PCM Ticket Info Extractor or the ticket's Organisation, split from names like "123 Name", "Name 123", "123 - Name" or "Name (123)"). Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
 // @run-at       document-start
@@ -117,6 +117,8 @@
         '}',
         '#' + PANEL_ID + ' tr.pcm-tl-band + tr td { padding-top: 5px; }',
         '#' + PANEL_ID + ' tr:not(:first-child).pcm-tl-band td { border-top: 6px solid #fff; }',
+        '#' + PANEL_ID + ' td.pcm-tl-name { width: 100%; max-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
+        '#' + PANEL_ID + ' .pcm-tl-org { margin-left: 6px; color: #8a8f99; font-size: 11px; }',
         '#' + PANEL_ID + ' td.pcm-tl-share { width: 1%; padding-left: 0; text-align: right; color: #888; font-size: 11px; white-space: nowrap; }',
         '#' + PANEL_ID + ' .pcm-tl-empty { padding: 16px 10px; color: #777; }',
         '#' + PANEL_ID + ' .pcm-tl-foot {',
@@ -126,7 +128,8 @@
     ].join('\n'));
 
     // STORAGE
-    // { customers: { profile id: { n: name, e: email, t: total, r: [ticket times, last 30 days], s: saved } } }
+    // { customers: { profile id: { n: name, e: email, c: company, a: account id,
+    //                              t: total, r: [ticket times, last 30 days], s: saved } } }
     // The email (lower case) links an entry to the full count PCM Customer
     // Ticket Count keeps for customers with 500 tickets or more.
     // Only customers with a profile id are kept, so one customer is always
@@ -169,7 +172,7 @@
         return { customers: customers };
     }
 
-    function save(id, name, email, total, times) {
+    function save(id, name, email, org, total, times) {
         var data = load();
         var now = Date.now();
         var since = now - RECENT_DAYS * DAY_MS;
@@ -180,9 +183,13 @@
             }
             return;
         }
+        // A ticket without a company keeps the one saved before.
+        var before = data.customers[id] || {};
         data.customers[id] = {
             n: name,
             e: email,
+            c: org.company || before.c || '',
+            a: org.account || before.a || '',
             t: total,
             r: times.filter(function (ts) { return ts >= since; }),
             s: now
@@ -252,6 +259,52 @@
         };
     }
 
+    // COMPANY AND ACCOUNT ID
+    // Organisation names come as "123 NAME", "123 - Name", "Name 123" or
+    // "Name (123)"; the number (3 digits or more) is the account id and the
+    // rest the company. Without a number the whole text is the company.
+    var ORG_PATTERNS = [
+        /^\s*\(?(\d{3,})\)?(?:\s*[-\u2013\u2014:|,.]\s*|\s+)(.*\S)\s*$/,   // 123 Name, 123 - Name, (123) Name
+        /^\s*(.*?\S)\s*\((\d{3,})\)\s*$/,                            // Name (123)
+        /^\s*(.*?\S)(?:\s*[-\u2013\u2014:|,]\s*|\s+)(\d{3,})\s*$/           // Name 123, Name - 123
+    ];
+
+    function splitOrganisation(text) {
+        var value = D.cleanText ? D.cleanText(text || '') : String(text || '').trim();
+        if (!value) return { company: '', account: '' };
+        var m = value.match(ORG_PATTERNS[0]);
+        if (m) return { company: m[2], account: m[1] };
+        m = value.match(ORG_PATTERNS[1]) || value.match(ORG_PATTERNS[2]);
+        if (m) return { company: m[1], account: m[2] };
+        return { company: value, account: '' };
+    }
+
+    // The ticket's company and account id: from PCM Ticket Info Extractor
+    // when it is installed (its company name is split too, in case it
+    // carries the number), otherwise from the Organisation field in
+    // Attributes.
+    function ticketOrganisation() {
+        var info = PAGE.PCM_TICKET_INFO || {};
+        var root = document.getElementById('pcm-ticket-info');
+        var company = info.companyName || (root && root.dataset.companyName) || '';
+        var account = info.customerId || (root && root.dataset.customerId) || '';
+        if (!company) {
+            var form = document.getElementById('ticket-attributes-form') || document.querySelector('form.edit_ticket');
+            var label = form && Array.prototype.find.call(form.querySelectorAll('label'), function (el) {
+                return /^\s*organisation:?\s*$/i.test(el.textContent || '');
+            });
+            var section = label && (label.closest('section, .form-group, [class*="col"]') || label.parentElement);
+            var select = section && section.querySelector('select');
+            var option = select && select.options[select.selectedIndex];
+            company = option ? option.textContent : '';
+        }
+        var parts = splitOrganisation(company);
+        return {
+            company: parts.company,
+            account: String(account || parts.account || '').trim()
+        };
+    }
+
     // COLLECTING ON A TICKET
     function customerName(ci) {
         var heading = ci.querySelector('#' + NAME_ID);
@@ -294,7 +347,7 @@
             checking = '';
             if (!text) return;
             var result = readTickets(text);
-            save(id, name || 'Customer ' + id, email.toLowerCase(), result.total, result.times);
+            save(id, name || 'Customer ' + id, email.toLowerCase(), ticketOrganisation(), result.total, result.times);
             savedFor = id;
         });
     }
@@ -327,6 +380,8 @@
             return {
                 id: id,
                 name: c.n || 'Customer ' + id,
+                company: c.c || '',
+                account: c.a || '',
                 total: useFull ? full.n : (c.t || 0),
                 capped: useFull ? !!full.c : (c.t || 0) >= PER_PAGE,
                 recent: (c.r || []).filter(function (ts) { return ts >= since; }).length
@@ -368,6 +423,12 @@
             var count = Number(c[key]).toLocaleString('en-GB') + (key === 'total' && c.capped ? '+' : '');
             var name = '<a href="/customers/' + c.id + '/edit" target="_blank" title="Open the customer\'s profile">' +
                 D.escapeHtml(c.name) + '</a>';
+            // Account id and company on the same line, after the name, in
+            // grey; a long line is cut with an ellipsis (full text in the
+            // tooltip), so no row gets taller.
+            var orgText = [c.account, c.company].filter(Boolean).join(' ');
+            if (orgText) name += '<span class="pcm-tl-org">' + D.escapeHtml(orgText) + '</span>';
+            var cellTitle = D.escapeHtml(c.name + (orgText ? ', ' + orgText : ''));
             // Last 30 days: the share of the customer's all-time total.
             var share = '';
             if (key === 'recent' && c.total > 0) {
@@ -376,7 +437,7 @@
                 share = '<td class="pcm-tl-share" title="Share of all ' + Number(c.total).toLocaleString('en-GB') +
                     (c.capped ? '+' : '') + ' tickets">' + shown + '</td>';
             }
-            return heading + '<tr><td class="pcm-tl-rank">' + (i + 1) + '</td><td>' + name +
+            return heading + '<tr><td class="pcm-tl-rank">' + (i + 1) + '</td><td class="pcm-tl-name" title="' + cellTitle + '">' + name +
                 '</td><td class="pcm-tl-count">' + count + '</td>' + share + '</tr>';
         }).join('') + '</table>';
     }
