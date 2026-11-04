@@ -1,6 +1,6 @@
 // @file_name = PCM_Customer_Top_List.user.js
 // @author = Kardo Rostam
-// @version = 2.0_2026-11-04
+// @version = 2.3_2026-11-04
 // @created = 2026-11-02 12:03
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails, companies, account ids and ticket counts are read from the page at runtime and kept only in this browser's Tampermonkey storage, never written here.
 // @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
@@ -8,8 +8,8 @@
 // ==UserScript==
 // @name         PCM Customer Top List
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.0_2026-11-04
-// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top), each step under a heading in its own colour from red to blue. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile, with the account id and company after it on the same line (from PCM Ticket Info Extractor or the ticket's Organisation, split from names like "123 Name", "Name 123", "123 - Name" or "Name (123)"). Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
+// @version      2.3_2026-11-04
+// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top), each step under a heading in its own colour from red to blue. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile, with the company after it on the same line, without its number (the account id is in the tooltip) and opening the organisation in PCM when clicked (from PCM Ticket Info Extractor or the ticket's Organisation, split from names like "123 Name", "Name 123", "123 - Name" or "Name (123)"). Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. A Sync button in the footer fetches the ticket list and the profile page (current name and company) of every customer in both lists again (one request at a time) and shows how long it took and how much data it drew. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
 // @run-at       document-start
@@ -119,16 +119,24 @@
         '#' + PANEL_ID + ' tr:not(:first-child).pcm-tl-band td { border-top: 6px solid #fff; }',
         '#' + PANEL_ID + ' td.pcm-tl-name { width: 100%; max-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
         '#' + PANEL_ID + ' .pcm-tl-org { margin-left: 6px; color: #8a8f99; font-size: 11px; }',
+        '#' + PANEL_ID + ' a.pcm-tl-org:hover { color: #1e5bd8; text-decoration: underline; }',
         '#' + PANEL_ID + ' td.pcm-tl-share { width: 1%; padding-left: 0; text-align: right; color: #888; font-size: 11px; white-space: nowrap; }',
         '#' + PANEL_ID + ' .pcm-tl-empty { padding: 16px 10px; color: #777; }',
         '#' + PANEL_ID + ' .pcm-tl-foot {',
         '    padding: 6px 10px; border-top: 1px solid #ddd;',
         '    color: #777; font-size: 11px;',
-        '}'
+        '}',
+        '#' + PANEL_ID + ' .pcm-tl-sync { display: flex; align-items: center; gap: 8px; margin-top: 5px; }',
+        '#' + PANEL_ID + ' .pcm-tl-sync button {',
+        '    padding: 2px 10px; border: 1px solid #1e5bd8; border-radius: 3px;',
+        '    background: #1e5bd8; color: #fff; font-weight: 700; font-size: 11px; cursor: pointer;',
+        '}',
+        '#' + PANEL_ID + ' .pcm-tl-sync button:disabled { opacity: .5; cursor: progress; }'
     ].join('\n'));
 
     // STORAGE
     // { customers: { profile id: { n: name, e: email, c: company, a: account id,
+    //                              o: organisation id (PCM's own, for /organisations/<o>/edit),
     //                              t: total, r: [ticket times, last 30 days], s: saved } } }
     // The email (lower case) links an entry to the full count PCM Customer
     // Ticket Count keeps for customers with 500 tickets or more.
@@ -185,11 +193,14 @@
         }
         // A ticket without a company keeps the one saved before.
         var before = data.customers[id] || {};
+        org = org || {};
         data.customers[id] = {
             n: name,
             e: email,
             c: org.company || before.c || '',
             a: org.account || before.a || '',
+            // The organisation id stays while the company does not change.
+            o: org.orgId || (org.company && org.company !== before.c ? '' : before.o) || '',
             t: total,
             r: times.filter(function (ts) { return ts >= since; }),
             s: now
@@ -279,29 +290,25 @@
         return { company: value, account: '' };
     }
 
-    // The ticket's company and account id: from PCM Ticket Info Extractor
-    // when it is installed (its company name is split too, in case it
-    // carries the number), otherwise from the Organisation field in
-    // Attributes.
+    // The ticket's company, account id and organisation id: company and
+    // account from PCM Ticket Info Extractor when it is installed (its
+    // company name is split too, in case it carries the number), otherwise
+    // from the Organisation field in Attributes (#organisation-select),
+    // whose value is PCM's own organisation id.
     function ticketOrganisation() {
         var info = PAGE.PCM_TICKET_INFO || {};
         var root = document.getElementById('pcm-ticket-info');
         var company = info.companyName || (root && root.dataset.companyName) || '';
         var account = info.customerId || (root && root.dataset.customerId) || '';
-        if (!company) {
-            var form = document.getElementById('ticket-attributes-form') || document.querySelector('form.edit_ticket');
-            var label = form && Array.prototype.find.call(form.querySelectorAll('label'), function (el) {
-                return /^\s*organisation:?\s*$/i.test(el.textContent || '');
-            });
-            var section = label && (label.closest('section, .form-group, [class*="col"]') || label.parentElement);
-            var select = section && section.querySelector('select');
-            var option = select && select.options[select.selectedIndex];
-            company = option ? option.textContent : '';
-        }
+        var select = document.getElementById('organisation-select');
+        var option = select && select.options[select.selectedIndex];
+        var orgId = option && /^\d+$/.test(option.value) ? option.value : '';
+        if (!company && option) company = option.textContent;
         var parts = splitOrganisation(company);
         return {
             company: parts.company,
-            account: String(account || parts.account || '').trim()
+            account: String(account || parts.account || '').trim(),
+            orgId: orgId
         };
     }
 
@@ -382,6 +389,7 @@
                 name: c.n || 'Customer ' + id,
                 company: c.c || '',
                 account: c.a || '',
+                orgId: c.o || '',
                 total: useFull ? full.n : (c.t || 0),
                 capped: useFull ? !!full.c : (c.t || 0) >= PER_PAGE,
                 recent: (c.r || []).filter(function (ts) { return ts >= since; }).length
@@ -423,12 +431,19 @@
             var count = Number(c[key]).toLocaleString('en-GB') + (key === 'total' && c.capped ? '+' : '');
             var name = '<a href="/customers/' + c.id + '/edit" target="_blank" title="Open the customer\'s profile">' +
                 D.escapeHtml(c.name) + '</a>';
-            // Account id and company on the same line, after the name, in
-            // grey; a long line is cut with an ellipsis (full text in the
-            // tooltip), so no row gets taller.
-            var orgText = [c.account, c.company].filter(Boolean).join(' ');
-            if (orgText) name += '<span class="pcm-tl-org">' + D.escapeHtml(orgText) + '</span>';
-            var cellTitle = D.escapeHtml(c.name + (orgText ? ', ' + orgText : ''));
+            // The company on the same line, after the name, in grey,
+            // without its number (the account id is in the tooltip); it
+            // opens the organisation in PCM when its id is known. A long
+            // line is cut with an ellipsis, so no row gets taller.
+            if (c.company) {
+                var orgTitle = (c.account ? 'Account ' + c.account + '. ' : '') +
+                    (c.orgId ? 'Open the organisation in PCM' : '');
+                name += c.orgId
+                    ? '<a class="pcm-tl-org" href="/organisations/' + c.orgId + '/edit" target="_blank" title="' +
+                        D.escapeHtml(orgTitle) + '">' + D.escapeHtml(c.company) + '</a>'
+                    : '<span class="pcm-tl-org" title="' + D.escapeHtml(orgTitle) + '">' + D.escapeHtml(c.company) + '</span>';
+            }
+            var cellTitle = D.escapeHtml(c.name + (c.company ? ', ' + c.company : '') + (c.account ? ' (' + c.account + ')' : ''));
             // Last 30 days: the share of the customer's all-time total.
             var share = '';
             if (key === 'recent' && c.total > 0) {
@@ -440,6 +455,155 @@
             return heading + '<tr><td class="pcm-tl-rank">' + (i + 1) + '</td><td class="pcm-tl-name" title="' + cellTitle + '">' + name +
                 '</td><td class="pcm-tl-count">' + count + '</td>' + share + '</tr>';
         }).join('') + '</table>';
+    }
+
+    // SYNC
+    // Refreshes every customer shown in either tab: their ticket list is
+    // fetched again by the saved email (one request at a time, with a
+    // short pause between them, so PCM is not hit all at once) and read
+    // the same way as when a ticket is opened. The customer's profile page
+    // (/customers/<id>/edit) is fetched too, for the current name and
+    // company (about 300 KB each: PCM lists every organisation in it). The
+    // time it took and the data it drew are shown, and the last sync is
+    // remembered.
+    var SYNC_PAUSE_MS = 150;
+    var SYNC_KEY = 'pcmCustomerTopListLastSync';
+    var sync = { running: false, done: 0, total: 0 };
+
+    function lastSync() {
+        try { return GM_getValue(SYNC_KEY, null); } catch (_) { return null; }
+    }
+
+    function formatBytes(bytes) {
+        if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+        return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+    }
+
+    function formatDuration(ms) {
+        var seconds = Math.round(ms / 1000);
+        var minutes = Math.floor(seconds / 60);
+        return minutes ? minutes + ' min ' + (seconds % 60) + ' s' : seconds + ' s';
+    }
+
+    function syncText() {
+        if (sync.running) return 'Syncing ' + sync.done + ' of ' + sync.total + '\u2026';
+        var last = lastSync();
+        if (!last) return 'Not synced yet';
+        var when = new Date(last.at);
+        var time = when.toLocaleDateString('en-GB') === new Date().toLocaleDateString('en-GB')
+            ? when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+            : when.toLocaleDateString('en-GB') + ' ' + when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        return 'Last sync ' + time + ': ' + last.n + (last.n === 1 ? ' customer' : ' customers') + ' in ' +
+            formatDuration(last.ms) + ', ' + formatBytes(last.bytes) + (last.failed ? ', ' + last.failed + ' failed' : '');
+    }
+
+    function showSyncState() {
+        var panel = document.getElementById(PANEL_ID);
+        if (!panel) return;
+        var status = panel.querySelector('.pcm-tl-sync-status');
+        var button = panel.querySelector('[data-action="sync"]');
+        if (status) status.textContent = syncText();
+        if (button) button.disabled = sync.running;
+    }
+
+    function fetchList(email) {
+        var url = '/customers/tickets_table?search%5Bcustomer_email%5D=' + encodeURIComponent(email) +
+            '&per_page=' + PER_PAGE + '&page=1';
+        return fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'text/javascript', 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.text();
+        });
+    }
+
+    function fetchProfile(id) {
+        return fetch('/customers/' + id + '/edit', { credentials: 'same-origin' }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.text();
+        });
+    }
+
+    // Name and organisations from the profile page: the name field and the
+    // selected entries of the Organisations list.
+    function readProfile(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var nameInput = doc.getElementById('customer_name');
+        var select = doc.getElementById('customer_organisation_ids');
+        var orgs = select ? Array.prototype.filter.call(select.options, function (option) {
+            return option.selected || option.hasAttribute('selected');
+        }).map(function (option) { return { text: option.textContent, value: option.value }; }) : [];
+        return { name: nameInput ? D.cleanText(nameInput.value || nameInput.getAttribute('value') || '') : '', orgs: orgs };
+    }
+
+    // Of several organisations, the one matching the saved account id or
+    // company, otherwise the first. Its number is the account id; without
+    // one, the saved id is kept when it is the same company.
+    function pickOrganisation(orgs, entry) {
+        var parts = orgs.map(function (org) {
+            var p = splitOrganisation(org.text);
+            p.orgId = /^\d+$/.test(org.value) ? org.value : '';
+            return p;
+        }).filter(function (p) { return p.company || p.account; });
+        if (!parts.length) return { company: entry.c || '', account: entry.a || '', orgId: entry.o || '' };
+        var savedCompany = (entry.c || '').toLowerCase();
+        var pick = parts.find(function (p) { return p.account && p.account === entry.a; }) ||
+            parts.find(function (p) { return p.company.toLowerCase() === savedCompany; }) ||
+            parts[0];
+        var sameCompany = pick.company.toLowerCase() === savedCompany;
+        return { company: pick.company, account: pick.account || (sameCompany ? entry.a || '' : ''), orgId: pick.orgId };
+    }
+
+    function runSync() {
+        if (sync.running) return;
+        var data = lists();
+        var ids = [];
+        data.recent.concat(data.total).forEach(function (c) {
+            if (ids.indexOf(c.id) === -1) ids.push(c.id);
+        });
+        var customers = load().customers;
+        ids = ids.filter(function (id) { return customers[id] && customers[id].e; });
+        sync = { running: true, done: 0, total: ids.length };
+        var started = Date.now();
+        var bytes = 0;
+        var failed = 0;
+        showSyncState();
+
+        function next(index) {
+            if (index >= ids.length) {
+                sync.running = false;
+                try {
+                    GM_setValue(SYNC_KEY, { at: Date.now(), n: ids.length, ms: Date.now() - started, bytes: bytes, failed: failed });
+                } catch (_) { /* the summary is a courtesy */ }
+                var panel = document.getElementById(PANEL_ID);
+                if (panel) render(panel);
+                return;
+            }
+            var entry = load().customers[ids[index]];
+            var id = ids[index];
+            var step = entry ? fetchList(entry.e).then(function (text) {
+                bytes += new Blob([text]).size;
+                var result = readTickets(text);
+                // The profile is a bonus: if it fails, the counts still update.
+                return fetchProfile(id).then(function (html) {
+                    bytes += new Blob([html]).size;
+                    return readProfile(html);
+                }, function () { return null; }).then(function (profile) {
+                    var name = (profile && profile.name) || entry.n;
+                    var org = profile ? pickOrganisation(profile.orgs, entry) : { company: entry.c, account: entry.a, orgId: entry.o };
+                    save(id, name, entry.e, org, result.total, result.times);
+                });
+            }) : Promise.resolve();
+            step.catch(function () {
+                failed += 1;
+            }).then(function () {
+                sync.done = index + 1;
+                showSyncState();
+                window.setTimeout(function () { next(index + 1); }, SYNC_PAUSE_MS);
+            });
+        }
+        next(0);
     }
 
     var tab = 'recent';
@@ -454,7 +618,10 @@
             '>All time</button></div>' +
             '<div class="pcm-tl-body">' + rowsHtml(data[tab], tab) + '</div>' +
             '<div class="pcm-tl-foot"><span>From the ' + data.known + (data.known === 1 ? ' customer' : ' customers') +
-            ' with ' + MIN_TICKETS + ' or more tickets you have opened in this browser</span></div>';
+            ' with ' + MIN_TICKETS + ' or more tickets you have opened in this browser</span>' +
+            '<div class="pcm-tl-sync"><button type="button" data-action="sync"' + (sync.running ? ' disabled' : '') +
+            ' title="Fetch the ticket lists of every customer in both lists again">Sync</button>' +
+            '<span class="pcm-tl-sync-status">' + D.escapeHtml(syncText()) + '</span></div></div>';
     }
 
     function closePanel() {
@@ -486,6 +653,8 @@
             if (target.dataset.tab) {
                 tab = target.dataset.tab;
                 render(panel);
+            } else if (target.dataset.action === 'sync') {
+                runSync();
             }
         });
         render(panel);
