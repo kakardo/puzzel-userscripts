@@ -1,6 +1,6 @@
 // @file_name = PCM_Form_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 4.3_2026-10-29
+// @version = 4.7_2026-11-04
 // @created = 2026-03-23 15:48
 // @dependency = PCM Ticket Info Extractor
 // @note = Converted from .txt to a standard installable userscript in v2.3.
@@ -10,8 +10,8 @@
 // ==UserScript==
 // @name         PCM Form Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.3_2026-10-29
-// @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields, and colour-codes buttons and fields (blue = CustomerId, yellow = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route. When the Extractor announces new values after the form was handled (for example an organisation saved later), the buttons and mismatch markers update; autofill does not run again, so typed values are never overwritten.
+// @version      4.7_2026-11-04
+// @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields (with a red ring until saved; the name with capital first letters), gives a saved name in Customer Ref that starts with a small letter a capital first letter (also after PCM redraws the field, with an orange ring until saved, so you only press Save), and colour-codes buttons and fields (blue = CustomerId, teal = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route. When the Extractor announces new values after the form was handled (for example an organisation saved later), the buttons and mismatch markers update; autofill does not run again, so typed values are never overwritten.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -32,7 +32,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Form Buttons';
-  const SCRIPT_VERSION = '4.3_2026-10-29';
+  const SCRIPT_VERSION = '4.7_2026-11-04';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const FORMS_INJECT_ID = 'kardo-forms-customer-copy';
@@ -81,7 +81,8 @@
       background-color: #e8f1ff;
     }
 
-    /* Colour coding: blue = CustomerId, yellow = Customer Name.
+    /* Colour coding: blue = CustomerId, teal = Customer Name (not
+       yellow: that is the Assigned To colour when you are assigned).
        The matching form fields get the same colours below. */
     #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-id {
       background-color: #dbe9ff;
@@ -95,14 +96,14 @@
     }
 
     #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-name {
-      background-color: #fff3c4;
-      border-color: #e0c76a;
-      color: #5c4a16;
+      background-color: #d8f1f1;
+      border-color: #6bbcbc;
+      color: #134e4e;
     }
 
     #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-kind-name:hover {
-      background-color: #ffeda8;
-      border-color: #d1b449;
+      background-color: #c6eaea;
+      border-color: #4fa9a9;
     }
 
     input.kardo-field-id,
@@ -113,8 +114,8 @@
 
     input.kardo-field-name,
     textarea.kardo-field-name {
-      background-color: #fff3c4 !important;
-      border-color: #e0c76a !important;
+      background-color: #d8f1f1 !important;
+      border-color: #6bbcbc !important;
     }
 
     #${FORMS_INJECT_ID} .kardo-copy-btn.kardo-copied {
@@ -164,6 +165,30 @@
 
     #${FORMS_INJECT_ID} .kardo-mismatch.kardo-visible {
       display: inline;
+    }
+
+    /* Rings until the form is saved (PCM redraws the form after a save):
+       red  = an EMPTY field the script filled in (same dark red as PCM
+              Unsaved Form Warning),
+       orange = a field that already HAD a value and was changed by the
+              script (a saved Customer Ref given a capital first letter).
+       The doubled classes and the :has() rules win over the unsaved
+       warning's own ring on these fields. */
+    input.kardo-field-filled.kardo-field-filled,
+    textarea.kardo-field-filled.kardo-field-filled {
+      border-color: #8b0000 !important;
+      box-shadow: inset 0 0 0 2px #8b0000 !important;
+    }
+    label:has(> .kardo-field-filled)::after {
+      box-shadow: inset 0 0 0 2px #8b0000 !important;
+    }
+    input.kardo-field-capitalised.kardo-field-capitalised,
+    textarea.kardo-field-capitalised.kardo-field-capitalised {
+      border-color: #f08c00 !important;
+      box-shadow: inset 0 0 0 2px #f08c00 !important;
+    }
+    label:has(> .kardo-field-capitalised)::after {
+      box-shadow: inset 0 0 0 2px #f08c00 !important;
     }
 
     #${FORMS_INJECT_ID}.kardo-fading .kardo-copy-status {
@@ -484,7 +509,61 @@
     if (!input || !clean(value)) return false;
     if (clean(input.value)) return false; // never overwrite anything the agent typed
     if (input.dataset.kardoUserCleared) return false; // the agent emptied it on purpose
-    return D.setNativeFieldValue(input, value);
+    if (!D.setNativeFieldValue(input, value)) return false;
+    input.classList.add(FILLED_CLASS);
+    input.title = 'Filled in by the script: press Save to keep it';
+    return true;
+  }
+
+  // CAPITAL FIRST LETTERS IN CUSTOMER REF
+  // A name in Customer Ref that starts with a small letter ("anna" or
+  // "anna-lena smith") gets a capital first letter in each part of the
+  // name ("Anna", "Anna-Lena Smith"); the rest of each word is kept as it
+  // is. The change is made the way typing would, so PCM's Save lights up
+  // and the unsaved warning sees it, and the field gets an orange ring
+  // until it is saved. Every copy of the field is handled once: PCM
+  // redraws the Forms fields while loading and after answers arrive, and
+  // a redraw brings the saved small letter back. A copy is only changed
+  // once PCM has recorded the form's original values (checked again a
+  // few times, bounded); a name you then type in lower case on purpose
+  // in the same copy is left alone.
+  const CAPITALISED_CLASS = 'kardo-field-capitalised';
+  const FILLED_CLASS = 'kardo-field-filled';
+  const CAPITALISE_RETRY_MS = 400;
+  const CAPITALISE_MAX_RETRIES = 25;
+  const handledRefFields = new WeakSet();
+  let capitaliseTimer = 0;
+  let capitaliseRetries = 0;
+  let capitaliseTarget = null;
+
+  function capitaliseName(value) {
+    return String(value || '').replace(/(^|[\s-])(\p{Ll})/gu, (match, before, letter) => before + letter.toUpperCase());
+  }
+
+  function capitaliseCustomerRef() {
+    capitaliseTimer = D.clearTimer(capitaliseTimer);
+    const refField = findFormField('Customer Ref');
+    if (!refField || handledRefFields.has(refField) || refField.classList.contains(FILLED_CLASS)) return;
+    // The retry budget is per copy of the field.
+    if (capitaliseTarget !== refField) {
+      capitaliseTarget = refField;
+      capitaliseRetries = 0;
+    }
+    if (!D.formReady(refField)) {
+      if (capitaliseRetries < CAPITALISE_MAX_RETRIES) {
+        capitaliseRetries += 1;
+        capitaliseTimer = window.setTimeout(capitaliseCustomerRef, CAPITALISE_RETRY_MS);
+      }
+      return;
+    }
+    handledRefFields.add(refField);
+    capitaliseRetries = 0;
+    const current = refField.value || '';
+    const fixed = capitaliseName(current);
+    if (!clean(current) || fixed === current) return;
+    D.setNativeFieldValue(refField, fixed);
+    refField.classList.add(CAPITALISED_CLASS);
+    refField.title = 'Changed to a capital first letter: press Save to keep it';
   }
 
   function ensureFormAutofill(info, allowFill) {
@@ -499,7 +578,9 @@
 
     if (refField) {
       refField.classList.add('kardo-field-name');
-      if (allowFill) setFieldValueIfEmpty(refField, info.customerName);
+      // Written with capital first letters straight away: an empty field
+      // filled by the script gets the red ring, never the orange one.
+      if (allowFill) setFieldValueIfEmpty(refField, capitaliseName(info.customerName));
     }
 
     // Only done when both fields were found; retries keep looking for a
@@ -586,6 +667,7 @@
     settleStartedAt = 0;
     settledApplied = true;
     echoRefillUsed = false;
+    capitaliseCustomerRef();
     updateMismatchIndicators();
   }
 
@@ -637,6 +719,9 @@
         if (tag) tag.classList.toggle('kardo-visible', mismatch);
       });
     }
+
+    // A redrawn Customer Ref is a new copy of the field: capitalise it too.
+    capitaliseCustomerRef();
 
     // Re-arm the re-render observer if the app replaced its root.
     ensureFormsObserver();

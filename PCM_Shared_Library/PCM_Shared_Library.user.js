@@ -1,6 +1,6 @@
 // @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 2.3_2026-10-28
+// @version = 2.4_2026-11-04
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -47,6 +47,8 @@
     - form readiness for PCM's Are You Sure plugin (formReady, recheckForm);
       setNativeFieldValue asks it to re-check after every write; temporary
       accordions close reliably after their open animation (v2.3)
+    - unsaved-change watcher: optional onEvaluate hook so a feature script
+      can adjust the warning from the changed fields (v2.4)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -1082,6 +1084,17 @@
                 warning.classList.toggle('pcm-visible', dirty);
                 warning.title = dirty ? 'Changed: ' + changed.map(fieldLabel).join(', ') : '';
             }
+            // Optional hook (v2.4): lets the feature script adjust the
+            // warning (text, colour) from the changed fields after each
+            // check. The script owns any text it writes and puts the
+            // normal text back itself.
+            if (typeof config.onEvaluate === 'function') {
+                try {
+                    config.onEvaluate({ warning: warning, changed: changed.slice(), dirty: dirty, warningText: warningText });
+                } catch (err) {
+                    console.warn('PCM_DOM.createUnsavedWatcher: onEvaluate failed', err);
+                }
+            }
         }
 
         const evaluateGate = createVisibilityGate(evaluate, evaluateDebounceMs);
@@ -1203,7 +1216,7 @@
     }
 
     global.PCM_DOM = {
-        LIB_VERSION: '2.3_2026-10-28',
+        LIB_VERSION: '2.4_2026-11-04',
         DEFAULT_CONFIG: assignDefined({}, DEFAULT_CONFIG),
         mergeConfig: mergeConfig,
         clearTimer: clearTimer,
