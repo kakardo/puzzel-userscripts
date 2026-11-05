@@ -1,12 +1,12 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-11-05
+// @version = 1.2_2026-11-05
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-11-05
+// @version      1.2_2026-11-05
 // @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
@@ -178,7 +178,10 @@
           event.preventDefault();
           const row = firstShownRow(sheet);
           const toggle = row && row.querySelector(TOGGLE);
-          if (toggle) toggle.click();
+          if (toggle) {
+            toggledAt = Date.now();
+            toggle.click();
+          }
         }
       });
     });
@@ -204,13 +207,24 @@
   let toggledAt = 0;
   let restore = null;
 
+  // A press anywhere on a playlist row is a toggle (YouTube's handler
+  // covers the whole row, not only its inner button), except the star.
+  function isToggle(target) {
+    return !!(target.closest('.' + SHEET_CLASS + ' ' + ROW) && !target.closest('.' + STAR_CLASS));
+  }
+
   document.addEventListener('pointerdown', (event) => {
     if (event.target.closest('ytd-popup-container')) {
-      if (event.target.closest(TOGGLE) && event.target.closest('.' + SHEET_CLASS)) toggledAt = Date.now();
+      if (isToggle(event.target)) toggledAt = Date.now();
       return;
     }
     const button = event.target.closest('button, [role="button"], tp-yt-paper-item, ytd-menu-service-item-renderer');
     if (button) trigger = button;
+  }, true);
+
+  // Enter or Space on a focused playlist row toggles it too.
+  document.addEventListener('keydown', (event) => {
+    if ((event.key === 'Enter' || event.key === ' ') && isToggle(event.target)) toggledAt = Date.now();
   }, true);
 
   // The Save button under the video, for when the remembered one is gone
