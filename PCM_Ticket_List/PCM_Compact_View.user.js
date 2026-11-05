@@ -1,12 +1,12 @@
 // @file_name = PCM_Compact_View.user.js
 // @author = Kardo Rostam
-// @version = 1.6_2026-11-04
+// @version = 1.7_2026-11-05
 // @created = 2026-08-28 09:04
 
 // ==UserScript==
 // @name         PCM Compact View
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.6_2026-11-04
+// @version      1.7_2026-11-05
 // @description  Compact settings menu for the tickets list, left of Hide Columns. Tightens cell padding and status badges, releases column widths so empty columns collapse, clamps Subject to a configurable MAX line count, and shortens times: minutes to m, hours to h, days to d, years to y, and "less than a minute" to <1m. All settings live in the menu and persist in localStorage; reapplies on every DataTables draw. Settings are kept in localStorage with a backup in Tampermonkey's own storage, restored after a cleared browser cache.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -205,7 +205,12 @@
         '  min-width:230px; display:flex; flex-direction:column; gap:8px;',
         '}',
         '#' + PANEL_ID + ' label { display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; user-select:none; white-space:nowrap; }',
-        '#' + PANEL_ID + ' input[type="number"] { width:56px; background:rgba(255,255,255,0.08); color:inherit; border:1px solid rgba(255,255,255,0.25); border-radius:3px; padding:2px 4px; }'
+        '#' + PANEL_ID + ' input[type="number"] { width:56px; background:rgba(255,255,255,0.08); color:inherit; border:1px solid rgba(255,255,255,0.25); border-radius:3px; padding:2px 4px; }',
+        // The open list of a select is drawn by the browser on white while
+        // the options inherit the panel's light text, so they were white on
+        // white. The select and its options get the panel's dark colours.
+        '#' + PANEL_ID + ' select { background:#1f2533; color:rgb(230,233,239); border:1px solid rgba(255,255,255,0.25); border-radius:3px; padding:2px 4px; }',
+        '#' + PANEL_ID + ' select option { background:#1f2533; color:rgb(230,233,239); }'
     ].join('\n'));
 
     function isOn() {
