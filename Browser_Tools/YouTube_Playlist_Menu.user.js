@@ -1,13 +1,13 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-11-05
+// @version = 1.1_2026-11-05
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-11-05
-// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
+// @version      1.1_2026-11-05
+// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -23,6 +23,9 @@
 
   // USER SETTINGS
   const COMPACT = true;            // hide thumbnails and the Private/Public line
+  const FULL_HEIGHT = true;        // menu from the top of the window to the bottom
+  const STAY_OPEN = true;          // open the menu again after saving to a playlist
+  const EDGE_PX = 8;               // gap to the window edges in full height
   const STAR_COLOUR = '#ffcc00';
   const FILTER_PLACEHOLDER = 'Filter playlists';
 
@@ -42,6 +45,7 @@
   const SCAN_DELAY_MS = 80;
   const BOOT_TRIES = 40;
   const BOOT_INTERVAL_MS = 500;
+  const REOPEN_WINDOW_MS = 1500;   // a close this soon after a toggle is YouTube's
 
   const style = document.createElement('style');
   style.textContent = [
@@ -49,6 +53,22 @@
     // CSS order without moving YouTube's own elements.
     '.' + SHEET_CLASS + ' yt-list-view-model { display: flex !important; flex-direction: column !important; }',
     '.' + SHEET_CLASS + ' ' + ROW + ' { position: relative; }',
+    // Full height: the dropdown is pinned from top to bottom (its inline
+    // top and size are YouTube's, so !important) and only the list scrolls.
+    FULL_HEIGHT ? [
+      'tp-yt-iron-dropdown:has(.' + SHEET_CLASS + ') {',
+      '  top: ' + EDGE_PX + 'px !important; bottom: ' + EDGE_PX + 'px !important;',
+      '  height: calc(100vh - ' + (EDGE_PX * 2) + 'px) !important; max-height: calc(100vh - ' + (EDGE_PX * 2) + 'px) !important;',
+      '}',
+      'tp-yt-iron-dropdown:has(.' + SHEET_CLASS + ') #contentWrapper,',
+      '.' + SHEET_CLASS + ',',
+      '.' + SHEET_CLASS + ' yt-contextual-sheet-layout {',
+      '  height: 100% !important; max-height: none !important; display: flex !important; flex-direction: column !important;',
+      '}',
+      '.' + SHEET_CLASS + ' .ytContextualSheetLayoutContentContainer {',
+      '  flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; overflow-y: auto !important;',
+      '}'
+    ].join('\n') : '',
     COMPACT ? [
       '.' + SHEET_CLASS + ' .ytListItemViewModelLeading,',
       '.' + SHEET_CLASS + ' .ytListItemViewModelSubtitleContainer { display: none !important; }',
@@ -175,6 +195,40 @@
 
   let wasOpen = false;
 
+  // STAYING OPEN
+  // The button that opened the menu is remembered (the last press outside
+  // the menu). A toggle in the menu marks the time; when YouTube closes
+  // the menu right after it, the same button is pressed again and the
+  // filter text and scroll position are put back once it is open.
+  let trigger = null;
+  let toggledAt = 0;
+  let restore = null;
+
+  document.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('ytd-popup-container')) {
+      if (event.target.closest(TOGGLE) && event.target.closest('.' + SHEET_CLASS)) toggledAt = Date.now();
+      return;
+    }
+    const button = event.target.closest('button, [role="button"], tp-yt-paper-item, ytd-menu-service-item-renderer');
+    if (button) trigger = button;
+  }, true);
+
+  // The Save button under the video, for when the remembered one is gone
+  // (it was an entry in a menu that has closed).
+  function saveButton() {
+    return Array.from(document.querySelectorAll('ytd-watch-metadata button[aria-label], #actions button[aria-label]'))
+      .find((b) => /save|spara|playlist|spellista/i.test(b.getAttribute('aria-label') || '')) || null;
+  }
+
+  function reopen(sheet) {
+    const filter = sheet.querySelector('.' + FILTER_CLASS);
+    const scroller = sheet.querySelector('.ytContextualSheetLayoutContentContainer');
+    restore = { filter: filter ? filter.value : '', scroll: scroller ? scroller.scrollTop : 0 };
+    const button = trigger && trigger.isConnected ? trigger : saveButton();
+    if (button) button.click();
+    else restore = null;
+  }
+
   function scan() {
     const sheet = playlistSheet();
     if (!sheet) {
@@ -185,10 +239,22 @@
     const filter = ensureFilter(sheet);
     const dropdown = sheet.closest('tp-yt-iron-dropdown');
     const open = !!(dropdown && dropdown.style.display !== 'none' && sheet.getClientRects().length);
-    // Freshly opened: empty filter, cursor in it.
+    // Freshly opened: empty filter, cursor in it; opened again after a
+    // toggle: the filter and scroll position as they were.
     if (open && !wasOpen && filter) {
-      if (filter.value) filter.value = '';
+      const back = restore;
+      restore = null;
+      filter.value = back ? back.filter : '';
       filter.focus({ preventScroll: true });
+      if (back) {
+        const scroller = sheet.querySelector('.ytContextualSheetLayoutContentContainer');
+        if (scroller) requestAnimationFrame(() => { scroller.scrollTop = back.scroll; });
+      }
+    }
+    // Closed by YouTube right after a toggle: open it again.
+    if (STAY_OPEN && !open && wasOpen && Date.now() - toggledAt < REOPEN_WINDOW_MS) {
+      toggledAt = 0;
+      reopen(sheet);
     }
     wasOpen = open;
     decorateRows(sheet);
