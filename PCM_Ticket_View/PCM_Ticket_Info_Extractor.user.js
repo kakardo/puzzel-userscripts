@@ -1,13 +1,13 @@
 // @file_name = PCM_Ticket_Info_Extractor.user.js
 // @author = Kardo Rostam
-// @version = 7.4_2026-10-28
+// @version = 7.5_2026-11-05
 // @created = 2026-03-20 (v1.0)
 
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      7.4_2026-10-28
-// @description  Present CustomerID, Customer Name, Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Organisation rows already in the page are read without opening CI Organisations; only when they load on opening is it opened briefly and closed again once its animation has finished, so it no longer stays open. Expose machine-friendly hooks for other scripts. Reads again when PCM Show Organisation Info signals that the Organisation Information module was added or changed after an Attributes save (event pcm-organisation-info-refreshed), and announces the new values the same way, so the scripts that use them update without a reload. The panel is put back automatically when PCM rebuilds the ticket header after an Attributes save.
+// @version      7.5_2026-11-05
+// @description  Present CustomerID, Customer Name (the name link in Customer Intelligence; notes other scripts add to that heading are ignored), Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Organisation rows already in the page are read without opening CI Organisations; only when they load on opening is it opened briefly and closed again once its animation has finished, so it no longer stays open. Expose machine-friendly hooks for other scripts. Reads again when PCM Show Organisation Info signals that the Organisation Information module was added or changed after an Attributes save (event pcm-organisation-info-refreshed), and announces the new values the same way, so the scripts that use them update without a reload. The panel is put back automatically when PCM rebuilds the ticket header after an Attributes save.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -149,19 +149,38 @@
     };
   }
 
+  // Elements other scripts put into the page carry ids or classes starting
+  // with pcm- (PCM's own markup does not).
+  const ADDED_BY_SCRIPTS = '[id^="pcm-"], [class^="pcm-"], [class*=" pcm-"]';
+
+  function nameText(node) {
+    if (!node) return '';
+    const link = node.matches && node.matches('h1, h2, h3, h4') ? node.querySelector('a') : null;
+    if (link && text(link)) return text(link);
+    if (!node.querySelector || !node.querySelector(ADDED_BY_SCRIPTS)) return text(node);
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll(ADDED_BY_SCRIPTS).forEach((el) => el.remove());
+    return clean(copy.textContent);
+  }
+
   function extractCustomerName(box) {
     const body = box?.querySelector('.jarviswidget-editbox, .widget-body, .panel-body') || box;
     if (!body) return '';
 
+    // Other scripts add their own notes to the name heading (for example
+    // PCM Customer ID Reminder's "(Reminder: add customer ID)", id pcm-...).
+    // The name is the heading's link when it has one, otherwise the
+    // heading without those added elements.
     const direct = body.querySelector('#cip-customer-name, h1[id^="cip-customer-name"], h1');
-    const directValue = text(direct);
+    const directValue = nameText(direct);
     if (visible(direct) && directValue && !BLOCKED_NAME_VALUES.has(directValue.toLowerCase())) {
       return directValue;
     }
 
     const candidates = [];
     for (const node of body.querySelectorAll('a, h1, h2, h3, h4, strong, span')) {
-      const value = text(node);
+      if (node.closest(ADDED_BY_SCRIPTS)) continue;
+      const value = nameText(node);
       if (!visible(node) || !value || node.closest('#organisations')) continue;
       if (BLOCKED_NAME_VALUES.has(value.toLowerCase())) continue;
       if (value.length > 120) continue;
