@@ -1,20 +1,20 @@
 // @file_name = Highlight_Same_Word.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-11-04
+// @version = 1.4_2026-11-05
 // @created = 2026-11-04 (v1.1)
 
 // ==UserScript==
 // @name         Highlight Same Word
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-11-04
+// @version      1.4_2026-11-05
 // @description  Highlights every other place the selected word or phrase appears on the page, on any website. Select text with the mouse (or Shift and the arrow keys) and every match lights up; click elsewhere or press Escape to clear. Whole words by default; when a selected part of a word has no whole-word match, it is found inside words instead. Case-insensitive, at most 1000 hits. A thin strip along the right edge, next to the scroll bar, marks where the matches are on the whole page. Uses the browser's CSS Custom Highlight API, so the page itself is never changed. Light: runs only when you finish a selection, reads nothing else and sends nothing anywhere.
 // @author       Kardo Rostam
 // @match        *://*/*
 // @run-at       document-idle
 // @noframes
 // @grant        none
-// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/All_Sites/Highlight_Same_Word.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/All_Sites/Highlight_Same_Word.user.js
+// @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Browser_Tools/Highlight_Same_Word.user.js
+// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Browser_Tools/Highlight_Same_Word.user.js
 // ==/UserScript==
 
 (() => {
