@@ -1,14 +1,14 @@
 // @file_name = PCM_Customer_ID_Reminder.user.js
 // @author = Kardo Rostam
-// @version = 1.4_2026-11-02
+// @version = 1.5_2026-11-05
 // @created = 2026-11-02 11:05
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The customer's email is read from the page at runtime (only to ask PCM for the ticket count), never written here.
 
 // ==UserScript==
 // @name         PCM Customer ID Reminder
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-11-02
-// @description  Reminds you to add the customer ID to a customer's profile. When the profile has an ID, PCM shows an Organisations section in Customer Intelligence; when that section is missing, the script counts the customer's tickets (the same list PCM loads when you open Customer Tickets, fetched once in the background with room for 500 tickets and only read, never run; the request is shared with PCM Customer Ticket Count and PCM Customer Top List) and, at 3 or more tickets, shows a red "(Reminder: add customer ID)" after the customer's name; its tooltip gives the number of tickets. Nothing is fetched when the ID is there. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      1.5_2026-11-05
+// @description  Reminds you to add the customer ID to a customer's profile. When the profile has an ID, PCM shows an Organisations section in Customer Intelligence; when that section is missing, the script counts the customer's tickets (the same list PCM loads when you open Customer Tickets, fetched once in the background with room for 500 tickets and only read, never run; the request is shared with PCM Customer Ticket Count and PCM Customer Top List) and, at 5 or more tickets, shows a red "(Reminder: add customer ID)" after the customer's name; its tooltip gives the number of tickets. Nothing is fetched when the ID is there. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -23,7 +23,7 @@
 
     // USER SETTINGS
     // The marker shows from this many tickets (the current one included).
-    var MIN_TICKETS = 3;
+    var MIN_TICKETS = 5;
     var MARK_TEXT = '(Reminder: add customer ID)';
     var MARK_COLOUR = '#c62828';
 
