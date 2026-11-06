@@ -1,6 +1,6 @@
 // @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 2.6_2026-11-06
+// @version = 2.7_2026-11-06
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -51,7 +51,8 @@
       can adjust the warning from the changed fields (v2.4); a redraw right
       after a change keeps the baseline only for the changed fields (v2.5);
       optional repairFormCheck gives PCM's form check the saved value back
-      when it took an unsaved value as the original (v2.6)
+      when it took an unsaved value as the original (v2.6), also checked when
+      the pointer reaches the Save area (v2.7)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -1233,6 +1234,21 @@
                 jq(document).on('ajaxComplete', function() {
                     if (dirty) evaluateGate.schedule();
                 });
+
+                // PCM can also record them with no request at all (right
+                // after a script writes a field, for one). So the check also
+                // runs the moment the pointer reaches the zone's Save area,
+                // before the click: Save is active by then (v2.7). At most
+                // once per 300 ms, and only while changes exist.
+                let lastHoverCheck = 0;
+                document.addEventListener('pointerover', function(event) {
+                    if (!dirty || Date.now() - lastHoverCheck < 300) return;
+                    const root = config.findRoot();
+                    const actions = root && findActions(root);
+                    if (!actions || !actions.contains(event.target)) return;
+                    lastHoverCheck = Date.now();
+                    evaluate();
+                }, true);
             }
 
             document.addEventListener('click', function(event) {
@@ -1280,7 +1296,7 @@
     }
 
     global.PCM_DOM = {
-        LIB_VERSION: '2.6_2026-11-06',
+        LIB_VERSION: '2.7_2026-11-06',
         DEFAULT_CONFIG: assignDefined({}, DEFAULT_CONFIG),
         mergeConfig: mergeConfig,
         clearTimer: clearTimer,
