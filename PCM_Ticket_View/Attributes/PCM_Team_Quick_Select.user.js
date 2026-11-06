@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 2.8_2026-11-02
+// @version = 2.9_2026-11-06
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.8_2026-11-02
-// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
+// @version      2.9_2026-11-06
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -230,16 +230,29 @@
     const onHandPick = (event) => {
       if (event.isTrusted && event.target && event.target.id === 'user-select') stop();
     };
+    // Saving ends the guard: the cleared value is what gets saved, and a
+    // clear after the save would show the freshly saved Assigned To as
+    // unsaved again once PCM redraws the form.
+    const form = select && select.form;
+    const onSave = (event) => {
+      const target = event.target;
+      if (target === form || (target && target.closest && form && target.closest('button[type="submit"], input[type="submit"]') &&
+          (form.contains(target) || target.getAttribute('form') === form.id))) stop();
+    };
     function stop() {
       if (stopped) return;
       stopped = true;
       if (observer) observer.disconnect();
       if (jq) jq(document).off('ajaxComplete', onAjax);
       document.removeEventListener('change', onHandPick, true);
+      document.removeEventListener('click', onSave, true);
+      document.removeEventListener('submit', onSave, true);
     }
     if (observer) observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['selected'] });
     if (jq) jq(document).on('ajaxComplete', onAjax);
     document.addEventListener('change', onHandPick, true);
+    document.addEventListener('click', onSave, true);
+    document.addEventListener('submit', onSave, true);
     window.setTimeout(stop, UNASSIGN_GUARD_MS);
   }
 

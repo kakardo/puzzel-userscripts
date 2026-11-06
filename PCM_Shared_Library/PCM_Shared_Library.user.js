@@ -1,6 +1,6 @@
 // @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 2.5_2026-11-04
+// @version = 2.6_2026-11-06
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -49,7 +49,9 @@
       accordions close reliably after their open animation (v2.3)
     - unsaved-change watcher: optional onEvaluate hook so a feature script
       can adjust the warning from the changed fields (v2.4); a redraw right
-      after a change keeps the baseline only for the changed fields (v2.5)
+      after a change keeps the baseline only for the changed fields (v2.5);
+      optional repairFormCheck gives PCM's form check the saved value back
+      when it took an unsaved value as the original (v2.6)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -961,6 +963,7 @@
         const evaluateDebounceMs = typeof config.evaluateDebounceMs === 'number' ? config.evaluateDebounceMs : 100;
         const rebaseDebounceMs = typeof config.rebaseDebounceMs === 'number' ? config.rebaseDebounceMs : 60;
         const userRerenderWindowMs = typeof config.userRerenderWindowMs === 'number' ? config.userRerenderWindowMs : 4000;
+        const repairFormCheck = !!config.repairFormCheck;
 
         const findActions = config.findActions || function(root) {
             return (root && query('.form-actions', root)) || null;
@@ -1069,6 +1072,33 @@
             return el;
         }
 
+        // PCM's "Are You Sure" form plugin keeps each field's original value
+        // (jQuery data 'ays-orig') and only allows Save when a field differs
+        // from it. PCM records those again at moments of its own (for
+        // example after sending an email), taking unsaved values as the
+        // originals: Save goes grey although the change was never saved.
+        // With repairFormCheck (v2.6), a field this watcher sees as changed
+        // but the plugin holds as original gets its saved value back as the
+        // plugin's original, and the plugin is asked to check again.
+        // Checkboxes, radios and multiple selects are left to the plugin.
+        function repairAreYouSure(root) {
+            const jq = window.jQuery;
+            if (!jq) return;
+            let repaired = null;
+            keyedFields(root).forEach(function(entry) {
+                const field = entry.field;
+                if (!baseline.has(entry.key) || field.type === 'checkbox' || field.type === 'radio' || field.multiple) return;
+                const saved = baseline.get(entry.key);
+                const current = fieldValue(field);
+                if (saved === current) return;
+                const orig = jq(field).data('ays-orig');
+                if (orig === undefined || String(orig) !== current) return;
+                jq(field).data('ays-orig', saved);
+                repaired = field;
+            });
+            if (repaired && repaired.form) jq(repaired.form).trigger('checkform.areYouSure');
+        }
+
         function evaluate() {
             const root = config.findRoot();
             if (!root) return;
@@ -1086,6 +1116,7 @@
             });
 
             dirty = changed.length > 0;
+            if (repairFormCheck) repairAreYouSure(root);
             const warning = ensureWarningElement();
             if (warning) {
                 warning.classList.toggle('pcm-visible', dirty);
@@ -1194,6 +1225,16 @@
             const jq = window.jQuery;
             if (jq) jq(document).on('input change', onFieldEvent);
 
+            // PCM records its form check's originals again after some of
+            // its own requests (sending an email, for one), with no field
+            // event; with repairFormCheck each finished request is followed
+            // by one debounced check (v2.6).
+            if (jq && repairFormCheck) {
+                jq(document).on('ajaxComplete', function() {
+                    if (dirty) evaluateGate.schedule();
+                });
+            }
+
             document.addEventListener('click', function(event) {
                 if (!isSaveClick(event)) return;
                 // Saving stores the current values: new baseline for
@@ -1239,7 +1280,7 @@
     }
 
     global.PCM_DOM = {
-        LIB_VERSION: '2.5_2026-11-04',
+        LIB_VERSION: '2.6_2026-11-06',
         DEFAULT_CONFIG: assignDefined({}, DEFAULT_CONFIG),
         mergeConfig: mergeConfig,
         clearTimer: clearTimer,

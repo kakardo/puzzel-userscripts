@@ -1,12 +1,12 @@
 // @file_name = PCM_Unsaved_Form_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.8_2026-11-04
+// @version = 1.9_2026-11-06
 // @created = 2026-08-27 09:37
 
 // ==UserScript==
 // @name         PCM Unsaved Form Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.8_2026-11-04
+// @version      1.9_2026-11-06
 // @description  Snapshot-based unsaved change detection for the ticket Forms widget. Highlights every field whose value differs from the loaded state (including values typed by the Form Buttons autofill) and shows a warning text next to the Save button. When every unsaved field is a correction PCM Form Buttons made to a saved value (its orange ring), the warning reads "Corrected values, please save" in orange instead (needs lib 2.4; with an older lib the normal warning shows). Highlight colour/mode and warning texts are settings at the top. Since 1.5 the watcher engine lives in the shared library (createUnsavedWatcher), so this script only supplies the Forms zone configuration and styling; Save clicks clear this zone only.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -137,7 +137,11 @@
     warningText: WARNING_TEXT,
     warnOnLeave: WARN_ON_LEAVE,
     useWrapRing: HIGHLIGHT_MODE === 'border' || HIGHLIGHT_MODE === 'both',
-    onEvaluate: decorateWarning   // lib 2.4; an older lib simply skips it
+    onEvaluate: decorateWarning,  // lib 2.4; an older lib simply skips it
+    // lib 2.6: when PCM's form check took an unsaved value as the original
+    // (it records them again after sending an email), Save is made
+    // possible again by giving it the saved value back.
+    repairFormCheck: true
   });
 
   watcher.start();

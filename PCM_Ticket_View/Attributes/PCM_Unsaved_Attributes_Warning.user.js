@@ -1,12 +1,12 @@
 // @file_name = PCM_Unsaved_Attributes_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.5_2026-11-02
+// @version = 1.6_2026-11-06
 // @created = 2026-09-04 15:43
 
 // ==UserScript==
 // @name         PCM Unsaved Attributes Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.5_2026-11-02
+// @version      1.6_2026-11-06
 // @description  Snapshot-based unsaved change detection for the ticket Attributes widget, built on the shared library's createUnsavedWatcher engine (lib 2.0). Highlights changed fields and dropdowns (including the Chosen-based Team select, where the ring lands on the visible container) and shows a warning next to the Attributes Save button. Saving in Attributes clears only this widget's warning. Colour, mode, and text are settings at the top. Since 1.3, SELF_SAVING_BUTTONS treats a real click on a header control that persists an Attributes value by itself (Assign To Me) as a save: the baseline is rebased once the new value lands, so the field is not left marked unsaved. Since 1.5, a save pressed by PCM Assign Buttons or PCM Team Quick Select (announced with the pcm-attributes-save event) also counts as a save.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -146,7 +146,11 @@
     warningText: WARNING_TEXT,
     warnOnLeave: WARN_ON_LEAVE,
     getWrapper: getWrapper,
-    useWrapRing: HIGHLIGHT_MODE === 'border' || HIGHLIGHT_MODE === 'both'
+    useWrapRing: HIGHLIGHT_MODE === 'border' || HIGHLIGHT_MODE === 'both',
+    // lib 2.6: when PCM's form check took an unsaved value as the original
+    // (it records them again after sending an email), Save is made
+    // possible again by giving it the saved value back.
+    repairFormCheck: true
   });
 
   // A trusted click on a self-saving button is a save, not an edit. The
