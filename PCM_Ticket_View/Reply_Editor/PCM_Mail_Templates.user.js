@@ -1,13 +1,13 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 4.9_2026-11-06
+// @version = 5.2_2026-11-06
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.9_2026-11-06
+// @version      5.2_2026-11-06
 // @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the Resolve and Password menus are split into English and Svenska, the Swedish entries with Swedish names); a FollowUp menu asks the customer follow-up questions (call example, logs, local admin or IT, testing after a change), while Resolve holds the replies that resolve the ticket. A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Names always get a capital first letter in each part ("anna-lena" becomes "Anna-Lena"). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -126,16 +126,27 @@
                 'Have a great day!'
             },
             {
-                label: 'Återställ', group: 'Svenska',
+                label: 'Återställ (du)', group: 'Svenska',
                 text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel Support.\n\n' +
-                'Det verkar som att du inte kan logga in eftersom kontot har låsts efter flera misslyckade ' +
-                'inloggningsförsök.\n\n' +
-                'Vänligen återställ ditt lösenord genom att följa instruktionerna i guiden nedan:\n' +
+                'Ditt konto har låsts efter flera misslyckade inloggningsförsök, och därför går det inte ' +
+                'att logga in just nu.\n\n' +
+                'Du kan själv återställa ditt lösenord med hjälp av guiden nedan:\n' +
                 'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
-                'När du har återställt ditt lösenord kan du försöka logga in igen.\n\n' +
-                'Om du inte får e-postmeddelandet för lösenordsåterställning, vänligen kontrollera din ' +
-                'skräppost-/spam-mapp. Om problemet kvarstår är du välkommen att svara på detta e-postmeddelande ' +
-                'så hjälper vi dig vidare.\n\n' +
+                'Därefter kan du logga in som vanligt igen.\n\n' +
+                'Om mejlet för lösenordsåterställning inte dyker upp, titta gärna i din skräppost. ' +
+                'Kvarstår problemet är du välkommen att svara på det här mejlet, så hjälper vi dig vidare.\n\n' +
+                'Ha en fortsatt fin dag!'
+            },
+            {
+                label: 'Återställ (användare)', group: 'Svenska',
+                text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel Support.\n\n' +
+                'Användarens konto har låsts efter flera misslyckade inloggningsförsök, och därför går det inte ' +
+                'att logga in just nu.\n\n' +
+                'Användaren kan själv återställa sitt lösenord med hjälp av guiden nedan:\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
+                'Därefter går det att logga in som vanligt igen.\n\n' +
+                'Om mejlet för lösenordsåterställning inte dyker upp, be användaren att titta i sin skräppost. ' +
+                'Kvarstår problemet är du välkommen att svara på det här mejlet, så hjälper vi er vidare.\n\n' +
                 'Ha en fortsatt fin dag!'
             }
         ] },
