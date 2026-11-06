@@ -1,13 +1,13 @@
 // @file_name = Highlight_Same_Word.user.js
 // @author = Kardo Rostam
-// @version = 1.4_2026-11-05
+// @version = 1.5_2026-11-06
 // @created = 2026-11-04 (v1.1)
 
 // ==UserScript==
 // @name         Highlight Same Word
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-11-05
-// @description  Highlights every other place the selected word or phrase appears on the page, on any website. Select text with the mouse (or Shift and the arrow keys) and every match lights up; click elsewhere or press Escape to clear. Whole words by default; when a selected part of a word has no whole-word match, it is found inside words instead. Case-insensitive, at most 1000 hits. A thin strip along the right edge, next to the scroll bar, marks where the matches are on the whole page. Uses the browser's CSS Custom Highlight API, so the page itself is never changed. Light: runs only when you finish a selection, reads nothing else and sends nothing anywhere.
+// @version      1.5_2026-11-06
+// @description  Highlights every other place the selected word or phrase appears on the page, on any website. Select text with the mouse (or Shift and the arrow keys) and every match lights up; click elsewhere or press Escape to clear. Whole words by default; when a selected part of a word has no whole-word match, it is found inside words instead. Case-insensitive, at most 1000 hits. Text inside open shadow DOM (used by some sites for their content) is searched too. A thin strip along the right edge, next to the scroll bar, marks where the matches are on the whole page. Uses the browser's CSS Custom Highlight API, so the page itself is never changed. Light: runs only when you finish a selection, reads nothing else and sends nothing anywhere.
 // @author       Kardo Rostam
 // @match        *://*/*
 // @run-at       document-idle
@@ -144,26 +144,58 @@
     }
   };
 
-  // One pass over the page's text, adding a range per match; returns the
-  // number of matches, bounded by MAX_HITS.
+  // SHADOW DOM
+  // Some sites keep their content in shadow DOM, a sealed-off part of the
+  // page that a normal text walk does not enter. Open shadow roots are
+  // searched too (closed ones cannot be read), and since page styles do
+  // not reach inside them, each gets the highlight colour once.
+  const styledRoots = new WeakSet();
+
+  const searchRoots = () => {
+    const roots = [document.body];
+    for (let i = 0; i < roots.length; i += 1) {
+      roots[i].querySelectorAll('*').forEach((el) => {
+        if (el.shadowRoot) roots.push(el.shadowRoot);
+      });
+    }
+    return roots;
+  };
+
+  const styleRoot = (root) => {
+    if (root === document.body || styledRoots.has(root)) return;
+    styledRoots.add(root);
+    const inner = document.createElement('style');
+    inner.textContent = style.textContent;
+    root.appendChild(inner);
+  };
+
+  // One pass over the page's text (and its open shadow roots), adding a
+  // range per match; returns the number of matches, bounded by MAX_HITS.
   const highlightAll = (re, minLength) => {
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, filter);
     let count = 0;
-    let node;
+    for (const root of searchRoots()) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, filter);
+      let node;
+      let found = false;
+      while ((node = walker.nextNode())) {
+        const value = node.nodeValue;
+        if (value.length < minLength) continue;
 
-    outer: while ((node = walker.nextNode())) {
-      const value = node.nodeValue;
-      if (value.length < minLength) continue;
-
-      re.lastIndex = 0;
-      let m;
-      while ((m = re.exec(value))) {
-        const r = new Range();
-        r.setStart(node, m.index);
-        r.setEnd(node, m.index + m[0].length);
-        hl.add(r);
-        if (++count >= MAX_HITS) break outer;
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(value))) {
+          const r = new Range();
+          r.setStart(node, m.index);
+          r.setEnd(node, m.index + m[0].length);
+          hl.add(r);
+          found = true;
+          if (++count >= MAX_HITS) {
+            styleRoot(root);
+            return count;
+          }
+        }
       }
+      if (found) styleRoot(root);
     }
     return count;
   };
