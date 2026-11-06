@@ -1,13 +1,13 @@
 // @file_name = PCM_Subscription_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.8_2026-10-29
+// @version = 1.9_2026-11-06
 // @created = 2026-09-02 14:17
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The partner name lives in localStorage (pcm-partner-name), never in code.
 
 // ==UserScript==
 // @name         PCM Subscription Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.8_2026-10-29
+// @version      1.9_2026-11-06
 // @description  One-press handling of partner telephony subscription tickets, one button per product (PSI and PCC), each with its own colour and mail template. Both fill the five Change form fields (invoiceable hours, soundfiles, out of hours, to be invoiced, and Invoice Information = the ticket title) and append their confirmation mail to the reply, with the user's name, id, email, user group, and profile team resolved from the first mail in the ticket (iframes included). Values that only exist after configuration stay visible as placeholders. Since 1.5 a label present but blank in the mail is reported as empty, by name, on the button and in the console, instead of silently taking the following line as its value. Partner details are read from localStorage, keeping this file free of customer information. Event-driven injection behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -402,6 +402,11 @@
     function start() {
         D.ensureStyleTag(STYLE_ID, CSS);
         ensureButtons();
+
+        // PCM Mail Templates announces its bar the moment it is built, so
+        // the buttons join it at once. The debounced scan below stays as
+        // the fallback (no Mail Templates: a bar of its own).
+        document.addEventListener('pcm-mail-templates-bar', ensureButtons);
 
         var root = document.getElementById('content') || document.body;
         var observer = new MutationObserver(function (mutations) {

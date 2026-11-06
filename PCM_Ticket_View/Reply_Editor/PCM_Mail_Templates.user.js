@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 4.7_2026-11-06
+// @version = 4.9_2026-11-06
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.7_2026-11-06
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the FollowUp and Password menus are split into English and Svenska). A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Names always get a capital first letter in each part ("anna-lena" becomes "Anna-Lena"). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      4.9_2026-11-06
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the Resolve and Password menus are split into English and Svenska, the Swedish entries with Swedish names); a FollowUp menu asks the customer follow-up questions (call example, logs, local admin or IT, testing after a change), while Resolve holds the replies that resolve the ticket. A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Names always get a capital first letter in each part ("anna-lena" becomes "Anna-Lena"). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -77,8 +77,8 @@
         password: '#ad1457',  // locked accounts and password resets
         handover: '#7b2cbf',  // incident handover and assigning
         evidence: '#e65100',  // asking for call examples and logs
-        checkin: '#00838f',   // check-in questions that keep the ticket going
-        closing: '#2f7d2f',   // no-reply and partner replies that close it
+        checkin: '#00838f',   // follow-up questions that keep the ticket going
+        closing: '#2f7d2f',   // no-reply and partner replies that resolve it
         priority: '#3949ab'   // priority change notes
     };
 
@@ -126,7 +126,7 @@
                 'Have a great day!'
             },
             {
-                label: 'Reset', group: 'Svenska',
+                label: 'Återställ', group: 'Svenska',
                 text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel Support.\n\n' +
                 'Det verkar som att du inte kan logga in eftersom kontot har låsts efter flera misslyckade ' +
                 'inloggningsförsök.\n\n' +
@@ -214,9 +214,9 @@
             { label: 'Lowest (P5)', text: 'Priority change: {priorityFrom} to {priority:Lowest}' },
             { label: 'Junk (P6)', text: 'Priority change: {priorityFrom} to {priority:Junk}' }
         ] },
-        // A dropdown: check-in questions. Unlike FollowUp, these ask the
+        // A dropdown: follow-up questions. Unlike Resolve, these ask the
         // customer something and keep the ticket going.
-        { label: 'Check in', color: COLORS.checkin, items: [
+        { label: 'FollowUp', color: COLORS.checkin, items: [
             {
                 label: 'General',
                 text: 'Hello {firstName},\n\nI just wanted to check in and see how things are going. Is everything ' +
@@ -266,9 +266,9 @@
                 'the change? I would love to hear whether it is working for you now.'
             }
         ] },
-        // A dropdown: own templates and PCM templates mixed, in the order
-        // they are used (close without reply, hand to partner).
-        { label: 'FollowUp', color: COLORS.closing, items: [
+        // A dropdown: replies that resolve the ticket (no reply from the
+        // customer, or handed to their partner), in English and Swedish.
+        { label: 'Resolve', color: COLORS.closing, items: [
             // Were PCM's own templates 8495 and 8448, which greet with the
             // full name; the same texts as own templates, by first name.
             {
@@ -279,7 +279,7 @@
                 '5 working days and it will automatically reopen.'
             },
             {
-                label: 'No reply', group: 'Svenska',
+                label: 'Inget svar', group: 'Svenska',
                 text: 'Hej {firstName},\n\nEftersom vi inte har hört från er sedan vårt senaste svar, kommer vi att sätta ' +
                 'detta ärende som löst. Om du behöver ytterligare hjälp med detta fall, vänligen svara på detta ' +
                 'meddelande inom 5 arbetsdagar så öppnas automatiskt igen.'
@@ -880,6 +880,9 @@
         });
         bar.appendChild(makeFillButton(container));
         container.parentNode.insertBefore(bar, container);
+        // Announced, so scripts that join this bar (PCM Subscription
+        // Buttons) add their buttons in the same moment instead of later.
+        document.dispatchEvent(new CustomEvent('pcm-mail-templates-bar', { detail: { container: container } }));
     }
 
     // Page translation (Chrome/Edge) rewrites text nodes as they change.
