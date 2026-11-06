@@ -1,13 +1,13 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 4.4_2026-11-04
+// @version = 4.7_2026-11-06
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.4_2026-11-04
+// @version      4.7_2026-11-06
 // @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the FollowUp and Password menus are split into English and Svenska). A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Names always get a capital first letter in each part ("anna-lena" becomes "Anna-Lena"). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -77,7 +77,8 @@
         password: '#ad1457',  // locked accounts and password resets
         handover: '#7b2cbf',  // incident handover and assigning
         evidence: '#e65100',  // asking for call examples and logs
-        closing: '#2f7d2f',   // follow-up, no-reply and partner replies
+        checkin: '#00838f',   // check-in questions that keep the ticket going
+        closing: '#2f7d2f',   // no-reply and partner replies that close it
         priority: '#3949ab'   // priority change notes
     };
 
@@ -213,10 +214,61 @@
             { label: 'Lowest (P5)', text: 'Priority change: {priorityFrom} to {priority:Lowest}' },
             { label: 'Junk (P6)', text: 'Priority change: {priorityFrom} to {priority:Junk}' }
         ] },
+        // A dropdown: check-in questions. Unlike FollowUp, these ask the
+        // customer something and keep the ticket going.
+        { label: 'Check in', color: COLORS.checkin, items: [
+            {
+                label: 'General',
+                text: 'Hello {firstName},\n\nI just wanted to check in and see how things are going. Is everything ' +
+                'working as it should now, or is there anything else I can help you with?\n\n'
+            },
+            {
+                label: 'Call example',
+                text: 'Hello {firstName},\n\nI just wanted to follow up on this. Have you managed to find a call example? ' +
+                'All I need is the caller\'s number and roughly when the call happened. If you can find the call in ' +
+                'the archive in Puzzel Admin, the "Call ID" and "Session ID" are even better, as they take me straight ' +
+                'to the right logs.\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=498\n\n' +
+                'As soon as I have it, I will carry on looking into this.'
+            },
+            {
+                label: 'Logs',
+                text: 'Hello {firstName},\n\nI just wanted to follow up on this. Have you had a chance to capture the ' +
+                'browser console logs? They show me what is happening on your side, and the guide below walks you ' +
+                'through it step by step.\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253903\n\n' +
+                'As soon as I have them, I will carry on looking into this.'
+            },
+            {
+                label: 'Call example + Logs',
+                text: 'Hello {firstName},\n\nI just wanted to follow up on this. To carry on, I still need two things ' +
+                'from you:\n' +
+                '- A call example: the caller\'s number and roughly when the call happened, or the "Call ID" and ' +
+                '"Session ID" from the archive in Puzzel Admin.\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=498\n' +
+                '- Browser console logs from a browser where the issue happens.\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253903\n\n' +
+                'As soon as I have them, I will take it from there.'
+            },
+            {
+                label: 'Local admin',
+                text: 'Hello {firstName},\n\nI just wanted to check in. Have you had a chance to speak with your local ' +
+                'administrator about this? They manage these settings for your organisation, so they are the best ' +
+                'person to help with it.\n\nIf they need anything from us, they are very welcome to get in touch.'
+            },
+            {
+                label: 'Local IT',
+                text: 'Hello {firstName},\n\nI just wanted to check in. Have you had a chance to speak with your local ' +
+                'IT team about this? They look after your network, computers and browsers, so they are the best ' +
+                'people to help with it.\n\nIf they need anything from us, they are very welcome to get in touch.'
+            },
+            {
+                label: 'Test after change',
+                text: 'Hello {firstName},\n\nI just wanted to check in. Have you had a chance to try again since we made ' +
+                'the change? I would love to hear whether it is working for you now.'
+            }
+        ] },
         // A dropdown: own templates and PCM templates mixed, in the order
-        // they are used (check in, close without reply, hand to partner).
+        // they are used (close without reply, hand to partner).
         { label: 'FollowUp', color: COLORS.closing, items: [
-            { label: 'Check in', group: 'English', text: 'Hello {firstName},\n\nJust checking in.\n\n' },
             // Were PCM's own templates 8495 and 8448, which greet with the
             // full name; the same texts as own templates, by first name.
             {
