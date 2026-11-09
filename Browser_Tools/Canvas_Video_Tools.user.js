@@ -1,6 +1,6 @@
 // @file_name = Canvas_Video_Tools.user.js
 // @author = Kardo Rostam
-// @version = 2.0_2026-11-09
+// @version = 2.1_2026-11-09
 // @created = 2026-11-09 10:29
 // @note = Named Canvas_Video_New_Tab until 1.2; renamed in 1.3 when the download button was added.
 // @note = run-at document-start on purpose: a tab opened by the buttons is dark as early as possible while it passes through Canvas's and Kaltura's pages.
@@ -9,8 +9,8 @@
 // ==UserScript==
 // @name         Canvas Video Tools
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.0_2026-11-09
-// @description  Adds two small text buttons under every video embedded in a Canvas page (videos from an external tool such as Kaltura, shown in a frame): "Open video in new tab" (soft blue, at the video's left edge) and "Download video" (soft yellow, at its right edge), right under the picture. Both open the frame's own address in your logged-in session; on Kaltura's page (play.canvas.du.se) the script then takes the video file (the MP4 the player has). Open: the tab switches to the file, which the browser plays filling the tab (the video is scaled to the window, also when the file is small); when the player has no file, the player is sized to the window instead (16:9, centred). Download: the file is downloaded and the extra tab closes again. The video player embedded in the Canvas page reports its file address to the page, so the buttons open or download the file directly, without passing through Canvas's and Kaltura's pages; a file address is also remembered for 6 hours (Tampermonkey storage). Only when no address is known yet does a button's tab go through those pages, kept dark on the way. Opened any other way, or inside Canvas's frame, Kaltura's page is left as it is. No polling on Canvas: a scan when the page is ready and one debounced MutationObserver on the page content.
+// @version      2.1_2026-11-09
+// @description  Adds two small text buttons under every video embedded in a Canvas page (videos from an external tool such as Kaltura, shown in a frame): "Open video in new tab" (soft blue, at the video's left edge) and "Download video" (soft yellow, at its right edge), right under the picture. Both open the frame's own address in your logged-in session; on Kaltura's page (play.canvas.du.se) the script then takes the video file (the MP4 the player has). Open: the tab switches to the file, which the browser plays filling the tab (the video is scaled to the window, also when the file is small); when the player has no file, the player is sized to the window instead (16:9, centred). Download: the file is downloaded and the extra tab closes again. The video player embedded in the Canvas page reports its file address to the page, so the buttons open or download the file directly, without passing through Canvas's and Kaltura's pages; a file address is also remembered for 30 minutes (Tampermonkey storage), since its access key expires. Only when no address is known yet does a button's tab go through those pages, kept dark on the way. Opened any other way, or inside Canvas's frame, Kaltura's page is left as it is. No polling on Canvas: a scan when the page is ready and one debounced MutationObserver on the page content.
 // @author       Kardo Rostam
 // @match        https://canvas.du.se/*
 // @match        https://*.instructure.com/*
@@ -37,7 +37,7 @@
   const DOWNLOAD_COLOURS = ['#fff3cf', '#f0d88a', '#6b5310'];  // butter yellow
   const GAP_BELOW_VIDEO = 6;       // px between the picture and the buttons
   const GAP_BEFORE_NEXT = 22;      // px between the buttons and the next video's picture
-  const REMEMBER_HOURS = 6;        // the file address carries an access key that expires
+  const REMEMBER_MINUTES = 30;     // the file address carries an access key that expires soon
 
   // INTERNAL SETTINGS
   // The tabs the buttons open are named "<kind>-<time>|<video key>", so the
@@ -91,13 +91,13 @@
 
   const remembered = (key) => {
     const entry = key && cache()[key];
-    return entry && Date.now() - entry.t < REMEMBER_HOURS * 3600000 ? entry.url : '';
+    return entry && Date.now() - entry.t < REMEMBER_MINUTES * 60000 ? entry.url : '';
   };
 
   const remember = (key, url) => {
     if (!key) return;
     const all = cache();
-    const limit = Date.now() - REMEMBER_HOURS * 3600000;
+    const limit = Date.now() - REMEMBER_MINUTES * 60000;
     Object.keys(all).forEach((k) => { if (!all[k] || all[k].t < limit) delete all[k]; });
     all[key] = { url: url, t: Date.now() };
     try { GM_setValue(CACHE_KEY, all); } catch (_) { /* remembering is a courtesy */ }
@@ -289,13 +289,18 @@
   const DONE_FLAG = 'kkVideoTab';
   const SCAN_DELAY_MS = 200;
 
+  // Addresses reported by this page's players (fresh keys), by video key.
+  const fresh = {};
+
   // File addresses reported by the embedded players: a message from
   // Kaltura's origin is matched to the video frame it came from.
   window.addEventListener('message', (event) => {
     const url = event.data && event.data[MESSAGE_KEY];
     if (typeof url !== 'string' || !KALTURA_ORIGIN_RE.test(event.origin)) return;
     const frame = Array.from(document.querySelectorAll(VIDEO_FRAME)).find((f) => f.contentWindow === event.source);
-    if (frame) remember(keyOf(frame.src), url);
+    if (!frame) return;
+    fresh[keyOf(frame.src)] = url;
+    remember(keyOf(frame.src), url);
   });
 
   const keyOf = (src) => {
@@ -316,7 +321,9 @@
     link.addEventListener('click', (event) => {
       const key = keyOf(link.href);
       const name = kindTab + '-' + Date.now() + '|' + key;
-      const file = remembered(key);
+      // This page's own report first (its key is fresh), then a remembered
+      // address under REMEMBER_MINUTES old; otherwise the safe route.
+      const file = fresh[key] || remembered(key);
       if (kindTab === OPEN_TAB) {
         if (file) {
           event.preventDefault();
