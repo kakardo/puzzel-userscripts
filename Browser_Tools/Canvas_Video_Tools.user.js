@@ -1,6 +1,6 @@
 // @file_name = Canvas_Video_Tools.user.js
 // @author = Kardo Rostam
-// @version = 1.8_2026-11-09
+// @version = 2.0_2026-11-09
 // @created = 2026-11-09 10:29
 // @note = Named Canvas_Video_New_Tab until 1.2; renamed in 1.3 when the download button was added.
 // @note = run-at document-start on purpose: a tab opened by the buttons is dark as early as possible while it passes through Canvas's and Kaltura's pages.
@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         Canvas Video Tools
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.8_2026-11-09
+// @version      2.0_2026-11-09
 // @description  Adds two small text buttons under every video embedded in a Canvas page (videos from an external tool such as Kaltura, shown in a frame): "Open video in new tab" (soft blue, at the video's left edge) and "Download video" (soft yellow, at its right edge), right under the picture. Both open the frame's own address in your logged-in session; on Kaltura's page (play.canvas.du.se) the script then takes the video file (the MP4 the player has). Open: the tab switches to the file, which the browser plays filling the tab (the video is scaled to the window, also when the file is small); when the player has no file, the player is sized to the window instead (16:9, centred). Download: the file is downloaded and the extra tab closes again. The video player embedded in the Canvas page reports its file address to the page, so the buttons open or download the file directly, without passing through Canvas's and Kaltura's pages; a file address is also remembered for 6 hours (Tampermonkey storage). Only when no address is known yet does a button's tab go through those pages, kept dark on the way. Opened any other way, or inside Canvas's frame, Kaltura's page is left as it is. No polling on Canvas: a scan when the page is ready and one debounced MutationObserver on the page content.
 // @author       Kardo Rostam
 // @match        https://canvas.du.se/*
@@ -36,6 +36,7 @@
   const OPEN_COLOURS = ['#e3f0ff', '#b7d4f7', '#1f4f8f'];      // sky blue
   const DOWNLOAD_COLOURS = ['#fff3cf', '#f0d88a', '#6b5310'];  // butter yellow
   const GAP_BELOW_VIDEO = 6;       // px between the picture and the buttons
+  const GAP_BEFORE_NEXT = 22;      // px between the buttons and the next video's picture
   const REMEMBER_HOURS = 6;        // the file address carries an access key that expires
 
   // INTERNAL SETTINGS
@@ -46,7 +47,7 @@
   const OPEN_TAB = 'kkCanvasVideoOnly';
   const DOWNLOAD_TAB = 'kkCanvasVideoDownload';
   const CACHE_KEY = 'kkCanvasVideoFiles';
-  const SOURCE_TRIES = 30;          // up to 30 x 300 ms for the player
+  const SOURCE_TRIES = 30;          // up to 30 x 300 ms for Kaltura's player to exist
   const SOURCE_INTERVAL_MS = 300;
   const CLOSE_AFTER_MS = 4000;      // a download tab, once the download has started
   const PAGE = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
@@ -113,11 +114,19 @@
   }
 
   // The first player's progressive (MP4) source, from Kaltura's player.
-  const fileUrl = () => {
+  const currentPlayer = () => {
     try {
       const kp = PAGE.KalturaPlayer;
       const players = kp && typeof kp.getPlayers === 'function' ? kp.getPlayers() : null;
-      const player = players && Object.values(players)[0];
+      return (players && Object.values(players)[0]) || null;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const fileUrl = () => {
+    try {
+      const player = currentPlayer();
       const sources = player && (player.sources || (player.config && player.config.sources));
       const progressive = sources && sources.progressive;
       const mp4 = progressive && Array.from(progressive).find((s) => s && s.url && /mp4/i.test(s.mimetype || s.url));
@@ -125,6 +134,51 @@
     } catch (_) {
       return '';
     }
+  };
+
+  // Waits for the file address: short checks only until Kaltura's player
+  // exists, then one look; if the address is not known yet, the player's
+  // own "media chosen / loaded" announcements trigger the next looks.
+  // Stops at the first address, or after FILE_WAIT_MS.
+  const PLAYER_EVENTS = ['sourceselected', 'changesourceended', 'loadedmetadata'];
+  const FILE_WAIT_MS = 15000;
+
+  const whenFile = (onFound, onGiveUp) => {
+    let done = false;
+    let player = null;
+    let tries = 0;
+    const check = () => {
+      if (done) return;
+      const url = fileUrl();
+      if (!url) return;
+      finish();
+      onFound(url);
+    };
+    const finish = () => {
+      done = true;
+      clearTimeout(giveUp);
+      if (player && typeof player.removeEventListener === 'function') {
+        PLAYER_EVENTS.forEach((name) => { try { player.removeEventListener(name, check); } catch (_) { /* gone */ } });
+      }
+    };
+    const giveUp = setTimeout(() => {
+      if (done) return;
+      finish();
+      if (onGiveUp) onGiveUp();
+    }, FILE_WAIT_MS);
+    (function waitForPlayer() {
+      if (done) return;
+      player = currentPlayer();
+      if (player) {
+        check();
+        if (!done && typeof player.addEventListener === 'function') {
+          PLAYER_EVENTS.forEach((name) => { try { player.addEventListener(name, check); } catch (_) { /* old player */ } });
+        }
+        return;
+      }
+      tries += 1;
+      if (tries < SOURCE_TRIES) setTimeout(waitForPlayer, SOURCE_INTERVAL_MS);
+    })();
   };
 
   // Canvas's own address (the page the embedded player reports to).
@@ -142,18 +196,11 @@
       let origin = '';
       try { origin = document.referrer ? new URL(document.referrer).origin : ''; } catch (_) { origin = ''; }
       if (!CANVAS_ORIGIN_RE.test(origin)) return;
-      let frameTries = 0;
-      (function report() {
-        const url = fileUrl();
-        if (url) {
-          const message = {};
-          message[MESSAGE_KEY] = url;
-          try { window.parent.postMessage(message, origin); } catch (_) { /* nothing to do */ }
-          return;
-        }
-        frameTries += 1;
-        if (frameTries < SOURCE_TRIES) setTimeout(report, SOURCE_INTERVAL_MS);
-      })();
+      whenFile((url) => {
+        const message = {};
+        message[MESSAGE_KEY] = url;
+        try { window.parent.postMessage(message, origin); } catch (_) { /* nothing to do */ }
+      });
       return;
     }
 
@@ -213,24 +260,15 @@
       });
     };
 
-    let tries = 0;
-    (function waitForSource() {
-      const url = fileUrl();
-      if (url) {
-        remember(videoKey, url);
-        window.name = '';
-        if (forDownload) download(url);
-        else location.replace(url);
-        return;
-      }
-      tries += 1;
-      if (tries < SOURCE_TRIES) {
-        setTimeout(waitForSource, SOURCE_INTERVAL_MS);
-      } else {
-        window.name = '';
-        showPage();
-      }
-    })();
+    whenFile((url) => {
+      remember(videoKey, url);
+      window.name = '';
+      if (forDownload) download(url);
+      else location.replace(url);
+    }, () => {
+      window.name = '';
+      showPage();
+    });
     return;
   }
 
@@ -304,7 +342,14 @@
   // video and right under its picture (the frame is taller than the 16:9
   // picture Kaltura centres in it, so the row moves up by the empty strip).
   function scan() {
-    document.querySelectorAll(VIDEO_FRAME).forEach((frame) => {
+    const frames = Array.from(document.querySelectorAll(VIDEO_FRAME));
+    // The empty strip above and below the 16:9 picture Kaltura centres in
+    // a frame that is taller than the picture.
+    const stripOf = (f) => {
+      const r = f.getBoundingClientRect();
+      return Math.max(0, Math.round((r.height - r.width / VIDEO_RATIO) / 2));
+    };
+    frames.forEach((frame, index) => {
       const src = frame.src;
       if (!src || src === 'about:blank') return;
       let box = frame.nextElementSibling && frame.nextElementSibling.classList.contains(BOX_CLASS)
@@ -325,9 +370,13 @@
       const rect = frame.getBoundingClientRect();
       const width = Math.round(rect.width);
       if (width && box.style.width !== width + 'px') box.style.width = width + 'px';
-      const strip = Math.max(0, Math.round((rect.height - rect.width / VIDEO_RATIO) / 2));
-      const top = (GAP_BELOW_VIDEO - strip) + 'px';
+      const top = (GAP_BELOW_VIDEO - stripOf(frame)) + 'px';
       if (width && box.style.marginTop !== top) box.style.marginTop = top;
+      // The next video's strip above its picture is taken off the space
+      // below this row, so every gap between videos looks the same.
+      const next = frames[index + 1];
+      const bottom = (GAP_BEFORE_NEXT - (next ? stripOf(next) : 0)) + 'px';
+      if (width && box.style.marginBottom !== bottom) box.style.marginBottom = bottom;
     });
   }
 
