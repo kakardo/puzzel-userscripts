@@ -1,13 +1,13 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 5.5_2026-11-06
+// @version = 5.6_2026-11-09
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      5.5_2026-11-06
+// @version      5.6_2026-11-09
 // @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the Resolve and Password menus are split into English and Svenska, the Swedish entries with Swedish names); a FollowUp menu asks the customer follow-up questions (call example, logs, local admin or IT, testing after a change), while Resolve holds the replies that resolve the ticket. A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Names always get a capital first letter in each part ("anna-lena" becomes "Anna-Lena"). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -273,6 +273,26 @@
                 '- Browser console logs from a browser where the issue happens.\n' +
                 'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253903\n\n' +
                 'As soon as I have them, I will take it from there.'
+            },
+            {
+                label: 'Softphone + Logs',
+                text: 'Hello {firstName},\n\nI just wanted to follow up on this. Have you had a chance to go through ' +
+                'the softphone troubleshooting guide? It often solves the problem on its own.\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=9355\n\n' +
+                'If it still does not work afterwards, I will need the browser console logs from a browser where ' +
+                'the issue happens. The guide below walks you through it.\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253903\n\n' +
+                'As soon as I hear back from you, I will carry on looking into this.'
+            },
+            {
+                label: 'Softphone + Call example',
+                text: 'Hello {firstName},\n\nI just wanted to follow up on this. Have you had a chance to go through ' +
+                'the softphone troubleshooting guide? It often solves the problem on its own.\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=9355\n\n' +
+                'If it still does not work afterwards, I will need a call example: the caller\'s number and roughly ' +
+                'when the call happened, or the "Call ID" and "Session ID" from the archive in Puzzel Admin.\n' +
+                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=498\n\n' +
+                'As soon as I hear back from you, I will carry on looking into this.'
             },
             {
                 label: 'Local admin',
