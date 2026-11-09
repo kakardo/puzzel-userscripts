@@ -68,6 +68,7 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
 - `Browser_Tools/`: general browser tools for use outside work too, on any website or on a specific one such as YouTube. Same rules as the other scripts:
   - `Highlight_Same_Word` (any website): highlights every other place the selected word or phrase appears on the page (whole words first, part of words when none match), with marks beside the scroll bar showing where the matches are on the whole page; Escape clears. Uses the CSS Custom Highlight API, so the page itself is never changed. Standalone, runs only when a selection is finished.
   - `YouTube_Playlist_Menu` (www.youtube.com): makes the "Save to..." playlist menu usable with many playlists: compact rows, a filter box (Enter toggles the first match) and a star per playlist that keeps favourites at the top (saved in Tampermonkey storage). Standalone, one observer on YouTube's popup container.
+  - `Canvas_Video_New_Tab` (Canvas, for example canvas.du.se): an "Open video in new tab" text button under every video embedded in a Canvas page, opening only the video player in a new tab. Standalone, a plain link per video.
 
 ## Design logic: one shared DOM library per application, not one per folder
 
@@ -131,6 +132,7 @@ Current status:
 | PCC_Agent_Highlighter | No | Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines |
 | Highlight_Same_Word | No | Any website, not PCM; one listener for mouse and one for keys, work only when a selection is finished |
 | YouTube_Playlist_Menu | No | YouTube, not PCM; one MutationObserver on the popup container, writes only when something differs |
+| Canvas_Video_New_Tab | No | Canvas, not PCM; one debounced MutationObserver on the page content, a plain link per video |
 | PCC_Request_Alert | No | Different app. Watches one status element and adds one main menu entry; nothing to share |
 | PCC_Softphone_Status_Highlight | No | Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection |
 | Geckoboard_Full_Numbers | No | Different app (Geckoboard). Pure CSS, a single style tag |
