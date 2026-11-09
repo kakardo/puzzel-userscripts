@@ -1,16 +1,18 @@
 // @file_name = Canvas_Video_New_Tab.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-11-09
+// @version = 1.2_2026-11-09
 // @created = 2026-11-09 10:29
 
 // ==UserScript==
 // @name         Canvas Video New Tab
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-11-09
-// @description  Adds a small "Open video in new tab" text button under every video embedded in a Canvas page (videos from an external tool such as Kaltura, shown in a frame). The button opens the frame's own address, which shows only the video player, in a new tab in your logged-in session, so the video gets the whole window. Nothing is fetched; the button is a plain link. Event-driven: a scan when the page is ready and one MutationObserver on the page content (Canvas can add content later), debounced, no polling.
+// @version      1.2_2026-11-09
+// @description  Adds a small "Open video in new tab" text button under every video embedded in a Canvas page (videos from an external tool such as Kaltura, shown in a frame). The button opens the frame's own address, which shows only the video player, in a new tab in your logged-in session, so the video gets the whole window. There (Kaltura's page, play.canvas.du.se) the tab switches to the video file itself (the MP4 the player has), which the browser plays filling the tab; when the player has no file, the player is sized to the window instead (16:9, centred). Opened any other way, or inside Canvas's frame, Kaltura's page is left as it is. Nothing is fetched; the button is a plain link. Event-driven: a scan when the page is ready and one MutationObserver on the page content (Canvas can add content later), debounced, no polling.
 // @author       Kardo Rostam
 // @match        https://canvas.du.se/*
 // @match        https://*.instructure.com/*
+// @match        https://play.canvas.du.se/*
+// @match        https://*.kaf.kaltura.com/*
 // @run-at       document-idle
 // @noframes
 // @grant        none
@@ -23,6 +25,73 @@
 
   // USER SETTINGS
   const BUTTON_TEXT = 'Open video in new tab ↗';
+  const VIDEO_RATIO = 16 / 9;      // shape the player keeps in its own tab
+
+  // The tab the button opens is named, so Kaltura's page can tell it was
+  // opened as a "video only" tab (a window keeps its name across sites).
+  const TAB_NAME = 'kkCanvasVideoOnly';
+  const SOURCE_TRIES = 30;          // up to 30 x 300 ms for the player
+  const SOURCE_INTERVAL_MS = 300;
+
+  // KALTURA'S PAGE (the video in its own tab)
+  // Opened from the button, the tab switches to the video file itself
+  // (the MP4 address the player has, with its access key): the browser
+  // plays a file on its own, filling the tab and following the window.
+  // Without a file (streaming only) or on any error the page stays, with
+  // the player sized to the window by CSS as a fallback. Opened any other
+  // way, or inside Canvas's frame, the page is left as it is.
+  if (/\/browseandembed\//.test(location.pathname) || document.getElementById('kplayer')) {
+    if (window.top !== window) return;
+
+    // Fallback: the player as large as the window allows, centred. The
+    // ids are doubled for weight over the page's own fixed size.
+    const fit = document.createElement('style');
+    fit.textContent = [
+      'html, body, #contentWrap, #wrap, #content, #entryMedia, #mediaContainer, #wrapper, #player {',
+      '  width: 100% !important; height: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important;',
+      '}',
+      'html body #player#player { position: relative !important; }',
+      'html body #player#player #kplayer#kplayer {',
+      '  position: absolute !important; inset: 0 !important; margin: auto !important; max-width: none !important; max-height: none !important;',
+      '  width: min(100vw, calc(100vh * ' + VIDEO_RATIO + ')) !important;',
+      '  height: min(100vh, calc(100vw / ' + VIDEO_RATIO + ')) !important;',
+      '}',
+      'html body #kplayer#kplayer .kaltura-player-container,',
+      'html body #kplayer#kplayer .playkit-player { width: 100% !important; height: 100% !important; }'
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(fit);
+
+    if (window.name.indexOf(TAB_NAME) !== 0) return;
+
+    // The first player's progressive (MP4) source, from Kaltura's player.
+    const fileUrl = () => {
+      try {
+        const kp = window.KalturaPlayer;
+        const players = kp && typeof kp.getPlayers === 'function' ? kp.getPlayers() : null;
+        const player = players && Object.values(players)[0];
+        const sources = player && (player.sources || (player.config && player.config.sources));
+        const progressive = sources && sources.progressive;
+        const mp4 = progressive && progressive.find((s) => s && s.url && /mp4/i.test(s.mimetype || s.url));
+        return mp4 ? mp4.url : '';
+      } catch (_) {
+        return '';
+      }
+    };
+
+    let tries = 0;
+    (function waitForSource() {
+      const url = fileUrl();
+      if (url) {
+        window.name = '';
+        location.replace(url);
+        return;
+      }
+      tries += 1;
+      if (tries < SOURCE_TRIES) setTimeout(waitForSource, SOURCE_INTERVAL_MS);
+      else window.name = '';
+    })();
+    return;
+  }
 
   // INTERNAL SETTINGS
   // From Canvas: a video added with an external tool (Kaltura and the
@@ -66,8 +135,10 @@
         wrap.style.display = 'block';
         link = document.createElement('a');
         link.className = LINK_CLASS;
-        link.target = '_blank';
-        link.rel = 'noopener';
+        link.target = TAB_NAME;
+        // A name of its own per click, so a second video gets its own tab;
+        // no "noopener", which drops the name in some browsers.
+        link.addEventListener('click', () => { link.target = TAB_NAME + '-' + Date.now(); });
         link.textContent = BUTTON_TEXT;
         link.title = 'Open only the video player in a new tab';
         wrap.appendChild(link);
