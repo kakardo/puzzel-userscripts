@@ -1,14 +1,14 @@
 // @file_name = Canvas_Video_Tools.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-11-09
+// @version = 1.4_2026-11-09
 // @created = 2026-11-09 10:29
 // @note = Named Canvas_Video_New_Tab until 1.2; renamed in 1.3 when the download button was added.
 
 // ==UserScript==
 // @name         Canvas Video Tools
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-11-09
-// @description  Adds two small text buttons under every video embedded in a Canvas page (videos from an external tool such as Kaltura, shown in a frame): "Open video in new tab" and "Download video". Both open the frame's own address in your logged-in session; on Kaltura's page (play.canvas.du.se) the script then takes the video file (the MP4 the player has). Open: the tab switches to the file, which the browser plays filling the tab; when the player has no file, the player is sized to the window instead (16:9, centred). Download: the file is downloaded and the extra tab closes again. Opened any other way, or inside Canvas's frame, Kaltura's page is left as it is. No polling on Canvas: a scan when the page is ready and one debounced MutationObserver on the page content.
+// @version      1.4_2026-11-09
+// @description  Adds two small text buttons under every video embedded in a Canvas page (videos from an external tool such as Kaltura, shown in a frame): "Open video in new tab" (blue, at the video's left edge) and "Download video" (yellow, at its right edge). Both open the frame's own address in your logged-in session; on Kaltura's page (play.canvas.du.se) the script then takes the video file (the MP4 the player has). Open: the tab switches to the file, which the browser plays filling the tab; when the player has no file, the player is sized to the window instead (16:9, centred). Download: the file is downloaded and the extra tab closes again. Opened any other way, or inside Canvas's frame, Kaltura's page is left as it is. No polling on Canvas: a scan when the page is ready and one debounced MutationObserver on the page content.
 // @author       Kardo Rostam
 // @match        https://canvas.du.se/*
 // @match        https://*.instructure.com/*
@@ -28,6 +28,8 @@
   const OPEN_TEXT = 'Open video in new tab ↗';
   const DOWNLOAD_TEXT = 'Download video ⬇';
   const VIDEO_RATIO = 16 / 9;      // shape the player keeps in its own tab
+  const OPEN_COLOUR = '#1e5bd8';   // blue, white text
+  const DOWNLOAD_COLOUR = '#f5c518'; // yellow, dark text
 
   // The tabs the buttons open are named, so Kaltura's page can tell what
   // they were opened for (a window keeps its name across sites).
@@ -142,13 +144,16 @@
 
   const style = document.createElement('style');
   style.textContent = [
-    '.' + BOX_CLASS + ' { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }',
+    // As wide as the video (set per frame below): open at the left edge,
+    // download at the right edge.
+    '.' + BOX_CLASS + ' { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; max-width: 100%; margin: 4px 0 10px; }',
     '.' + LINK_CLASS + ' {',
-    '  display: inline-block; padding: 3px 10px;',
-    '  border: 1px solid currentColor; border-radius: 4px;',
-    '  font-size: 13px; line-height: 1.4; text-decoration: none !important; cursor: pointer;',
+    '  display: inline-block; padding: 3px 10px; border-radius: 4px;',
+    '  font-size: 13px; font-weight: 600; line-height: 1.4; text-decoration: none !important; cursor: pointer;',
     '}',
-    '.' + LINK_CLASS + ':hover { background: rgba(0,0,0,.05); }'
+    '.' + LINK_CLASS + '.kk-open { background: ' + OPEN_COLOUR + '; border: 1px solid ' + OPEN_COLOUR + '; color: #fff !important; }',
+    '.' + LINK_CLASS + '.kk-download { background: ' + DOWNLOAD_COLOUR + '; border: 1px solid ' + DOWNLOAD_COLOUR + '; color: #222 !important; }',
+    '.' + LINK_CLASS + ':hover { filter: brightness(1.08); }'
   ].join('\n');
   (document.head || document.documentElement).appendChild(style);
 
@@ -156,9 +161,9 @@
   // tab). Open is a plain link (no "noopener", which drops the name in
   // some browsers); download opens its tab by script, so that tab may
   // close itself once the download has started.
-  function makeLink(text, title, tabName, byScript) {
+  function makeLink(text, title, tabName, byScript, kind) {
     const link = document.createElement('a');
-    link.className = LINK_CLASS;
+    link.className = LINK_CLASS + ' ' + kind;
     link.textContent = text;
     link.title = title;
     link.target = tabName;
@@ -188,13 +193,16 @@
         frame.dataset[DONE_FLAG] = '1';
         box = document.createElement('span');
         box.className = BOX_CLASS;
-        box.appendChild(makeLink(OPEN_TEXT, 'Open only the video in a new tab', OPEN_TAB, false));
-        box.appendChild(makeLink(DOWNLOAD_TEXT, 'Download the video file', DOWNLOAD_TAB, true));
+        box.appendChild(makeLink(OPEN_TEXT, 'Open only the video in a new tab', OPEN_TAB, false, 'kk-open'));
+        box.appendChild(makeLink(DOWNLOAD_TEXT, 'Download the video file', DOWNLOAD_TAB, true, 'kk-download'));
         frame.insertAdjacentElement('afterend', box);
       }
       box.querySelectorAll('a').forEach((link) => {
         if (link.href !== src) link.href = src;
       });
+      // The row is as wide as the video.
+      const width = Math.round(frame.getBoundingClientRect().width);
+      if (width && box.style.width !== width + 'px') box.style.width = width + 'px';
     });
   }
 
@@ -206,6 +214,8 @@
 
   // BOOT
   scan();
+  // The video's width can change with the window (narrow screens).
+  window.addEventListener('resize', schedule, { passive: true });
   const root = document.getElementById('content') || document.body;
   new MutationObserver((mutations) => {
     for (let i = 0; i < mutations.length; i += 1) {
