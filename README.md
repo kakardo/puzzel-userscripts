@@ -65,10 +65,6 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
   - `PCC_Agent_Highlighter`: highlights agent rows by status/profile and badges names in the ARIA agents grid. SPA-safe (grid rebinding, navigation hooks). Standalone.
   - `PCC_Softphone_Status_Highlight`: colours the Softphone Online/Offline value in the header. Standalone.
   - `PCC_Request_Alert`: rings (and optionally notifies, flashes the tab title or the screen) when your status leaves Ready or a chat request arrives. Settings in the code and under the main menu. Standalone.
-- `Browser_Tools/`: general browser tools for use outside work too, on any website or on a specific one such as YouTube. Same rules as the other scripts:
-  - `Highlight_Same_Word` (any website): highlights every other place the selected word or phrase appears on the page (whole words first, part of words when none match), with marks beside the scroll bar showing where the matches are on the whole page; Escape clears. Uses the CSS Custom Highlight API, so the page itself is never changed. Standalone, runs only when a selection is finished.
-  - `YouTube_Playlist_Menu` (www.youtube.com): makes the "Save to..." playlist menu usable with many playlists: compact rows, a filter box (Enter toggles the first match) and a star per playlist that keeps favourites at the top (saved in Tampermonkey storage). Standalone, one observer on YouTube's popup container.
-  - `Canvas_Video_Tools` (Canvas, for example canvas.du.se): "Open video in new tab" and "Download video" text buttons under every video embedded in a Canvas page. Open shows only the video file in a new tab (filling the window); Download saves the MP4. The embedded player reports the file address to the page, so both open or download the file directly; only without one does the tab pass through Canvas and Kaltura (kept dark). Standalone, plain links plus a short step on Kaltura's page. Named `Canvas_Video_New_Tab` until 1.2.
 
 ## Design logic: one shared DOM library per application, not one per folder
 
@@ -130,9 +126,6 @@ Current status:
 | PCC_User_Group_Search | No | Different app (Admin console), server-rendered, bounded boot only |
 | POS_Access_Log_Filter | No | Different app (Organisation Settings), server-rendered, bounded boot plus one row observer |
 | PCC_Agent_Highlighter | No | Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines |
-| Highlight_Same_Word | No | Any website, not PCM; one listener for mouse and one for keys, work only when a selection is finished |
-| YouTube_Playlist_Menu | No | YouTube, not PCM; one MutationObserver on the popup container, writes only when something differs |
-| Canvas_Video_Tools | No | Canvas, not PCM; one debounced MutationObserver on the page content, two plain links per video |
 | PCC_Request_Alert | No | Different app. Watches one status element and adds one main menu entry; nothing to share |
 | PCC_Softphone_Status_Highlight | No | Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection |
 | Geckoboard_Full_Numbers | No | Different app (Geckoboard). Pure CSS, a single style tag |
