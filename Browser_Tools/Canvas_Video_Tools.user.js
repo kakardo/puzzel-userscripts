@@ -1,14 +1,14 @@
 // @file_name = Canvas_Video_Tools.user.js
 // @author = Kardo Rostam
-// @version = 1.4_2026-11-09
+// @version = 1.5_2026-11-09
 // @created = 2026-11-09 10:29
 // @note = Named Canvas_Video_New_Tab until 1.2; renamed in 1.3 when the download button was added.
 
 // ==UserScript==
 // @name         Canvas Video Tools
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-11-09
-// @description  Adds two small text buttons under every video embedded in a Canvas page (videos from an external tool such as Kaltura, shown in a frame): "Open video in new tab" (blue, at the video's left edge) and "Download video" (yellow, at its right edge). Both open the frame's own address in your logged-in session; on Kaltura's page (play.canvas.du.se) the script then takes the video file (the MP4 the player has). Open: the tab switches to the file, which the browser plays filling the tab; when the player has no file, the player is sized to the window instead (16:9, centred). Download: the file is downloaded and the extra tab closes again. Opened any other way, or inside Canvas's frame, Kaltura's page is left as it is. No polling on Canvas: a scan when the page is ready and one debounced MutationObserver on the page content.
+// @version      1.5_2026-11-09
+// @description  Adds two small text buttons under every video embedded in a Canvas page (videos from an external tool such as Kaltura, shown in a frame): "Open video in new tab" (soft blue, at the video's left edge) and "Download video" (soft yellow, at its right edge), right under the picture. Both open the frame's own address in your logged-in session; on Kaltura's page (play.canvas.du.se) the script then takes the video file (the MP4 the player has). Open: the tab switches to the file, which the browser plays filling the tab; when the player has no file, the player is sized to the window instead (16:9, centred). Download: the file is downloaded and the extra tab closes again. Opened any other way, or inside Canvas's frame, Kaltura's page is left as it is. No polling on Canvas: a scan when the page is ready and one debounced MutationObserver on the page content.
 // @author       Kardo Rostam
 // @match        https://canvas.du.se/*
 // @match        https://*.instructure.com/*
@@ -28,8 +28,10 @@
   const OPEN_TEXT = 'Open video in new tab ↗';
   const DOWNLOAD_TEXT = 'Download video ⬇';
   const VIDEO_RATIO = 16 / 9;      // shape the player keeps in its own tab
-  const OPEN_COLOUR = '#1e5bd8';   // blue, white text
-  const DOWNLOAD_COLOUR = '#f5c518'; // yellow, dark text
+  // Soft pastel pills: [background, border, text].
+  const OPEN_COLOURS = ['#e3f0ff', '#b7d4f7', '#1f4f8f'];      // sky blue
+  const DOWNLOAD_COLOURS = ['#fff3cf', '#f0d88a', '#6b5310'];  // butter yellow
+  const GAP_BELOW_VIDEO = 6;       // px between the picture and the buttons
 
   // The tabs the buttons open are named, so Kaltura's page can tell what
   // they were opened for (a window keeps its name across sites).
@@ -146,14 +148,15 @@
   style.textContent = [
     // As wide as the video (set per frame below): open at the left edge,
     // download at the right edge.
-    '.' + BOX_CLASS + ' { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; max-width: 100%; margin: 4px 0 10px; }',
+    '.' + BOX_CLASS + ' { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; max-width: 100%; margin: 0 0 22px; position: relative; }',
     '.' + LINK_CLASS + ' {',
-    '  display: inline-block; padding: 3px 10px; border-radius: 4px;',
+    '  display: inline-block; padding: 4px 14px; border-radius: 999px;',
     '  font-size: 13px; font-weight: 600; line-height: 1.4; text-decoration: none !important; cursor: pointer;',
+    '  transition: filter .15s ease;',
     '}',
-    '.' + LINK_CLASS + '.kk-open { background: ' + OPEN_COLOUR + '; border: 1px solid ' + OPEN_COLOUR + '; color: #fff !important; }',
-    '.' + LINK_CLASS + '.kk-download { background: ' + DOWNLOAD_COLOUR + '; border: 1px solid ' + DOWNLOAD_COLOUR + '; color: #222 !important; }',
-    '.' + LINK_CLASS + ':hover { filter: brightness(1.08); }'
+    '.' + LINK_CLASS + '.kk-open { background: ' + OPEN_COLOURS[0] + '; border: 1px solid ' + OPEN_COLOURS[1] + '; color: ' + OPEN_COLOURS[2] + ' !important; }',
+    '.' + LINK_CLASS + '.kk-download { background: ' + DOWNLOAD_COLOURS[0] + '; border: 1px solid ' + DOWNLOAD_COLOURS[1] + '; color: ' + DOWNLOAD_COLOURS[2] + ' !important; }',
+    '.' + LINK_CLASS + ':hover { filter: brightness(.96); }'
   ].join('\n');
   (document.head || document.documentElement).appendChild(style);
 
@@ -200,9 +203,15 @@
       box.querySelectorAll('a').forEach((link) => {
         if (link.href !== src) link.href = src;
       });
-      // The row is as wide as the video.
-      const width = Math.round(frame.getBoundingClientRect().width);
+      // The row is as wide as the video, and sits right under the picture:
+      // the frame is taller than the 16:9 picture Kaltura centres in it, so
+      // the row moves up by the empty strip under the picture.
+      const rect = frame.getBoundingClientRect();
+      const width = Math.round(rect.width);
       if (width && box.style.width !== width + 'px') box.style.width = width + 'px';
+      const strip = Math.max(0, Math.round((rect.height - rect.width / VIDEO_RATIO) / 2));
+      const top = (GAP_BELOW_VIDEO - strip) + 'px';
+      if (width && box.style.marginTop !== top) box.style.marginTop = top;
     });
   }
 
