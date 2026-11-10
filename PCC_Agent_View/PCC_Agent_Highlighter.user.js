@@ -1,12 +1,12 @@
 // @file_name = PCC_Agent_Highlighter.user.js
 // @author = Kardo Rostam
-// @version = 6.3_2026-10-02
+// @version = 6.5_2026-11-10
 // @created = 2026-02-10 (v2.9)
 
 // ==UserScript==
 // @name         Puzzel Agent Highlighter
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.3_2026-10-02
+// @version      6.5_2026-11-10
 // @description  Highlights Puzzel Agent rows and badges names. Battery friendly: pauses all processing while the tab is hidden and resyncs once on return.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
@@ -411,6 +411,59 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     debounceTimer = setTimeout(processChanges, DEBOUNCE_DELAY_MS);
   }
 
+  // ============================================================================
+  // COLUMN PRIORITY ON NARROW WINDOWS
+  // The app drops columns from the right when the window gets narrow, so
+  // Time goes first. Here the same number of columns is dropped, but in
+  // the order below, so Name, Status and Time stay longest. The app's own
+  // hidden marks are left in place and only overruled with a stylesheet,
+  // written only when the result changes.
+  // ============================================================================
+  const COLUMN_PRIORITY = ['name', 'status', 'time', 'number', 'profile', 'group'];
+  let columnStyle = null;
+  let columnGrid = null;
+
+  function applyColumnPriority() {
+    const grid = AGENTS_GRID && AGENTS_GRID.isConnected ? AGENTS_GRID : null;
+    if (columnGrid && columnGrid !== grid) columnGrid.removeAttribute('data-pcc-columns');
+    columnGrid = grid;
+    let css = '';
+    if (grid) {
+      grid.setAttribute('data-pcc-columns', '');
+      const heads = {};
+      grid.querySelectorAll('[role="columnheader"][aria-colindex]').forEach((h) => {
+        const key = (h.textContent || '').trim().toLowerCase();
+        if (COLUMN_PRIORITY.indexOf(key) !== -1) heads[key] = h;
+      });
+      const known = COLUMN_PRIORITY.filter((k) => heads[k]);
+      const dropped = known.filter((k) => heads[k].classList.contains('aurelia-hide')).length;
+      if (dropped && dropped < known.length) {
+        known.forEach((k, i) => {
+          const keep = i < known.length - dropped;
+          if (keep !== heads[k].classList.contains('aurelia-hide')) return;
+          const col = '[aria-colindex="' + heads[k].getAttribute('aria-colindex') + '"]';
+          const head = '[data-pcc-columns] aa-data-grid-column' + col;
+          const cells = '[data-pcc-columns] .aa-data-grid-cell' + col;
+          css += keep
+            ? head + '{display:flex !important}' + cells + '{display:grid !important}'
+            : head + ',' + cells + '{display:none !important}';
+        });
+      }
+    }
+    if (!columnStyle) {
+      if (!css) return;
+      columnStyle = document.createElement('style');
+      document.head.appendChild(columnStyle);
+    }
+    if (columnStyle.textContent !== css) columnStyle.textContent = css;
+  }
+
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(applyColumnPriority, 300);
+  });
+
   function processChanges() {
     if (!AGENTS_GRID) return;
 
@@ -420,6 +473,7 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
       dirtyRows.clear();
       return;
     }
+    applyColumnPriority();
 
     // If nothing changed and no forced scan, do nothing (big efficiency win)
     if (dirtyRows.size === 0 && !forceFullScan) return;
@@ -705,6 +759,15 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   const ROW_FLAG = 'pccScheduledRow';
   const TICK_MS = 1000;
   const GRID_RECHECK_TICKS = 2;
+  // The app updates every agent's Time once every 10 seconds, all at
+  // once. This row follows the same rhythm: its Time only moves when the
+  // others do, so all values on screen are from the same moment and the
+  // order cannot flip in between. MAX_HOLD_S is the fallback when no
+  // other Time changes (an empty list, say).
+  const MAX_HOLD_S = 15;
+  // The row picks up the app's update at most one tick later, so times
+  // this close count as equal and the row stays where it is.
+  const TIME_SLACK_S = 1;
 
   let unpacked;
 
@@ -1127,37 +1190,50 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     if (group.length) {
       const allTimes = table.time || (table.time = rows.map((r) => cellValue(r, cols, 'time')));
       const times = group.map((k) => allTimes[k]);
-      const ascending = times.length < 2 || times[0] <= times[times.length - 1];
-      let at = group.find((k, n) => (ascending ? own.time <= times[n] : own.time >= times[n]));
-      if (at !== undefined) {
-        const before = units[at];
-        if (unit.nextElementSibling !== before) before.parentElement.insertBefore(unit, before);
-      } else {
-        const last = units[group[group.length - 1]];
-        if (last.nextElementSibling !== unit) last.insertAdjacentElement('afterend', unit);
-      }
+      const dir = times.length < 2 || times[0] <= times[times.length - 1] ? 1 : -1;
+      const spot = bestSpot(times.length, (n) => compareTime(own.time, times[n]) * dir, unit, group.map((k) => units[k]));
+      putAt(unit, group.map((k) => units[k]), spot);
       return;
     }
 
-    // Position i means "before row i" (rows.length = after the last).
-    let bestIndex = rows.length;
+    const compare = spec.key === 'time' ? compareTime : spec.compare;
+    putAt(unit, units, bestSpot(rows.length, (k) => compare(mine, values[k]) * spec.dir, unit, units));
+  }
+
+  function compareTime(a, b) {
+    return Math.abs(a - b) <= TIME_SLACK_S ? 0 : a - b;
+  }
+
+  // Spot i means "before unit i" (count = after the last). The spot that
+  // breaks the order the least wins; when the row's current spot is as
+  // good as any, it stays there.
+  function bestSpot(count, cmp, unit, units) {
+    const c = [];
+    for (let k = 0; k < count; k += 1) c.push(cmp(k));
+    let best = count;
     let bestCost = Infinity;
-    for (let i = 0; i <= rows.length; i += 1) {
+    let here = -1;
+    for (let i = 0; i <= count; i += 1) {
       let cost = 0;
-      for (let k = 0; k < rows.length; k += 1) {
-        const c = spec.compare(mine, values[k]) * spec.dir;
-        if (k < i && c < 0) cost += 1;     // a row above that should be below
-        if (k >= i && c > 0) cost += 1;    // a row below that should be above
+      for (let k = 0; k < count; k += 1) {
+        if (k < i && c[k] < 0) cost += 1;     // a row above that should be below
+        if (k >= i && c[k] > 0) cost += 1;    // a row below that should be above
       }
-      if (cost < bestCost) { bestCost = cost; bestIndex = i; }
+      if (cost < bestCost) { bestCost = cost; best = i; }
+      if (isAt(unit, units, i)) here = cost;
     }
-    if (bestIndex < rows.length) {
-      const before = units[bestIndex];
-      if (unit.nextElementSibling !== before) before.parentElement.insertBefore(unit, before);
-    } else {
-      const last = units[units.length - 1];
-      if (last.nextElementSibling !== unit) last.insertAdjacentElement('afterend', unit);
-    }
+    return here === bestCost ? -1 : best;
+  }
+
+  function isAt(unit, units, i) {
+    return i < units.length ? unit.nextElementSibling === units[i] : units[units.length - 1].nextElementSibling === unit;
+  }
+
+  // -1 means the row is already in a best spot.
+  function putAt(unit, units, i) {
+    if (i < 0 || isAt(unit, units, i)) return;
+    if (i < units.length) units[i].parentElement.insertBefore(unit, units[i]);
+    else units[units.length - 1].insertAdjacentElement('afterend', unit);
   }
 
   // Narrow windows hide columns and change widths on the live rows only
@@ -1262,7 +1338,7 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
       if (!ourRow) { report(config, 'could not copy an agent row'); return; }
     }
 
-    const elapsed = now.seconds - state.sinceSeconds;
+    const elapsed = shownTime(grid, cols, state, now.seconds - state.sinceSeconds);
     const statusCell = cell(ourRow, cols.status);
     setCellText(statusCell, (state.status || '') + (config.suffix ? ' ' + config.suffix : ''));
     setStatusIcon(statusCell, state.ready);
@@ -1279,6 +1355,17 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     if (!ourUnit.isConnected) { report(config, 'could not place the row in the list'); return; }
     syncLayout(grid);
     report(config, 'shown: ' + (state.status || ''));
+  }
+
+  let held = { sig: null, since: null, value: null };
+
+  function shownTime(grid, cols, state, elapsed) {
+    const sig = shownRows(grid).map((r) => { const c = cell(r, cols.time); return c ? c.textContent : ''; }).join('|');
+    if (sig !== held.sig || state.sinceSeconds !== held.since || held.value === null ||
+        elapsed < held.value || elapsed - held.value > MAX_HOLD_S) {
+      held = { sig: sig, since: state.sinceSeconds, value: elapsed };
+    }
+    return held.value;
   }
 
   // A failure is reported once in the console instead of silently on
