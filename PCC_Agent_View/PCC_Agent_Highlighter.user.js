@@ -1,12 +1,12 @@
 // @file_name = PCC_Agent_Highlighter.user.js
 // @author = Kardo Rostam
-// @version = 6.5_2026-11-10
+// @version = 6.7_2026-11-10
 // @created = 2026-02-10 (v2.9)
 
 // ==UserScript==
 // @name         Puzzel Agent Highlighter
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.5_2026-11-10
+// @version      6.7_2026-11-10
 // @description  Highlights Puzzel Agent rows and badges names. Battery friendly: pauses all processing while the tab is hidden and resyncs once on return.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
@@ -417,39 +417,37 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   // Time goes first. Here the same number of columns is dropped, but in
   // the order below, so Name, Status and Time stay longest. The app's own
   // hidden marks are left in place and only overruled with a stylesheet,
-  // written only when the result changes.
+  // written only when the result changes. Every agents grid on the page
+  // gets a rule for every column, so a row the app has not caught up
+  // with yet (or a copied row) still shows the same columns as the rest.
   // ============================================================================
   const COLUMN_PRIORITY = ['name', 'status', 'time', 'number', 'profile', 'group'];
   let columnStyle = null;
-  let columnGrid = null;
+
+  function columnRules(grid, id) {
+    const heads = {};
+    grid.querySelectorAll('[role="columnheader"][aria-colindex]').forEach((h) => {
+      const key = (h.textContent || '').trim().toLowerCase();
+      if (COLUMN_PRIORITY.indexOf(key) !== -1) heads[key] = h;
+    });
+    const known = COLUMN_PRIORITY.filter((k) => heads[k]);
+    if (known.length !== COLUMN_PRIORITY.length) return '';
+    if (grid.getAttribute('data-pcc-columns') !== id) grid.setAttribute('data-pcc-columns', id);
+    const dropped = known.filter((k) => heads[k].classList.contains('aurelia-hide')).length;
+    const scope = '[data-pcc-columns="' + id + '"] ';
+    return known.map((k, i) => {
+      const col = '[aria-colindex="' + heads[k].getAttribute('aria-colindex') + '"]';
+      const head = scope + 'aa-data-grid-column' + col;
+      const cells = scope + '.aa-data-grid-cell' + col;
+      return i < known.length - dropped
+        ? head + '{display:flex !important}' + cells + '{display:grid !important}'
+        : head + ',' + cells + '{display:none !important}';
+    }).join('');
+  }
 
   function applyColumnPriority() {
-    const grid = AGENTS_GRID && AGENTS_GRID.isConnected ? AGENTS_GRID : null;
-    if (columnGrid && columnGrid !== grid) columnGrid.removeAttribute('data-pcc-columns');
-    columnGrid = grid;
     let css = '';
-    if (grid) {
-      grid.setAttribute('data-pcc-columns', '');
-      const heads = {};
-      grid.querySelectorAll('[role="columnheader"][aria-colindex]').forEach((h) => {
-        const key = (h.textContent || '').trim().toLowerCase();
-        if (COLUMN_PRIORITY.indexOf(key) !== -1) heads[key] = h;
-      });
-      const known = COLUMN_PRIORITY.filter((k) => heads[k]);
-      const dropped = known.filter((k) => heads[k].classList.contains('aurelia-hide')).length;
-      if (dropped && dropped < known.length) {
-        known.forEach((k, i) => {
-          const keep = i < known.length - dropped;
-          if (keep !== heads[k].classList.contains('aurelia-hide')) return;
-          const col = '[aria-colindex="' + heads[k].getAttribute('aria-colindex') + '"]';
-          const head = '[data-pcc-columns] aa-data-grid-column' + col;
-          const cells = '[data-pcc-columns] .aa-data-grid-cell' + col;
-          css += keep
-            ? head + '{display:flex !important}' + cells + '{display:grid !important}'
-            : head + ',' + cells + '{display:none !important}';
-        });
-      }
-    }
+    document.querySelectorAll('[role="grid"]').forEach((g, i) => { css += columnRules(g, String(i)); });
     if (!columnStyle) {
       if (!css) return;
       columnStyle = document.createElement('style');
@@ -458,8 +456,12 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     if (columnStyle.textContent !== css) columnStyle.textContent = css;
   }
 
+  // Once on the next frame and once when the resizing has settled, so the
+  // columns follow the app's own switch without a visible delay.
   let resizeTimer = null;
+  let resizeFrame = 0;
   window.addEventListener('resize', () => {
+    if (!resizeFrame) resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; applyColumnPriority(); });
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(applyColumnPriority, 300);
   });
@@ -1054,6 +1056,25 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   let ourKind = null;   // 'ready' or 'away': which template it was cloned from
   let ourLayout = '';   // layoutKey() the row was built for
 
+  // The badge goes where the Highlighter puts it on real rows: inside the
+  // element that holds the name text. Placed straight in the cell it was
+  // a grid item of its own and dropped to a second line.
+  function nameHolder(nameCell) {
+    const known = nameCell.querySelector('.aa-grid-cell-wrapper, .m365-agent-name-inline');
+    if (known) return known;
+    const walker = document.createTreeWalker(nameCell, NodeFilter.SHOW_TEXT);
+    let last = null;
+    let node;
+    while ((node = walker.nextNode())) if (node.nodeValue.trim()) last = node;
+    if (!last) return nameCell;
+    if (last.parentElement !== nameCell) return last.parentElement;
+    const inline = document.createElement('span');
+    inline.className = 'm365-agent-name-inline';
+    nameCell.insertBefore(inline, last);
+    inline.appendChild(last);
+    return inline;
+  }
+
   function buildRow(grid, cols, config, state) {
     const rows = shownRows(grid);
     const template = templateFor(rows, cols, state.ready);
@@ -1081,8 +1102,7 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
       badge.className = 'm365-name-badge';
       badge.setAttribute('aria-hidden', 'true');
       badge.textContent = ' ' + config.emoji;
-      const target = nameCell.querySelector('.aa-grid-cell-wrapper') || nameCell;
-      target.appendChild(badge);
+      nameHolder(nameCell).appendChild(badge);
     }
     setCellText(cell(row, cols.number), config.number || '');
     setCellText(cell(row, cols.profile), config.profile || '');
@@ -1287,9 +1307,26 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     // The app re-renders the list now and then and drops foreign rows;
     // put ours back on the next tick instead of waiting for the reorder.
     gridObserver = new MutationObserver(() => {
-      if (ourUnit && !ourUnit.isConnected) window.setTimeout(tick, 0);
+      if (ourUnit && (!ourUnit.isConnected || ourLayout !== layoutKey(grid))) soon();
     });
     gridObserver.observe(grid, { childList: true, subtree: true });
+  }
+
+  // One extra tick right away, however many changes come in at once.
+  let soonTimer = 0;
+  function soon() {
+    if (!soonTimer) soonTimer = window.setTimeout(() => { soonTimer = 0; safeTick(); }, 0);
+  }
+  window.addEventListener('resize', soon);
+
+  // A rebuilt row starts without the Highlighter's colour until its next
+  // pass; taking it over from the old row avoids a frame without it.
+  function carryHighlight(from, to) {
+    if (!from || !to || !from.dataset.m365HighlightKey) return;
+    to.classList.add('m365-highlight-row');
+    to.style.backgroundColor = from.style.backgroundColor;
+    to.style.color = from.style.color;
+    to.dataset.m365HighlightKey = from.dataset.m365HighlightKey;
   }
 
   // Test mode only: say once in the console why the row is or is not
@@ -1332,10 +1369,18 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
 
     // A change between ready and away needs the other kind of icon.
     const kind = state.ready ? 'ready' : 'away';
-    if (ourRow && (ourKind !== kind || !grid.contains(ourUnit) || ourLayout !== layoutKey(grid))) removeRow();
+    // A new layout or the other icon needs a fresh copy. When the app only
+    // re-renders the list and drops the row, the same row goes back in
+    // (placeRow below), keeping its colour and badge.
+    let previous = null;
+    if (ourRow && (ourKind !== kind || ourLayout !== layoutKey(grid))) {
+      previous = ourKind === kind ? ourRow : null;
+      removeRow();
+    }
     if (!ourRow) {
       ourRow = buildRow(grid, cols, config, state);
       if (!ourRow) { report(config, 'could not copy an agent row'); return; }
+      carryHighlight(previous, ourRow);
     }
 
     const elapsed = shownTime(grid, cols, state, now.seconds - state.sinceSeconds);
