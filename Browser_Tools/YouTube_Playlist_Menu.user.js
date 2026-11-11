@@ -1,13 +1,13 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-11-05
+// @version = 1.3_2026-11-11
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-11-05
-// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
+// @version      1.3_2026-11-11
+// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -28,6 +28,8 @@
   const EDGE_PX = 8;               // gap to the window edges in full height
   const STAR_COLOUR = '#ffcc00';
   const FILTER_PLACEHOLDER = 'Filter playlists';
+  const SAVE_BUTTON = true;        // a Save button with text right after Share
+  const SAVE_TEXT = /^sv\b/i.test(document.documentElement.lang || '') ? 'Spara' : 'Save';
 
   // INTERNAL SETTINGS
   // From YouTube (2026 "sheet" menu): the menu is a yt-sheet-view-model in
@@ -41,6 +43,9 @@
   const SHEET_CLASS = 'kk-ytpl';
   const FILTER_CLASS = 'kk-ytpl-filter';
   const STAR_CLASS = 'kk-ytpl-star';
+  const SAVE_CLASS = 'kk-ytpl-save';
+  const SAVE_LABEL = /^(spara i spellista|save to playlist|spara|save)$/i;
+  const SAVE_ITEM = /^(spara|save)\b/i;
   const FAVOURITES_KEY = 'ytPlaylistFavourites';
   const SCAN_DELAY_MS = 80;
   const BOOT_TRIES = 40;
@@ -86,7 +91,16 @@
     '  font-size: 17px; line-height: 1; color: rgba(255,255,255,.35);',
     '}',
     '.' + STAR_CLASS + ':hover { color: ' + STAR_COLOUR + '; }',
-    '.' + STAR_CLASS + '.kk-on { color: ' + STAR_COLOUR + '; }'
+    '.' + STAR_CLASS + '.kk-on { color: ' + STAR_COLOUR + '; }',
+    // Same look as YouTube's own pill buttons, in light and dark theme.
+    '.' + SAVE_CLASS + ' {',
+    '  display: inline-flex; align-items: center; gap: 6px; flex: none; height: 36px; margin-left: 8px; padding: 0 16px 0 12px;',
+    '  border: 0; border-radius: 18px; cursor: pointer; white-space: nowrap;',
+    '  background: var(--yt-spec-badge-chip-background, rgba(255,255,255,.1)); color: var(--yt-spec-text-primary, #f1f1f1);',
+    '  font-family: Roboto, Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 36px;',
+    '}',
+    '.' + SAVE_CLASS + ':hover { background: var(--yt-spec-button-chip-background-hover, rgba(255,255,255,.2)); }',
+    '.' + SAVE_CLASS + ' svg { width: 24px; height: 24px; fill: currentColor; }'
   ].join('\n');
   (document.head || document.documentElement).appendChild(style);
 
@@ -272,6 +286,96 @@
     }
     wasOpen = open;
     decorateRows(sheet);
+  }
+
+  // SAVE BUTTON
+  // Pressing it presses YouTube's own Save button, which is still on the
+  // page when YouTube hides it for lack of room. Without it, the three
+  // dots menu is opened and its Save entry chosen.
+  function nativeSave() {
+    return Array.from(document.querySelectorAll('ytd-watch-metadata #actions button[aria-label]'))
+      .find((b) => !b.classList.contains(SAVE_CLASS) && SAVE_LABEL.test((b.getAttribute('aria-label') || '').trim())) || null;
+  }
+
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function openSave() {
+    const native = nativeSave();
+    if (native) {
+      native.click();
+      return;
+    }
+    const more = Array.from(document.querySelectorAll('ytd-watch-metadata #actions ytd-menu-renderer button'))
+      .filter((b) => !b.classList.contains(SAVE_CLASS)).pop();
+    if (!more) return;
+    more.click();
+    // Only while the menu opens after a press: ten looks at most.
+    for (let i = 0; i < 10; i += 1) {
+      await wait(100);
+      const item = Array.from(document.querySelectorAll('ytd-popup-container [role="menuitem"]'))
+        .find((e) => e.getClientRects().length && SAVE_ITEM.test(e.textContent.trim()));
+      if (item) {
+        item.click();
+        return;
+      }
+    }
+  }
+
+  // Built with DOM calls: YouTube blocks innerHTML (Trusted Types).
+  function makeSaveButton() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = SAVE_CLASS;
+    button.setAttribute('aria-label', SAVE_TEXT);
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', 'M14 10H3v2h11v-2zm0-4H3v2h11V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM3 16h7v-2H3v2z');
+    svg.appendChild(path);
+    button.appendChild(svg);
+    button.appendChild(document.createTextNode(SAVE_TEXT));
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openSave();
+    });
+    return button;
+  }
+
+  let saveRenderer = null;
+  let saveObserver = null;
+
+  // Right after the like and share buttons. YouTube redraws that row now
+  // and then; the row is watched (its own children only) to put it back.
+  function placeSaveButton() {
+    const renderer = document.querySelector('ytd-watch-metadata #actions ytd-menu-renderer');
+    const top = renderer && renderer.querySelector(':scope > #top-level-buttons-computed');
+    if (!top) return;
+    let button = renderer.querySelector(':scope > .' + SAVE_CLASS);
+    if (!button || button.previousElementSibling !== top) {
+      button = button || makeSaveButton();
+      top.insertAdjacentElement('afterend', button);
+    }
+    if (renderer !== saveRenderer) {
+      if (saveObserver) saveObserver.disconnect();
+      saveRenderer = renderer;
+      saveObserver = new MutationObserver(() => requestAnimationFrame(placeSaveButton));
+      saveObserver.observe(renderer, { childList: true });
+    }
+  }
+
+  // A new video is drawn a moment after navigating; a few looks cover it.
+  function placeSaveButtonSoon() {
+    [0, 500, 1500, 3000].forEach((ms) => setTimeout(placeSaveButton, ms));
+  }
+
+  if (SAVE_BUTTON) {
+    document.addEventListener('yt-navigate-finish', placeSaveButtonSoon);
+    placeSaveButtonSoon();
   }
 
   let timer = 0;
