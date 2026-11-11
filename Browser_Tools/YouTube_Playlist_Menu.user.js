@@ -1,13 +1,13 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-11-11
+// @version = 1.4_2026-11-11
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-11-11
-// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
+// @version      1.4_2026-11-11
+// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -29,6 +29,7 @@
   const STAR_COLOUR = '#ffcc00';
   const FILTER_PLACEHOLDER = 'Filter playlists';
   const SAVE_BUTTON = true;        // a Save button with text right after Share
+  const HIDE_NATIVE_SAVE = true;  // hide YouTube's own Save icon (ours replaces it)
   const SAVE_TEXT = /^sv\b/i.test(document.documentElement.lang || '') ? 'Spara' : 'Save';
 
   // INTERNAL SETTINGS
@@ -100,7 +101,16 @@
     '  font-family: Roboto, Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 36px;',
     '}',
     '.' + SAVE_CLASS + ':hover { background: var(--yt-spec-button-chip-background-hover, rgba(255,255,255,.2)); }',
-    '.' + SAVE_CLASS + ' svg { width: 24px; height: 24px; fill: currentColor; }'
+    '.' + SAVE_CLASS + ' svg { width: 24px; height: 24px; fill: currentColor; }',
+    // YouTube's own Save icon is squeezed to nothing instead of removed:
+    // our button presses it, and the menu opens next to where it sits.
+    HIDE_NATIVE_SAVE ? [
+      'ytd-watch-metadata #actions yt-button-view-model:has(button[aria-label="Spara i spellista" i]),',
+      'ytd-watch-metadata #actions yt-button-view-model:has(button[aria-label="Save to playlist" i]) {',
+      '  width: 0 !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important;',
+      '  overflow: hidden !important; opacity: 0 !important; pointer-events: none !important;',
+      '}'
+    ].join('\n') : ''
   ].join('\n');
   (document.head || document.documentElement).appendChild(style);
 
