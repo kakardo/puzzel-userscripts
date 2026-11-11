@@ -1,12 +1,12 @@
 // @file_name = PCC_Agent_Highlighter.user.js
 // @author = Kardo Rostam
-// @version = 6.8_2026-11-11
+// @version = 6.9_2026-11-11
 // @created = 2026-02-10 (v2.9)
 
 // ==UserScript==
 // @name         Puzzel Agent Highlighter
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.8_2026-11-11
+// @version      6.9_2026-11-11
 // @description  Highlights Puzzel Agent rows and badges names. Battery friendly: pauses all processing while the tab is hidden and resyncs once on return.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
@@ -951,11 +951,12 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
 
   function parseDuration(text) {
     let total = 0;
-    const re = /(\d+)\s*([hms])/g;
+    // Days too: long absences show as "6d", which read as 0 before and
+    // made the Time column look unsorted.
+    const re = /(\d+)\s*([dhms])/g;
+    const unit = { d: 86400, h: 3600, m: 60, s: 1 };
     let hit;
-    while ((hit = re.exec(text || '')) !== null) {
-      total += +hit[1] * (hit[2] === 'h' ? 3600 : hit[2] === 'm' ? 60 : 1);
-    }
+    while ((hit = re.exec(text || '')) !== null) total += +hit[1] * unit[hit[2]];
     return total;
   }
 
@@ -1132,6 +1133,9 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
    * Each column is scored against the rows on screen, with each way of
    * comparing and both directions, by counting neighbours that are out of
    * order. The best fit wins, Time first on a tie (the grid's default).
+   * When a header carries aria-sort (ascending or descending), only that
+   * column is used: with few agents another column could look sorted by
+   * chance (all "Softphone" after one number) and win over Time.
    * Header icons are not used: every header carries icons, sorted or
    * not, which made an unsorted column look sorted. Columns with a single
    * value on screen say nothing about the order and are skipped. The row
@@ -1174,14 +1178,23 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
   }
 
   // Every column is read once per check into this table and reused.
-  function sortSpec(cols, rows, table) {
-    const keys = SORT_KEYS.filter((k) => cols[k]);
+  function sortedColumn(grid) {
+    const head = grid.querySelector('[role="columnheader"][aria-sort="ascending"], [role="columnheader"][aria-sort="descending"]');
+    if (!head) return null;
+    const key = (head.textContent || '').trim().toLowerCase();
+    if (SORT_KEYS.indexOf(key) === -1) return null;
+    return { key: key, dir: head.getAttribute('aria-sort') === 'ascending' ? 1 : -1 };
+  }
+
+  function sortSpec(cols, rows, table, sorted) {
+    const keys = sorted && cols[sorted.key] ? [sorted.key] : SORT_KEYS.filter((k) => cols[k]);
+    const dirs = sorted && sorted.dir === -1 ? [-1, 1] : [1, -1];
     let best = null;
     keys.forEach((key) => {
       const values = table[key] || (table[key] = rows.map((r) => cellValue(r, cols, key)));
-      if (new Set(values.map(String)).size < 2) return;
+      if (!sorted && new Set(values.map(String)).size < 2) return;
       comparersFor(key).forEach((name) => {
-        [1, -1].forEach((dir) => {
+        dirs.forEach((dir) => {
           const bad = outOfOrder(values, COMPARERS[name], dir);
           if (!best || bad < best.bad) best = { key: key, compare: COMPARERS[name], dir: dir, bad: bad };
         });
@@ -1200,9 +1213,10 @@ const REBIND_CHECK_THROTTLE_MS = 400;        // Prevent rebind storms on heavy D
     if (!rows.length) return;
     const units = rows.map(unitOf);
     const table = { name: rows.map((r) => cellValue(r, cols, 'name')) };
-    const sig = table.name.join('\u0001');
+    const sorted = sortedColumn(grid);
+    const sig = table.name.join('\u0001') + '\u0002' + (sorted ? sorted.key + sorted.dir : '');
     if (sig !== sortCache.sig || !sortCache.spec) {
-      sortCache = { sig: sig, spec: sortSpec(cols, rows, table) };
+      sortCache = { sig: sig, spec: sortSpec(cols, rows, table, sorted) };
     }
     const spec = sortCache.spec;
     if (!spec) return;
