@@ -1,13 +1,13 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 1.6_2026-11-12
+// @version = 1.8_2026-11-12
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.6_2026-11-12
-// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
+// @version      1.8_2026-11-12
+// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -27,6 +27,11 @@
   const STAY_OPEN = true;          // open the menu again after saving to a playlist
   const EDGE_PX = 8;               // gap to the window edges in full height
   const STAR_COLOUR = '#ffcc00';
+  const COLUMNS = 2;               // playlists side by side (1 = YouTube's single list)
+  const COLUMN_WIDTH_PX = 280;     // width of each column
+  const GROUP_ROWS = 3;            // a space after this many rows (0 = none)
+  const GROUP_GAP_PX = 16;         // size of that space
+  const GROUP_LINE = 'rgba(170, 170, 170, .55)';  // line in the middle of the space ('' = none)
   const FILTER_PLACEHOLDER = 'Filter playlists';
   const SAVE_BUTTON = true;        // a Save button with text right after Share
   const HIDE_NATIVE_SAVE = true;  // hide YouTube's own Save icon (ours replaces it)
@@ -44,6 +49,7 @@
   const SHEET_CLASS = 'kk-ytpl';
   const FILTER_CLASS = 'kk-ytpl-filter';
   const STAR_CLASS = 'kk-ytpl-star';
+  const GAP_CLASS = 'kk-ytpl-gap';
   const SAVE_CLASS = 'kk-ytpl-save';
   const SAVE_LABEL = /^(spara i spellista|save to playlist|spara|save)$/i;
   const SAVE_ITEM = /^(spara|save)\b/i;
@@ -59,7 +65,24 @@
   style.textContent = [
     // The list becomes a flex column, so favourites can be put first with
     // CSS order without moving YouTube's own elements.
-    '.' + SHEET_CLASS + ' yt-list-view-model { display: flex !important; flex-direction: column !important; }',
+    // In columns it becomes a grid instead; CSS order works the same there.
+    COLUMNS > 1
+      ? '.' + SHEET_CLASS + ' yt-list-view-model { display: grid !important; grid-template-columns: repeat(' + COLUMNS + ', minmax(0, 1fr)) !important; column-gap: 4px; align-content: start; }'
+      : '.' + SHEET_CLASS + ' yt-list-view-model { display: flex !important; flex-direction: column !important; }',
+    // Wider menu for the columns; the sheet's own width limits are lifted.
+    COLUMNS > 1 ? [
+      'tp-yt-iron-dropdown:has(.' + SHEET_CLASS + ') {',
+      '  width: ' + (COLUMNS * COLUMN_WIDTH_PX + 24) + 'px !important; max-width: calc(100vw - ' + (EDGE_PX * 2) + 'px) !important;',
+      '}',
+      'tp-yt-iron-dropdown:has(.' + SHEET_CLASS + ') #contentWrapper,',
+      '.' + SHEET_CLASS + ',',
+      '.' + SHEET_CLASS + ' yt-contextual-sheet-layout,',
+      '.' + SHEET_CLASS + ' .ytContextualSheetLayoutContentContainer { width: 100% !important; max-width: none !important; }',
+      '.' + SHEET_CLASS + ' ' + ROW + ' { min-width: 0; }'
+    ].join('\n') : '',
+    '.' + SHEET_CLASS + ' ' + ROW + '.' + GAP_CLASS + ' { margin-bottom: ' + GROUP_GAP_PX + 'px !important; }',
+    // The line runs across both columns (it reaches over the column gap).
+    GROUP_LINE ? '.' + SHEET_CLASS + ' ' + ROW + '.' + GAP_CLASS + '::after { content: ""; position: absolute; left: -2px; right: -2px; height: 2px; border-radius: 1px; background: ' + GROUP_LINE + '; bottom: ' + (-Math.round(GROUP_GAP_PX / 2) - 1) + 'px; pointer-events: none; }' : '',
     '.' + SHEET_CLASS + ' ' + ROW + ' { position: relative; }',
     // Full height: the dropdown is pinned from top to bottom (its inline
     // top and size are YouTube's, so !important) and only the list scrolls.
@@ -177,12 +200,27 @@
       const display = !wanted || name.toLowerCase().indexOf(wanted) !== -1 ? '' : 'none';
       if (row.style.display !== display) row.style.display = display;
     });
+    markGroups(sheet);
+  }
+
+  // A space under every GROUP_ROWS-th line of the menu, counted over the
+  // rows as shown (favourites first, filtered rows left out).
+  function markGroups(sheet) {
+    const cols = Math.max(1, COLUMNS);
+    shownRows(sheet).forEach((row, i) => {
+      const line = Math.floor(i / cols);
+      row.classList.toggle(GAP_CLASS, GROUP_ROWS > 0 && line % GROUP_ROWS === GROUP_ROWS - 1);
+    });
+  }
+
+  function shownRows(sheet) {
+    const rows = Array.from(sheet.querySelectorAll(ROW)).filter((row) => row.style.display !== 'none');
+    rows.sort((a, b) => (Number(a.style.order) || 0) - (Number(b.style.order) || 0));
+    return rows;
   }
 
   function firstShownRow(sheet) {
-    const rows = Array.from(sheet.querySelectorAll(ROW)).filter((row) => row.style.display !== 'none');
-    rows.sort((a, b) => (Number(a.style.order) || 0) - (Number(b.style.order) || 0));
-    return rows[0] || null;
+    return shownRows(sheet)[0] || null;
   }
 
   function ensureFilter(sheet) {
@@ -277,6 +315,7 @@
   function scan() {
     const sheet = playlistSheet();
     if (!sheet) {
+      releaseDropdown();
       wasOpen = false;
       return;
     }
@@ -303,6 +342,33 @@
     }
     wasOpen = open;
     decorateRows(sheet);
+    if (open && COLUMNS > 1) keepInside(dropdown);
+    else releaseDropdown();
+  }
+
+  // YouTube places the menu for its own, narrower width; the wider menu
+  // is moved left (by its margin, which YouTube leaves alone) when it
+  // would reach past the right edge of the window.
+  let shifted = null;
+
+  // YouTube reuses the dropdown for other menus: the shift goes once the
+  // playlist menu is closed.
+  function releaseDropdown() {
+    if (shifted && shifted.style.marginLeft) shifted.style.marginLeft = '';
+    shifted = null;
+  }
+
+  function keepInside(dropdown) {
+    if (shifted && shifted !== dropdown) releaseDropdown();
+    shifted = dropdown;
+    const current = parseFloat(dropdown.style.marginLeft) || 0;
+    const box = dropdown.getBoundingClientRect();
+    const left = box.left - current;
+    const right = box.right - current;
+    let shift = Math.min(0, window.innerWidth - EDGE_PX - right);
+    shift = Math.max(shift, EDGE_PX - left);
+    const next = shift ? shift + 'px' : '';
+    if (dropdown.style.marginLeft !== next) dropdown.style.marginLeft = next;
   }
 
   // SAVE BUTTON
