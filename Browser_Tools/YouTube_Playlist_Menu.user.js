@@ -1,12 +1,12 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 1.4_2026-11-11
+// @version = 1.6_2026-11-12
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-11-11
+// @version      1.6_2026-11-12
 // @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
@@ -47,6 +47,8 @@
   const SAVE_CLASS = 'kk-ytpl-save';
   const SAVE_LABEL = /^(spara i spellista|save to playlist|spara|save)$/i;
   const SAVE_ITEM = /^(spara|save)\b/i;
+  const QUIET_CLASS = 'kk-ytpl-quiet';
+  const QUIET_MAX_MS = 3000;       // give up on the three dots route after this
   const FAVOURITES_KEY = 'ytPlaylistFavourites';
   const SCAN_DELAY_MS = 80;
   const BOOT_TRIES = 40;
@@ -104,6 +106,11 @@
     '.' + SAVE_CLASS + ' svg { width: 24px; height: 24px; fill: currentColor; }',
     // YouTube's own Save icon is squeezed to nothing instead of removed:
     // our button presses it, and the menu opens next to where it sits.
+    // While the Save button goes through the three dots menu, that menu is
+    // opened invisibly, so only the playlist menu is seen. Every dropdown
+    // without a sheet counts: on the first press after loading the page the
+    // menu is shown empty before its entries are added.
+    'html.' + QUIET_CLASS + ' ytd-popup-container tp-yt-iron-dropdown:not(:has(yt-sheet-view-model)) { opacity: 0 !important; pointer-events: none !important; }',
     HIDE_NATIVE_SAVE ? [
       'ytd-watch-metadata #actions yt-button-view-model:has(button[aria-label="Spara i spellista" i]),',
       'ytd-watch-metadata #actions yt-button-view-model:has(button[aria-label="Save to playlist" i]) {',
@@ -307,30 +314,47 @@
       .find((b) => !b.classList.contains(SAVE_CLASS) && SAVE_LABEL.test((b.getAttribute('aria-label') || '').trim())) || null;
   }
 
-  function wait(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  async function openSave() {
-    const native = nativeSave();
-    if (native) {
-      native.click();
-      return;
-    }
+  // The three dots route: its Save entry is pressed the moment YouTube
+  // puts it in the menu (watched, not polled), with the menu invisible.
+  function saveThroughMenu() {
     const more = Array.from(document.querySelectorAll('ytd-watch-metadata #actions ytd-menu-renderer button'))
       .filter((b) => !b.classList.contains(SAVE_CLASS)).pop();
-    if (!more) return;
-    more.click();
-    // Only while the menu opens after a press: ten looks at most.
-    for (let i = 0; i < 10; i += 1) {
-      await wait(100);
-      const item = Array.from(document.querySelectorAll('ytd-popup-container [role="menuitem"]'))
-        .find((e) => e.getClientRects().length && SAVE_ITEM.test(e.textContent.trim()));
-      if (item) {
-        item.click();
+    const container = document.querySelector('ytd-popup-container');
+    if (!more || !container) return;
+    const root = document.documentElement;
+    let observer = null;
+    let timer = 0;
+    let pressed = false;
+    const done = () => {
+      if (observer) observer.disconnect();
+      clearTimeout(timer);
+      root.classList.remove(QUIET_CLASS);
+    };
+    // After the press, invisible until the playlist menu is there (the
+    // three dots menu is closed by then), or QUIET_MAX_MS at most.
+    const step = () => {
+      if (pressed) {
+        const sheet = playlistSheet();
+        if (sheet && sheet.getClientRects().length) done();
         return;
       }
-    }
+      const item = Array.from(container.querySelectorAll('[role="menuitem"]'))
+        .find((e) => e.getClientRects().length && SAVE_ITEM.test(e.textContent.trim()));
+      if (!item) return;
+      pressed = true;
+      item.click();
+    };
+    root.classList.add(QUIET_CLASS);
+    observer = new MutationObserver(step);
+    observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+    timer = setTimeout(done, QUIET_MAX_MS);
+    more.click();
+  }
+
+  function openSave() {
+    const native = nativeSave();
+    if (native) native.click();
+    else saveThroughMenu();
   }
 
   // Built with DOM calls: YouTube blocks innerHTML (Trusted Types).
