@@ -12,21 +12,10 @@ Click a folder to see its scripts, and a script to read what it does.
 
 <details><summary><b><code>PCM_Shared_Library/</code></b>: the shared DOM helper library, used by 26 scripts</summary>
 
-<blockquote>
-
 Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scripts that read or watch the page's DOM. Keeps DOM/runtime logic (boot/retry, style injection, observers, widget lookup) in one place so feature scripts only handle their own state and styling.
 
-**One library per application, not one per folder.** All PCM scripts target the same web app (puzzel.cm.puzzel.com, SmartAdmin/jarviswidget, Bootstrap accordions, DataTables, Chosen), so the same DOM helpers are valid on every PCM page. One shared library in `PCM_Shared_Library/` avoids per-folder copies drifting apart.
-
-The boundary is the application, not the repo. `PCC_Agent_View/` targets app.puzzel.com, an ARIA-grid SPA with nothing structurally in common with PCM, so PCC scripts must NOT require `PCM_Shared_Library`. If a third PCC script ever needs the agents grid or SPA navigation handling, extract the rebind/nav-hook machinery from `PCC_Agent_Highlighter` into a separate `PCC_DOM_Shared` module rather than reusing the PCM library.
-
-Not every script should use it, though. The rule of thumb:
-
-- Scripts that read or watch Puzzel's DOM structure (extracting data, reacting to widget changes) `@require` the shared library. They benefit from `bootUntil`, `ensureStyleTag`, observer lifecycle helpers, and widget lookup, and they should abort with a console error if `PCM_DOM` is missing.
-- Scripts that are pure CSS (`GM_addStyle` only) or pure timers stay standalone. A dependency adds nothing for them, and keeping them dependency-free means they cannot break if the `@require` fetch fails.
-
-If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), add them additively to the shared library rather than forking it per folder.
-
+<ul>
+<li>
 <details><summary>Scripts that use the library (26)</summary>
 
 - `PCM_Ticket_Info_Extractor`: Reads CI widget, accordion rows, tables; helpers aliased to the lib since 6.1
@@ -57,6 +46,8 @@ If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), 
 - `PCM_No_Access_Redirection_Button`: `bootUntil`, `ensureStyleTag`, `cleanText`; one observer on the direct children of body
 
 </details>
+</li>
+<li>
 <details><summary>Scripts that do not use it (23)</summary>
 
 - `PCM_Name_Field_Placeholder` (since 1.8): Calls no lib functions; bounded one-shot retries, so it stays dependency-free
@@ -84,8 +75,24 @@ If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), 
 - `Geckoboard_Keep_Last_Data`: Different app. Wraps fetch for widget data requests only; no observers, no polling
 
 </details>
+</li>
+<li>
+<details><summary>Why one library per application, not one per folder</summary>
 
-</blockquote>
+All PCM scripts target the same web app (puzzel.cm.puzzel.com, SmartAdmin/jarviswidget, Bootstrap accordions, DataTables, Chosen), so the same DOM helpers are valid on every PCM page. One shared library in `PCM_Shared_Library/` avoids per-folder copies drifting apart.
+
+The boundary is the application, not the repo. `PCC_Agent_View/` targets app.puzzel.com, an ARIA-grid SPA with nothing structurally in common with PCM, so PCC scripts must NOT require `PCM_Shared_Library`. If a third PCC script ever needs the agents grid or SPA navigation handling, extract the rebind/nav-hook machinery from `PCC_Agent_Highlighter` into a separate `PCC_DOM_Shared` module rather than reusing the PCM library.
+
+Not every script should use it, though. The rule of thumb:
+
+- Scripts that read or watch Puzzel's DOM structure (extracting data, reacting to widget changes) `@require` the shared library. They benefit from `bootUntil`, `ensureStyleTag`, observer lifecycle helpers, and widget lookup, and they should abort with a console error if `PCM_DOM` is missing.
+- Scripts that are pure CSS (`GM_addStyle` only) or pure timers stay standalone. A dependency adds nothing for them, and keeping them dependency-free means they cannot break if the `@require` fetch fails.
+
+If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), add them additively to the shared library rather than forking it per folder.
+
+</details>
+</li>
+</ul>
 </details>
 <details><summary><b><code>PCM_Ticket_View/</code></b>: ticket detail page (<code>/tickets/*</code>), 31 scripts</summary>
 
