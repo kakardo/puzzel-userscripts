@@ -1,19 +1,20 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 1.9_2026-11-13
+// @version = 2.3_2026-11-13
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.9_2026-11-13
-// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
+// @version      2.3_2026-11-13
+// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle; it is kept on screen and reloaded in place once the save is done, so the new tick shows without a blink; should it close anyway, it is opened again once YouTube has finished saving, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
 // @noframes
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        unsafeWindow
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Browser_Tools/YouTube_Playlist_Menu.user.js
 // @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Browser_Tools/YouTube_Playlist_Menu.user.js
 // ==/UserScript==
@@ -65,6 +66,11 @@
   const BOOT_TRIES = 40;
   const BOOT_INTERVAL_MS = 500;
   const REOPEN_WINDOW_MS = 1500;   // a close this soon after a toggle is YouTube's
+  const KEEP_OPEN_MS = 1000;       // a close this soon after a toggle is YouTube's own
+  const HOLD_MAX_MS = 4000;        // the menu is kept on screen this long at most
+  const SAVE_WAIT_MAX_MS = 3000;   // reopen after this even if the save is not seen
+  const HOLD_CLASS = 'kk-ytpl-hold';
+  const SCROLL_WAIT_MS = 2000;     // how long the scroll position waits for the rows
 
   const style = document.createElement('style');
   style.textContent = [
@@ -137,6 +143,9 @@
     '.' + SAVE_CLASS + ' svg { width: 24px; height: 24px; fill: currentColor; }',
     // YouTube's own Save icon is squeezed to nothing instead of removed:
     // our button presses it, and the menu opens next to where it sits.
+    // Kept on screen while YouTube closes and reloads the menu after a
+    // save; not clickable until the fresh rows are in.
+    'tp-yt-iron-dropdown.' + HOLD_CLASS + ' { display: block !important; opacity: 1 !important; visibility: visible !important; pointer-events: none !important; }',
     // While the Save button goes through the three dots menu, that menu is
     // opened invisibly, so only the playlist menu is seen. Every dropdown
     // without a sheet counts: on the first press after loading the page the
@@ -369,13 +378,137 @@
       .find((b) => /save|spara|playlist|spellista/i.test(b.getAttribute('aria-label') || '')) || null;
   }
 
-  function reopen(sheet) {
-    const filter = sheet.querySelector('.' + FILTER_CLASS);
+  // SAVES IN PROGRESS
+  // YouTube closes the menu as soon as a playlist is toggled, before the
+  // save itself is done. Opened again at once, the menu was loaded with
+  // the old state (the video not shown as saved). YouTube's save requests
+  // are counted here, so the menu is only opened again once they are done.
+  const SAVE_URL = /\/youtubei\/v1\/browse\/edit_playlist/;
+  let savesRunning = 0;
+  let lastSaveDone = 0;
+
+  // The page itself (outside the script's sandbox), where YouTube lives.
+  const page = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+  (function watchSaves() {
+    const original = page.fetch;
+    if (typeof original !== 'function') return;
+    const wrapped = function (input, init) {
+      let url = '';
+      try { url = typeof input === 'string' ? input : (input && input.url) || ''; } catch (_) { /* unreadable */ }
+      const result = original.apply(this, arguments);
+      if (SAVE_URL.test(url)) {
+        savesRunning += 1;
+        const end = () => {
+          savesRunning = Math.max(0, savesRunning - 1);
+          lastSaveDone = Date.now();
+        };
+        result.then(end, end);
+      }
+      return result;
+    };
+    try {
+      // Firefox keeps the page and the script apart; exportFunction hands
+      // the wrapper over to the page.
+      page.fetch = toPage(wrapped, page);
+    } catch (_) { /* the page refused: the time limit below still applies */ }
+  })();
+
+  // Done once no save is running and one has finished after the toggle,
+  // or after SAVE_WAIT_MAX_MS at most. Only runs after a toggle.
+  function afterSave(since, then) {
+    const until = Date.now() + SAVE_WAIT_MAX_MS;
+    (function check() {
+      const saved = savesRunning === 0 && lastSaveDone >= since;
+      if (saved || Date.now() > until) then(saved);
+      else setTimeout(check, 50);
+    })();
+  }
+
+  // KEEPING THE MENU ON SCREEN
+  // After a toggle YouTube closes the menu by calling close() on its
+  // dropdown, and only a fresh menu shows the new tick (a row cannot be
+  // updated in place). So that close() is let through, but the dropdown
+  // is held on screen first (HOLD_CLASS): the menu does not blink while
+  // it is opened again and reloaded, and the new rows replace the old in
+  // place. A click outside or Escape uses cancel(), not close(), so those
+  // close it as usual.
+  function toPage(fn, scope) {
+    return typeof exportFunction === 'function' ? exportFunction(fn, scope) : fn;
+  }
+
+  let holdTimer = 0;
+
+  function hold(dropdown) {
+    dropdown.classList.add(HOLD_CLASS);
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => release(dropdown), HOLD_MAX_MS);
+  }
+
+  function release(dropdown) {
+    clearTimeout(holdTimer);
+    if (dropdown && dropdown.classList.contains(HOLD_CLASS)) dropdown.classList.remove(HOLD_CLASS);
+  }
+
+  function guardClose(dropdown) {
+    if (!STAY_OPEN || dropdown.dataset.kkGuard) return;
+    const target = dropdown.wrappedJSObject || dropdown;
+    const original = target.close;
+    if (typeof original !== 'function') return;
+    try {
+      target.close = toPage(function () {
+        if (Date.now() - toggledAt < KEEP_OPEN_MS) hold(dropdown);
+        return original.apply(this, arguments);
+      }, target);
+      dropdown.dataset.kkGuard = '1';
+    } catch (_) { /* refused: the reopen below still covers it */ }
+  }
+
+  // The scroll position is read while the menu is open: once YouTube has
+  // hidden it, the list reports 0, which sent the reopened menu to the top.
+  let lastScroll = 0;
+
+  function watchScroll(sheet) {
     const scroller = sheet.querySelector('.ytContextualSheetLayoutContentContainer');
-    restore = { filter: filter ? filter.value : '', scroll: scroller ? scroller.scrollTop : 0 };
-    const button = trigger && trigger.isConnected ? trigger : saveButton();
-    if (button) button.click();
-    else restore = null;
+    if (!scroller || scroller.dataset.kkScroll) return;
+    scroller.dataset.kkScroll = '1';
+    scroller.addEventListener('scroll', () => { lastScroll = scroller.scrollTop; }, { passive: true });
+    // Your own scrolling ends the putting back at once.
+    ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach((type) => {
+      scroller.addEventListener(type, () => { pendingScroll = null; }, { passive: true });
+    });
+  }
+
+  function reopen(sheet, since) {
+    const filter = sheet.querySelector('.' + FILTER_CLASS);
+    restore = { filter: filter ? filter.value : '', scroll: lastScroll };
+    pendingScroll = lastScroll ? { value: lastScroll, until: Date.now() + SAVE_WAIT_MAX_MS + SCROLL_WAIT_MS } : null;
+    afterSave(since, () => {
+      const button = trigger && trigger.isConnected ? trigger : saveButton();
+      if (button) button.click();
+      else restore = null;
+    });
+  }
+
+  // Put back once the rows are there to scroll to (they arrive a moment
+  // after the menu opens), or after SCROLL_WAIT_MS at most.
+  let pendingScroll = null;
+
+  function applyScroll(sheet) {
+    if (!pendingScroll) return;
+    // Not while the old menu is only held on screen: the reloaded rows
+    // would start at the top again.
+    const dropdown = sheet.closest('tp-yt-iron-dropdown');
+    if (!dropdown || dropdown.style.display === 'none') return;
+    const scroller = sheet.querySelector('.ytContextualSheetLayoutContentContainer');
+    if (!scroller) return;
+    // Kept up until the time is out: YouTube may swap in the fresh rows
+    // after the menu is open again, which starts the list at the top.
+    if (Date.now() > pendingScroll.until) {
+      pendingScroll = null;
+      return;
+    }
+    if (Math.abs(scroller.scrollTop - pendingScroll.value) > 1) scroller.scrollTop = pendingScroll.value;
   }
 
   function scan() {
@@ -396,18 +529,25 @@
       restore = null;
       filter.value = back ? back.filter : '';
       filter.focus({ preventScroll: true });
-      if (back) {
-        const scroller = sheet.querySelector('.ytContextualSheetLayoutContentContainer');
-        if (scroller) requestAnimationFrame(() => { scroller.scrollTop = back.scroll; });
+      if (!back) {
+        lastScroll = 0;
+        pendingScroll = null;
       }
     }
     // Closed by YouTube right after a toggle: open it again.
     if (STAY_OPEN && !open && wasOpen && Date.now() - toggledAt < REOPEN_WINDOW_MS) {
+      const since = toggledAt;
       toggledAt = 0;
-      reopen(sheet);
+      reopen(sheet, since);
     }
     wasOpen = open;
     decorateRows(sheet);
+    if (open) {
+      guardClose(dropdown);
+      watchScroll(sheet);
+      applyScroll(sheet);
+      if (sheet.querySelector(ROW)) release(dropdown);
+    }
     if (open && COLUMNS > 1) keepInside(dropdown);
     else releaseDropdown();
   }
@@ -555,7 +695,15 @@
   // Only YouTube's popup container is watched: the menu is built there and
   // shown or hidden through its dropdown's style.
   function start(container) {
-    new MutationObserver(schedule).observe(container, {
+    // The scroll position is put back at once (before the page is drawn),
+    // so a reloaded menu does not show its top first.
+    new MutationObserver(() => {
+      if (pendingScroll) {
+        const sheet = playlistSheet();
+        if (sheet) applyScroll(sheet);
+      }
+      schedule();
+    }).observe(container, {
       childList: true,
       subtree: true,
       attributes: true,
