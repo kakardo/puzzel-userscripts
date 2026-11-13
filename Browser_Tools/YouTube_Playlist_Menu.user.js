@@ -1,12 +1,12 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 2.9_2026-11-13
+// @version = 3.1_2026-11-13
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.9_2026-11-13
+// @version      3.1_2026-11-13
 // @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. A click on a playlist saves or removes the video without reloading the menu: a saved playlist is shown boxed in like a pressed button (YouTube's bookmark icons are hidden, the star sits before the name), and the menu stays open without reloading. While YouTube is still saving, the row shows a small spinner; the box only appears or goes once YouTube has confirmed. Closing the tab while saving asks first. The "New playlist" button sits in the top right corner, on the same line as the menu's title, so the list gets the room of the bottom bar. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle; it is kept on screen and reloaded in place once the save is done, so the new tick shows without a blink; should it close anyway, it is opened again once YouTube has finished saving, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
@@ -133,8 +133,12 @@
     '.' + FILTER_CLASS + ' {',
     '  box-sizing: border-box; width: calc(100% - 24px); margin: 4px 12px 8px; padding: 7px 10px;',
     '  border: 1px solid rgba(255,255,255,.2); border-radius: 8px;',
-    '  background: rgba(255,255,255,.08); color: inherit; font: inherit; font-size: 14px; outline: none;',
+    '  background: rgba(255,255,255,.08); font: inherit; font-size: 14px; outline: none;',
+    // YouTube's own text colours (light in the dark theme, dark in the
+    // light one); inheriting gave black text on the dark menu.
+    '  color: var(--yt-spec-text-primary, #f1f1f1) !important; caret-color: var(--yt-spec-text-primary, #f1f1f1);',
     '}',
+    '.' + FILTER_CLASS + '::placeholder { color: var(--yt-spec-text-secondary, #aaa); opacity: 1; }',
     '.' + FILTER_CLASS + ':focus { border-color: rgba(255,255,255,.5); }',
     '.' + STAR_CLASS + ' {',
     '  position: absolute; top: 50%; right: 52px; transform: translateY(-50%); z-index: 2;',
@@ -362,6 +366,12 @@
     filter.placeholder = FILTER_PLACEHOLDER;
     filter.autocomplete = 'off';
     filter.addEventListener('input', () => decorateRows(sheet));
+    // A click in the box stays in the box: passed on, YouTube took it as
+    // a click in the menu and closed it. Only passing it on is stopped, so
+    // the cursor still lands where you click.
+    ['pointerdown', 'mousedown', 'mouseup', 'click', 'pointerup', 'touchstart', 'touchend'].forEach((type) => {
+      filter.addEventListener(type, (event) => event.stopPropagation());
+    });
     // Typing here must not reach YouTube's keyboard shortcuts (k, f, m ...).
     ['keydown', 'keypress', 'keyup'].forEach((type) => {
       filter.addEventListener(type, (event) => {
