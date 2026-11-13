@@ -1,13 +1,13 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 2.5_2026-11-13
+// @version = 2.7_2026-11-13
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.5_2026-11-13
-// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. A click on a playlist saves or removes the video at once: a saved playlist is shown boxed in like a pressed button (YouTube's bookmark icons are hidden, the star sits before the name), and the menu stays open without reloading. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle; it is kept on screen and reloaded in place once the save is done, so the new tick shows without a blink; should it close anyway, it is opened again once YouTube has finished saving, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
+// @version      2.7_2026-11-13
+// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. A click on a playlist saves or removes the video without reloading the menu: a saved playlist is shown boxed in like a pressed button (YouTube's bookmark icons are hidden, the star sits before the name), and the menu stays open without reloading. While YouTube is still saving, the row shows a small spinner; the box only appears or goes once YouTube has confirmed. Closing the tab while saving asks first. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle; it is kept on screen and reloaded in place once the save is done, so the new tick shows without a blink; should it close anyway, it is opened again once YouTube has finished saving, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -150,7 +150,14 @@
       SHEET + ' ' + ROW + ' svg, ' + SHEET + ' ' + ROW + ' yt-icon, ' + SHEET + ' ' + ROW + ' yt-icon-shape { display: none !important; }',
       SHEET + ' ' + ROW + ' { border-radius: 10px; transition: box-shadow .12s, background-color .12s; }',
       SHEET + ' ' + ROW + '.' + SAVED_CLASS + ' { box-shadow: inset 0 0 0 2px ' + SAVED_COLOUR + '; background-color: color-mix(in srgb, ' + SAVED_COLOUR + ' 16%, transparent); }',
-      SHEET + ' ' + ROW + '.' + BUSY_CLASS + ' { opacity: .7; }',
+      // Still saving: a spinner at the right end of the row. The box itself
+      // only changes once YouTube has confirmed.
+      SHEET + ' ' + ROW + '.' + BUSY_CLASS + '::before {',
+      '  content: ""; position: absolute; right: 12px; top: 50%; width: 14px; height: 14px; margin-top: -9px; z-index: 2;',
+      '  border: 2px solid ' + SAVED_COLOUR + '; border-right-color: transparent; border-radius: 50%;',
+      '  animation: kk-ytpl-spin .7s linear infinite; pointer-events: none;',
+      '}',
+      '@keyframes kk-ytpl-spin { to { transform: rotate(360deg); } }',
       SHEET + ' ' + ROW + '.' + FAILED_CLASS + ' { box-shadow: inset 0 0 0 2px #e53935; }'
     ].join('\n') : '',
     // Same look as YouTube's own pill buttons, in light and dark theme.
@@ -422,15 +429,16 @@
 
   // OWN TOGGLE
   // YouTube only shows a new tick after reloading the whole menu, which is
-  // slow. Instead the script keeps the saved state itself, shows it at
-  // once (a box around the playlist) and sends the same save or remove
-  // request YouTube would, in the background. The request is taken from
+  // slow. Instead the script keeps the saved state itself, shows it as a
+  // box around the playlist and sends the same save or remove request
+  // YouTube would, without reloading the menu. The request is taken from
   // the row itself: each row carries both of YouTube's versions, "not
   // saved" with the add action and "saved" with the remove action. The
+  // box changes once YouTube has confirmed; until then a spinner shows. The
   // sign-in headers are copied from YouTube's own requests (opening the
   // menu makes one). Without them, or without a row's data, the click is
-  // left to YouTube as before. A failed request puts the state back and
-  // flashes the row red.
+  // left to YouTube as before. A failed request leaves the state as it
+  // was and flashes the row red.
   let ytHeaders = null;
   const overrides = new Map();     // videoId|playlistId -> saved, this page only
 
@@ -508,10 +516,22 @@
     const body = '{"context":' + page.JSON.stringify(context) + ',"playlistId":' + JSON.stringify(edit.playlistId) +
       ',"actions":' + JSON.stringify(edit.actions) + '}';
     const headers = Object.assign({}, ytHeaders, { 'content-type': 'application/json' });
-    return Promise.resolve(pageFetch.call(page, EDIT_URL, toPageObject({ method: 'POST', credentials: 'include', headers: headers, body: body })))
+    // Started inside the chain, so even an error at the start ends as a
+    // failure (spinner gone, state put back) instead of hanging.
+    return Promise.resolve()
+      .then(() => pageFetch.call(page, EDIT_URL, toPageObject({ method: 'POST', credentials: 'include', headers: headers, body: body })))
       .then((res) => res.json())
       .then((json) => !!json && json.status === 'STATUS_SUCCEEDED', () => false);
   }
+
+  // Closing the tab while a save is still on its way could lose it: the
+  // browser asks first, only then.
+  let busyCount = 0;
+  window.addEventListener('beforeunload', (event) => {
+    if (busyCount <= 0) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
 
   // Seen before anything of YouTube's (window, capture phase), so YouTube
   // neither saves nor closes the menu for a click handled here.
@@ -527,12 +547,15 @@
     event.stopPropagation();
     toggledAt = 0;
     if (row.classList.contains(BUSY_CLASS)) return;
-    setSaved(row, !saved);
     row.classList.add(BUSY_CLASS);
+    busyCount += 1;
     sendEdit(edit).then((ok) => {
+      busyCount -= 1;
       row.classList.remove(BUSY_CLASS);
-      if (ok) return;
-      setSaved(row, saved);
+      if (ok) {
+        setSaved(row, !saved);
+        return;
+      }
       row.classList.add(FAILED_CLASS);
       setTimeout(() => row.classList.remove(FAILED_CLASS), 1500);
     });
