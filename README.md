@@ -10,10 +10,78 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
 
 Click a folder to see its scripts, and a script to read what it does.
 
-<details><summary><b><code>PCM_Shared_Library/</code></b>: the shared DOM helper library</summary>
+<details><summary><b><code>PCM_Shared_Library/</code></b>: the shared DOM helper library, used by 26 scripts</summary>
 
 Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scripts that read or watch the page's DOM. Keeps DOM/runtime logic (boot/retry, style injection, observers, widget lookup) in one place so feature scripts only handle their own state and styling.
 
+**One library per application, not one per folder.** All PCM scripts target the same web app (puzzel.cm.puzzel.com, SmartAdmin/jarviswidget, Bootstrap accordions, DataTables, Chosen), so the same DOM helpers are valid on every PCM page. One shared library in `PCM_Shared_Library/` avoids per-folder copies drifting apart.
+
+The boundary is the application, not the repo. `PCC_Agent_View/` targets app.puzzel.com, an ARIA-grid SPA with nothing structurally in common with PCM, so PCC scripts must NOT require `PCM_Shared_Library`. If a third PCC script ever needs the agents grid or SPA navigation handling, extract the rebind/nav-hook machinery from `PCC_Agent_Highlighter` into a separate `PCC_DOM_Shared` module rather than reusing the PCM library.
+
+Not every script should use it, though. The rule of thumb:
+
+- Scripts that read or watch Puzzel's DOM structure (extracting data, reacting to widget changes) `@require` the shared library. They benefit from `bootUntil`, `ensureStyleTag`, observer lifecycle helpers, and widget lookup, and they should abort with a console error if `PCM_DOM` is missing.
+- Scripts that are pure CSS (`GM_addStyle` only) or pure timers stay standalone. A dependency adds nothing for them, and keeping them dependency-free means they cannot break if the `@require` fetch fails.
+
+If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), add them additively to the shared library rather than forking it per folder.
+
+<details><summary>Scripts that use the library (26)</summary>
+
+- `PCM_Ticket_Info_Extractor`: Reads CI widget, accordion rows, tables; helpers aliased to the lib since 6.1
+- `PCM_New_Ticket_Notifier`: Table reading, observers, dedupe and JSON storage from the lib
+- `Puzzel_Styler_(Ticket_Field)`: Entirely built on `createFieldRuntime`
+- `PCM_Form_Buttons`: General DOM work via `PCM_DOM`; GitHub `@require` since 2.3
+- `PCM_Unsaved_Form_Warning`: `bootUntil`, `ensureStyleTag`, `createVisibilityGate`, snapshot diffing over form fields
+- `PCM_Team_Quick_Select`: `bootUntil`, `ensureStyleTag`, `cleanText`; drives the Chosen team widget
+- `PCM Dark Mode (Attributes)` (since 4.6): Watches widget state; `bootUntil`, `ensureStyleTag`, `createVisibilityGate`
+- `PCM_Compact_View`: `bootUntil`, `ensureStyleTag`, `createVisibilityGate`; rewrites cells per draw so the visibility gate matters
+- `PCM_Unsaved_Attributes_Warning`: Built on `createUnsavedWatcher`
+- `PCM_Organisation_Quick_Search`: `createFieldFinder`, `createVisibilityGate`, `flashLabel`; drives the select2 Organisation widget
+- `PCM_Partner_Highlight`: `createVisibilityGate`, `installNavigationHooks`; reads the Extractor's outputs
+- `PCM_PostIt_Quick_Text`: `bootUntil`, `setNativeFieldValue`, `flashLabel`, `createVisibilityGate`; one scoped MutationObserver
+- `PCM_Assign_Buttons`: `bootUntil`, `createVisibilityGate`, `cleanText`; one scoped MutationObserver
+- `PCM_Collapse_Categories`: `bootUntil`, `ensureStyleTag`, `createVisibilityGate`; one scoped MutationObserver
+- `PCM_Incident_Button`: Field lookup and value setting over the re-rendering Forms widget
+- `PCM_Change_Completed_Now`: Widget-scoped observer behind `createVisibilityGate`
+- `PCM_Timeline_Box_Autosize`: `createVisibilityGate`, `installNavigationHooks`, `readJson`/`writeJson`; one ResizeObserver plus one scoped MutationObserver
+- `PCM_Mail_Templates`: Summernote editor helpers, `createVisibilityGate`, `flashLabel`
+- `PCM_Subscription_Buttons`: Field finder, native value setter and editor helpers
+- `PCM_Quick_Email`: `bootUntil`, `createVisibilityGate`, `flashLabel`; one scoped MutationObserver plus a bounded wait after assigning
+- `PCM_Quick_Emoji`: `bootUntil`, `createVisibilityGate`; one scoped MutationObserver, inserts through Summernote
+- `PCM_Customer_ID_Reminder`: `bootUntil`, `createVisibilityGate`, `ensureStyleTag`; one scoped MutationObserver, at most one request per customer and page view
+- `PCM_Customer_Ticket_Count`: `bootUntil`, `createVisibilityGate`, `ensureStyleTag`; one scoped MutationObserver, one request per customer and page view, shared with PCM_Customer_ID_Reminder and PCM_Customer_Top_List
+- `PCM_Customer_Top_List`: `createVisibilityGate`, `readJson`/`writeJson`, `escapeHtml`; runs at document-start to place the button as early as possible (that observer stops when the page is parsed), the ticket observer only starts on a ticket page
+- `PCM_Jira_Quick_Link`: `bootUntil`, `setNativeFieldValue`, `flashLabel`, `createVisibilityGate`; one scoped MutationObserver
+- `PCM_No_Access_Redirection_Button`: `bootUntil`, `ensureStyleTag`, `cleanText`; one observer on the direct children of body
+
+</details>
+<details><summary>Scripts that do not use it (23)</summary>
+
+- `PCM_Name_Field_Placeholder` (since 1.8): Calls no lib functions; bounded one-shot retries, so it stays dependency-free
+- `PCM Dark Mode (Ticket List)`: Mostly CSS plus a small toggle; marginal benefit
+- `PCM Dark Mode (Ticket, Org, Customer Background)`: Pure CSS
+- `PCM_Auto_Refresh`: Timer core, reloads the page every interval; must stay dependency-free
+- `PCM_Hide_Columns`: Drives the DataTables API (through unsafeWindow, it has Tampermonkey storage grants), event-driven via init.dt; no DOM watching to share
+- `PCM_Selected_Row_Highlight`: Pure CSS on the `selected` class DataTables sets
+- `PCM_Last_Activity_Sort`: Drives the DataTables API, event-driven via init.dt and order.dt; no DOM watching to share
+- `PCM_Ticket_Search_New_Tab`: One capture-phase key listener; runs at document-start with an observer that only runs while the page loads
+- `PCM_Bulk_Update_Presets`: Purely event-driven via `shown.bs.modal`; sets three plain selects
+- `PCM_Show_Organisation_Info`: Event-driven via jQuery `ajaxComplete`; one background request per organisation change
+- `PCM_Reply_Editor_Autosize`: Pure CSS, a single style tag
+- `PCM_Template_ID_Viewer`: Purely event-driven inside one modal
+- `PCM_Image_Viewer`: Purely event-driven via `shown.bs.modal` and the iframe load event
+- `PCM_Merge_By_Number`: Purely event-driven via `shown.bs.modal`; one lookup per Use click
+- `PCM_No_Autoscroll`: Must run at document-start, before the library loads; active only while a ticket opens
+- `PCM_Timeline_Preview_Cleanup`: CSS for hiding, plus jQuery `ajaxComplete` and `shown.bs.modal` for avatars; no observers
+- `PCC_User_Group_Search`: Different app (Admin console), server-rendered, bounded boot only
+- `POS_Access_Log_Filter`: Different app (Organisation Settings), server-rendered, bounded boot plus one row observer
+- `PCC_Agent_Highlighter`: Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines
+- `PCC_Request_Alert`: Different app. Watches one status element and adds one main menu entry; nothing to share
+- `PCC_Softphone_Status_Highlight`: Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection
+- `Geckoboard_Full_Numbers`: Different app (Geckoboard). Pure CSS, a single style tag
+- `Geckoboard_Keep_Last_Data`: Different app. Wraps fetch for widget data requests only; no observers, no polling
+
+</details>
 </details>
 <details><summary><b><code>PCM_Ticket_View/</code></b>: ticket detail page (<code>/tickets/*</code>), 31 scripts</summary>
 
@@ -413,73 +481,6 @@ Rings (and optionally notifies, flashes the tab title or the screen) when your s
 </li>
 </ul>
 </details>
-
-## Design logic: one shared DOM library per application, not one per folder
-
-All PCM scripts target the same web app (puzzel.cm.puzzel.com, SmartAdmin/jarviswidget, Bootstrap accordions, DataTables, Chosen), so the same DOM helpers are valid on every PCM page. One shared library in `PCM_Shared_Library/` avoids per-folder copies drifting apart.
-
-The boundary is the application, not the repo. `PCC_Agent_View/` targets app.puzzel.com, an ARIA-grid SPA with nothing structurally in common with PCM, so PCC scripts must NOT require `PCM_Shared_Library`. If a third PCC script ever needs the agents grid or SPA navigation handling, extract the rebind/nav-hook machinery from `PCC_Agent_Highlighter` into a separate `PCC_DOM_Shared` module rather than reusing the PCM library.
-
-Not every script should use it, though. The rule of thumb:
-
-- Scripts that read or watch Puzzel's DOM structure (extracting data, reacting to widget changes) `@require` the shared library. They benefit from `bootUntil`, `ensureStyleTag`, observer lifecycle helpers, and widget lookup, and they should abort with a console error if `PCM_DOM` is missing.
-- Scripts that are pure CSS (`GM_addStyle` only) or pure timers stay standalone. A dependency adds nothing for them, and keeping them dependency-free means they cannot break if the `@require` fetch fails.
-
-Current status:
-
-| Script | Shared DOM? | Why |
-| --- | --- | --- |
-| PCM_Ticket_Info_Extractor | Yes | Reads CI widget, accordion rows, tables; helpers aliased to the lib since 6.1 |
-| PCM_New_Ticket_Notifier | Yes | Table reading, observers, dedupe and JSON storage from the lib |
-| Puzzel_Styler_(Ticket_Field) | Yes | Entirely built on `createFieldRuntime` |
-| PCM_Form_Buttons | Yes | General DOM work via `PCM_DOM`; GitHub `@require` since 2.3 |
-| PCM_Unsaved_Form_Warning | Yes | `bootUntil`, `ensureStyleTag`, `createVisibilityGate`, snapshot diffing over form fields |
-| PCM_Team_Quick_Select | Yes | `bootUntil`, `ensureStyleTag`, `cleanText`; drives the Chosen team widget |
-| PCM_Name_Field_Placeholder | No (since 1.8) | Calls no lib functions; bounded one-shot retries, so it stays dependency-free |
-| PCM Dark Mode (Attributes) | Yes (since 4.6) | Watches widget state; `bootUntil`, `ensureStyleTag`, `createVisibilityGate` |
-| PCM Dark Mode (Ticket List) | No | Mostly CSS plus a small toggle; marginal benefit |
-| PCM Dark Mode (Ticket, Org, Customer Background) | No | Pure CSS |
-| PCM_Auto_Refresh | No | Timer core, reloads the page every interval; must stay dependency-free |
-| PCM_Hide_Columns | No | Drives the DataTables API (through unsafeWindow, it has Tampermonkey storage grants), event-driven via init.dt; no DOM watching to share |
-| PCM_Compact_View | Yes | `bootUntil`, `ensureStyleTag`, `createVisibilityGate`; rewrites cells per draw so the visibility gate matters |
-| PCM_Selected_Row_Highlight | No | Pure CSS on the `selected` class DataTables sets |
-| PCM_Last_Activity_Sort | No | Drives the DataTables API, event-driven via init.dt and order.dt; no DOM watching to share |
-| PCM_Ticket_Search_New_Tab | No | One capture-phase key listener; runs at document-start with an observer that only runs while the page loads |
-| PCM_Bulk_Update_Presets | No | Purely event-driven via `shown.bs.modal`; sets three plain selects |
-| PCM_Unsaved_Attributes_Warning | Yes | Built on `createUnsavedWatcher` |
-| PCM_Organisation_Quick_Search | Yes | `createFieldFinder`, `createVisibilityGate`, `flashLabel`; drives the select2 Organisation widget |
-| PCM_Show_Organisation_Info | No | Event-driven via jQuery `ajaxComplete`; one background request per organisation change |
-| PCM_Partner_Highlight | Yes | `createVisibilityGate`, `installNavigationHooks`; reads the Extractor's outputs |
-| PCM_PostIt_Quick_Text | Yes | `bootUntil`, `setNativeFieldValue`, `flashLabel`, `createVisibilityGate`; one scoped MutationObserver |
-| PCM_Assign_Buttons | Yes | `bootUntil`, `createVisibilityGate`, `cleanText`; one scoped MutationObserver |
-| PCM_Collapse_Categories | Yes | `bootUntil`, `ensureStyleTag`, `createVisibilityGate`; one scoped MutationObserver |
-| PCM_Incident_Button | Yes | Field lookup and value setting over the re-rendering Forms widget |
-| PCM_Change_Completed_Now | Yes | Widget-scoped observer behind `createVisibilityGate` |
-| PCM_Reply_Editor_Autosize | No | Pure CSS, a single style tag |
-| PCM_Timeline_Box_Autosize | Yes | `createVisibilityGate`, `installNavigationHooks`, `readJson`/`writeJson`; one ResizeObserver plus one scoped MutationObserver |
-| PCM_Mail_Templates | Yes | Summernote editor helpers, `createVisibilityGate`, `flashLabel` |
-| PCM_Subscription_Buttons | Yes | Field finder, native value setter and editor helpers |
-| PCM_Quick_Email | Yes | `bootUntil`, `createVisibilityGate`, `flashLabel`; one scoped MutationObserver plus a bounded wait after assigning |
-| PCM_Quick_Emoji | Yes | `bootUntil`, `createVisibilityGate`; one scoped MutationObserver, inserts through Summernote |
-| PCM_Template_ID_Viewer | No | Purely event-driven inside one modal |
-| PCM_Image_Viewer | No | Purely event-driven via `shown.bs.modal` and the iframe load event |
-| PCM_Merge_By_Number | No | Purely event-driven via `shown.bs.modal`; one lookup per Use click |
-| PCM_Customer_ID_Reminder | Yes | `bootUntil`, `createVisibilityGate`, `ensureStyleTag`; one scoped MutationObserver, at most one request per customer and page view |
-| PCM_Customer_Ticket_Count | Yes | `bootUntil`, `createVisibilityGate`, `ensureStyleTag`; one scoped MutationObserver, one request per customer and page view, shared with PCM_Customer_ID_Reminder and PCM_Customer_Top_List |
-| PCM_Customer_Top_List | Yes | `createVisibilityGate`, `readJson`/`writeJson`, `escapeHtml`; runs at document-start to place the button as early as possible (that observer stops when the page is parsed), the ticket observer only starts on a ticket page |
-| PCM_No_Autoscroll | No | Must run at document-start, before the library loads; active only while a ticket opens |
-| PCM_Timeline_Preview_Cleanup | No | CSS for hiding, plus jQuery `ajaxComplete` and `shown.bs.modal` for avatars; no observers |
-| PCM_Jira_Quick_Link | Yes | `bootUntil`, `setNativeFieldValue`, `flashLabel`, `createVisibilityGate`; one scoped MutationObserver |
-| PCM_No_Access_Redirection_Button | Yes | `bootUntil`, `ensureStyleTag`, `cleanText`; one observer on the direct children of body |
-| PCC_User_Group_Search | No | Different app (Admin console), server-rendered, bounded boot only |
-| POS_Access_Log_Filter | No | Different app (Organisation Settings), server-rendered, bounded boot plus one row observer |
-| PCC_Agent_Highlighter | No | Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines |
-| PCC_Request_Alert | No | Different app. Watches one status element and adds one main menu entry; nothing to share |
-| PCC_Softphone_Status_Highlight | No | Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection |
-| Geckoboard_Full_Numbers | No | Different app (Geckoboard). Pure CSS, a single style tag |
-| Geckoboard_Keep_Last_Data | No | Different app. Wraps fetch for widget data requests only; no observers, no polling |
-
-If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), add them additively to the shared library rather than forking it per folder.
 
 ## Installing
 
