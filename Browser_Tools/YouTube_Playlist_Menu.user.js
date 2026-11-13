@@ -1,13 +1,13 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 2.3_2026-11-13
+// @version = 2.4_2026-11-13
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.3_2026-11-13
-// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle; it is kept on screen and reloaded in place once the save is done, so the new tick shows without a blink; should it close anyway, it is opened again once YouTube has finished saving, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
+// @version      2.4_2026-11-13
+// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. A click on a playlist saves or removes the video at once: a saved playlist is shown boxed in like a pressed button (YouTube's bookmark icons are hidden, the star sits before the name), and the menu stays open without reloading. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle; it is kept on screen and reloaded in place once the save is done, so the new tick shows without a blink; should it close anyway, it is opened again once YouTube has finished saving, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -28,6 +28,8 @@
   const STAY_OPEN = true;          // open the menu again after saving to a playlist
   const EDGE_PX = 8;               // gap to the window edges in full height
   const STAR_COLOUR = '#ffcc00';
+  const OWN_TOGGLE = true;         // our own saved box and instant save/remove (false = YouTube's icons)
+  const SAVED_COLOUR = '#3ea6ff';  // box around a playlist the video is in
   const COLUMNS = 2;               // playlists side by side (1 = YouTube's single list)
   const COLUMN_WIDTH_PX = 280;     // width of each column
   const GROUP_ROWS = 3;            // a space after this many rows (0 = none)
@@ -54,6 +56,10 @@
   const STAR_CLASS = 'kk-ytpl-star';
   const GAP_CLASS = 'kk-ytpl-gap';
   const LABEL_CLASS = 'kk-ytpl-label';
+  const SAVED_CLASS = 'kk-ytpl-saved';
+  const BUSY_CLASS = 'kk-ytpl-busy';
+  const FAILED_CLASS = 'kk-ytpl-failed';
+  const EDIT_URL = '/youtubei/v1/browse/edit_playlist?prettyPrint=false';
   const LABEL_SEPARATOR = ' - ';
   const LABEL_MAX_LENGTH = 24;     // longer first parts are a name, not a label
   const SAVE_CLASS = 'kk-ytpl-save';
@@ -132,6 +138,17 @@
     '}',
     '.' + STAR_CLASS + ':hover { color: ' + STAR_COLOUR + '; }',
     '.' + STAR_CLASS + '.kk-on { color: ' + STAR_COLOUR + '; }',
+    // Own toggle: star before the name, YouTube's bookmark icons hidden,
+    // a saved playlist boxed in like a pressed button.
+    OWN_TOGGLE ? [
+      '.' + SHEET_CLASS + ' .ytListItemViewModelContainer { padding-left: 36px !important; }',
+      '.' + SHEET_CLASS + ' .' + STAR_CLASS + ' { left: 8px; right: auto; }',
+      '.' + SHEET_CLASS + ' ' + ROW + ' svg, .' + SHEET_CLASS + ' ' + ROW + ' yt-icon, .' + SHEET_CLASS + ' ' + ROW + ' yt-icon-shape { display: none !important; }',
+      '.' + SHEET_CLASS + ' ' + ROW + ' { border-radius: 10px; transition: box-shadow .12s, background-color .12s; }',
+      '.' + SHEET_CLASS + ' ' + ROW + '.' + SAVED_CLASS + ' { box-shadow: inset 0 0 0 2px ' + SAVED_COLOUR + '; background-color: color-mix(in srgb, ' + SAVED_COLOUR + ' 16%, transparent); }',
+      '.' + SHEET_CLASS + ' ' + ROW + '.' + BUSY_CLASS + ' { opacity: .7; }',
+      '.' + SHEET_CLASS + ' ' + ROW + '.' + FAILED_CLASS + ' { box-shadow: inset 0 0 0 2px #e53935; }'
+    ].join('\n') : '',
     // Same look as YouTube's own pill buttons, in light and dark theme.
     '.' + SAVE_CLASS + ' {',
     '  display: inline-flex; align-items: center; gap: 6px; flex: none; height: 36px; margin-left: 8px; padding: 0 16px 0 12px;',
@@ -274,6 +291,10 @@
       const display = !wanted || name.toLowerCase().indexOf(wanted) !== -1 ? '' : 'none';
       if (row.style.display !== display) row.style.display = display;
       if (hues) colourLabel(row, hues);
+      if (OWN_TOGGLE) {
+        const saved = isSaved(row);
+        if (row.classList.contains(SAVED_CLASS) !== saved) row.classList.toggle(SAVED_CLASS, saved);
+      }
     });
     markGroups(sheet);
   }
@@ -389,13 +410,138 @@
 
   // The page itself (outside the script's sandbox), where YouTube lives.
   const page = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+  let pageFetch = null;
+
+  function toPageObject(obj) {
+    return typeof cloneInto === 'function' ? cloneInto(obj, page) : obj;
+  }
+
+  // OWN TOGGLE
+  // YouTube only shows a new tick after reloading the whole menu, which is
+  // slow. Instead the script keeps the saved state itself, shows it at
+  // once (a box around the playlist) and sends the same save or remove
+  // request YouTube would, in the background. The request is taken from
+  // the row itself: each row carries both of YouTube's versions, "not
+  // saved" with the add action and "saved" with the remove action. The
+  // sign-in headers are copied from YouTube's own requests (opening the
+  // menu makes one). Without them, or without a row's data, the click is
+  // left to YouTube as before. A failed request puts the state back and
+  // flashes the row red.
+  let ytHeaders = null;
+  const overrides = new Map();     // videoId|playlistId -> saved, this page only
+
+  function readHeaders(h) {
+    const out = {};
+    if (!h) return out;
+    if (typeof h.forEach === 'function' && typeof h.get === 'function') h.forEach((v, k) => { out[String(k).toLowerCase()] = String(v); });
+    else Object.keys(h).forEach((k) => { out[k.toLowerCase()] = String(h[k]); });
+    return out;
+  }
+
+  function keepHeaders(init, input) {
+    try {
+      let h = readHeaders(init && init.headers);
+      if (!h.authorization && input && typeof input === 'object' && input.headers) h = readHeaders(input.headers);
+      if (!h.authorization) return;
+      ['content-length', 'content-encoding', 'content-type', 'host', 'cookie'].forEach((k) => { delete h[k]; });
+      ytHeaders = h;
+    } catch (_) { /* unreadable: the next request may do */ }
+  }
+
+  function rowData(row) {
+    const target = row.wrappedJSObject || row;
+    return target.data || null;
+  }
+
+  // The playlist edit (playlist id and actions) behind one of the row's
+  // two versions, found wherever YouTube nests it.
+  function editFor(row, saved) {
+    const data = rowData(row);
+    if (!data) return null;
+    let item;
+    try { item = JSON.parse(page.JSON.stringify(saved ? data.toggledListItem : data.defaultListItem) || 'null'); } catch (_) { return null; }
+    let found = null;
+    (function walk(node, depth) {
+      if (found || !node || typeof node !== 'object' || depth > 12) return;
+      if (node.playlistEditEndpoint && node.playlistEditEndpoint.playlistId) {
+        found = node.playlistEditEndpoint;
+        return;
+      }
+      Object.keys(node).forEach((k) => walk(node[k], depth + 1));
+    })(item, 0);
+    return found && Array.isArray(found.actions) ? { playlistId: found.playlistId, actions: found.actions } : null;
+  }
+
+  function overrideKey(row) {
+    const video = new URLSearchParams(location.search).get('v') || '';
+    const edit = editFor(row, false) || editFor(row, true);
+    return edit ? video + '|' + edit.playlistId : '';
+  }
+
+  // Read once per freshly loaded row: YouTube's own state, unless a save
+  // or remove was made from here since (the server agrees by then).
+  function isSaved(row) {
+    if (row.dataset.kkSaved === undefined) {
+      const key = overrideKey(row);
+      const data = rowData(row);
+      const saved = key && overrides.has(key) ? overrides.get(key) : !!(data && data.initialState && data.initialState.isToggled);
+      row.dataset.kkSaved = saved ? '1' : '0';
+    }
+    return row.dataset.kkSaved === '1';
+  }
+
+  function setSaved(row, saved) {
+    row.dataset.kkSaved = saved ? '1' : '0';
+    row.classList.toggle(SAVED_CLASS, saved);
+    const key = overrideKey(row);
+    if (key) overrides.set(key, saved);
+  }
+
+  function sendEdit(edit) {
+    const ytcfg = page.ytcfg;
+    const context = ytcfg && typeof ytcfg.get === 'function' ? ytcfg.get('INNERTUBE_CONTEXT') : null;
+    if (!context) return Promise.resolve(false);
+    const body = '{"context":' + page.JSON.stringify(context) + ',"playlistId":' + JSON.stringify(edit.playlistId) +
+      ',"actions":' + JSON.stringify(edit.actions) + '}';
+    const headers = Object.assign({}, ytHeaders, { 'content-type': 'application/json' });
+    return Promise.resolve(pageFetch.call(page, EDIT_URL, toPageObject({ method: 'POST', credentials: 'include', headers: headers, body: body })))
+      .then((res) => res.json())
+      .then((json) => !!json && json.status === 'STATUS_SUCCEEDED', () => false);
+  }
+
+  // Seen before anything of YouTube's (window, capture phase), so YouTube
+  // neither saves nor closes the menu for a click handled here.
+  window.addEventListener('click', (event) => {
+    if (!OWN_TOGGLE || !isToggle(event.target) || !ytHeaders || !pageFetch) return;
+    const row = event.target.closest(ROW);
+    if (!row) return;
+    const saved = isSaved(row);
+    const edit = editFor(row, saved);
+    if (!edit) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+    toggledAt = 0;
+    if (row.classList.contains(BUSY_CLASS)) return;
+    setSaved(row, !saved);
+    row.classList.add(BUSY_CLASS);
+    sendEdit(edit).then((ok) => {
+      row.classList.remove(BUSY_CLASS);
+      if (ok) return;
+      setSaved(row, saved);
+      row.classList.add(FAILED_CLASS);
+      setTimeout(() => row.classList.remove(FAILED_CLASS), 1500);
+    });
+  }, true);
 
   (function watchSaves() {
     const original = page.fetch;
     if (typeof original !== 'function') return;
+    pageFetch = original;
     const wrapped = function (input, init) {
       let url = '';
       try { url = typeof input === 'string' ? input : (input && input.url) || ''; } catch (_) { /* unreadable */ }
+      if (/\/youtubei\/v1\//.test(url)) keepHeaders(init, input);
       const result = original.apply(this, arguments);
       if (SAVE_URL.test(url)) {
         savesRunning += 1;
@@ -529,6 +675,8 @@
       restore = null;
       filter.value = back ? back.filter : '';
       filter.focus({ preventScroll: true });
+      // A freshly loaded menu: every row's state is read again.
+      sheet.querySelectorAll(ROW).forEach((row) => row.removeAttribute('data-kk-saved'));
       if (!back) {
         lastScroll = 0;
         pendingScroll = null;
