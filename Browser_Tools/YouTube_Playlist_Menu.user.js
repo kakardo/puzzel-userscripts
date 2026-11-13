@@ -1,12 +1,12 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 2.4_2026-11-13
+// @version = 2.5_2026-11-13
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.4_2026-11-13
+// @version      2.5_2026-11-13
 // @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. A click on a playlist saves or removes the video at once: a saved playlist is shown boxed in like a pressed button (YouTube's bookmark icons are hidden, the star sits before the name), and the menu stays open without reloading. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle; it is kept on screen and reloaded in place once the save is done, so the new tick shows without a blink; should it close anyway, it is opened again once YouTube has finished saving, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
@@ -52,6 +52,10 @@
   const TITLE = '.ytListItemViewModelTitle';
   const TOGGLE = 'button.ytListItemViewModelButtonOrAnchor';
   const SHEET_CLASS = 'kk-ytpl';
+  // The styles match the playlist menu by its content, not by a class the
+  // script adds: they apply from the very first frame, before the script
+  // has even seen the menu, so YouTube's own layout never shows.
+  const SHEET = 'yt-sheet-view-model:has(toggleable-list-item-view-model)';
   const FILTER_CLASS = 'kk-ytpl-filter';
   const STAR_CLASS = 'kk-ytpl-star';
   const GAP_CLASS = 'kk-ytpl-gap';
@@ -84,46 +88,46 @@
     // CSS order without moving YouTube's own elements.
     // In columns it becomes a grid instead; CSS order works the same there.
     COLUMNS > 1
-      ? '.' + SHEET_CLASS + ' yt-list-view-model { display: grid !important; grid-template-columns: repeat(' + COLUMNS + ', minmax(0, 1fr)) !important; column-gap: 4px; align-content: start; }'
-      : '.' + SHEET_CLASS + ' yt-list-view-model { display: flex !important; flex-direction: column !important; }',
+      ? SHEET + ' yt-list-view-model { display: grid !important; grid-template-columns: repeat(' + COLUMNS + ', minmax(0, 1fr)) !important; column-gap: 4px; align-content: start; }'
+      : SHEET + ' yt-list-view-model { display: flex !important; flex-direction: column !important; }',
     // Wider menu for the columns; the sheet's own width limits are lifted.
     COLUMNS > 1 ? [
-      'tp-yt-iron-dropdown:has(.' + SHEET_CLASS + ') {',
+      'tp-yt-iron-dropdown:has(' + ROW + ') {',
       '  width: ' + (COLUMNS * COLUMN_WIDTH_PX + 24) + 'px !important; max-width: calc(100vw - ' + (EDGE_PX * 2) + 'px) !important;',
       '}',
-      'tp-yt-iron-dropdown:has(.' + SHEET_CLASS + ') #contentWrapper,',
-      '.' + SHEET_CLASS + ',',
-      '.' + SHEET_CLASS + ' yt-contextual-sheet-layout,',
-      '.' + SHEET_CLASS + ' .ytContextualSheetLayoutContentContainer { width: 100% !important; max-width: none !important; }',
-      '.' + SHEET_CLASS + ' ' + ROW + ' { min-width: 0; }'
+      'tp-yt-iron-dropdown:has(' + ROW + ') #contentWrapper,',
+      SHEET + ',',
+      SHEET + ' yt-contextual-sheet-layout,',
+      SHEET + ' .ytContextualSheetLayoutContentContainer { width: 100% !important; max-width: none !important; }',
+      SHEET + ' ' + ROW + ' { min-width: 0; }'
     ].join('\n') : '',
-    '.' + SHEET_CLASS + ' ' + ROW + '.' + GAP_CLASS + ' { margin-bottom: ' + GROUP_GAP_PX + 'px !important; }',
+    SHEET + ' ' + ROW + '.' + GAP_CLASS + ' { margin-bottom: ' + GROUP_GAP_PX + 'px !important; }',
     // Label colours: darker on the light theme, lighter on the dark one.
     '.' + LABEL_CLASS + ' { color: hsl(var(--kk-hue) 70% 36%); font-weight: 600; }',
     'html[dark] .' + LABEL_CLASS + ' { color: hsl(var(--kk-hue) 80% 68%); }',
     // The line runs across both columns (it reaches over the column gap).
-    GROUP_LINE ? '.' + SHEET_CLASS + ' ' + ROW + '.' + GAP_CLASS + '::after { content: ""; position: absolute; left: -2px; right: -2px; height: 2px; border-radius: 1px; background: ' + GROUP_LINE + '; bottom: ' + (-Math.round(GROUP_GAP_PX / 2) - 1) + 'px; pointer-events: none; }' : '',
-    '.' + SHEET_CLASS + ' ' + ROW + ' { position: relative; }',
+    GROUP_LINE ? SHEET + ' ' + ROW + '.' + GAP_CLASS + '::after { content: ""; position: absolute; left: -2px; right: -2px; height: 2px; border-radius: 1px; background: ' + GROUP_LINE + '; bottom: ' + (-Math.round(GROUP_GAP_PX / 2) - 1) + 'px; pointer-events: none; }' : '',
+    SHEET + ' ' + ROW + ' { position: relative; }',
     // Full height: the dropdown is pinned from top to bottom (its inline
     // top and size are YouTube's, so !important) and only the list scrolls.
     FULL_HEIGHT ? [
-      'tp-yt-iron-dropdown:has(.' + SHEET_CLASS + ') {',
+      'tp-yt-iron-dropdown:has(' + ROW + ') {',
       '  top: ' + EDGE_PX + 'px !important; bottom: ' + EDGE_PX + 'px !important;',
       '  height: calc(100vh - ' + (EDGE_PX * 2) + 'px) !important; max-height: calc(100vh - ' + (EDGE_PX * 2) + 'px) !important;',
       '}',
-      'tp-yt-iron-dropdown:has(.' + SHEET_CLASS + ') #contentWrapper,',
-      '.' + SHEET_CLASS + ',',
-      '.' + SHEET_CLASS + ' yt-contextual-sheet-layout {',
+      'tp-yt-iron-dropdown:has(' + ROW + ') #contentWrapper,',
+      SHEET + ',',
+      SHEET + ' yt-contextual-sheet-layout {',
       '  height: 100% !important; max-height: none !important; display: flex !important; flex-direction: column !important;',
       '}',
-      '.' + SHEET_CLASS + ' .ytContextualSheetLayoutContentContainer {',
+      SHEET + ' .ytContextualSheetLayoutContentContainer {',
       '  flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; overflow-y: auto !important;',
       '}'
     ].join('\n') : '',
     COMPACT ? [
-      '.' + SHEET_CLASS + ' .ytListItemViewModelLeading,',
-      '.' + SHEET_CLASS + ' .ytListItemViewModelSubtitleContainer { display: none !important; }',
-      '.' + SHEET_CLASS + ' .ytListItemViewModelContainer { min-height: 0 !important; padding-top: 3px !important; padding-bottom: 3px !important; }'
+      SHEET + ' .ytListItemViewModelLeading,',
+      SHEET + ' .ytListItemViewModelSubtitleContainer { display: none !important; }',
+      SHEET + ' .ytListItemViewModelContainer { min-height: 0 !important; padding-top: 3px !important; padding-bottom: 3px !important; }'
     ].join('\n') : '',
     '.' + FILTER_CLASS + ' {',
     '  box-sizing: border-box; width: calc(100% - 24px); margin: 4px 12px 8px; padding: 7px 10px;',
@@ -141,13 +145,13 @@
     // Own toggle: star before the name, YouTube's bookmark icons hidden,
     // a saved playlist boxed in like a pressed button.
     OWN_TOGGLE ? [
-      '.' + SHEET_CLASS + ' .ytListItemViewModelContainer { padding-left: 36px !important; }',
-      '.' + SHEET_CLASS + ' .' + STAR_CLASS + ' { left: 8px; right: auto; }',
-      '.' + SHEET_CLASS + ' ' + ROW + ' svg, .' + SHEET_CLASS + ' ' + ROW + ' yt-icon, .' + SHEET_CLASS + ' ' + ROW + ' yt-icon-shape { display: none !important; }',
-      '.' + SHEET_CLASS + ' ' + ROW + ' { border-radius: 10px; transition: box-shadow .12s, background-color .12s; }',
-      '.' + SHEET_CLASS + ' ' + ROW + '.' + SAVED_CLASS + ' { box-shadow: inset 0 0 0 2px ' + SAVED_COLOUR + '; background-color: color-mix(in srgb, ' + SAVED_COLOUR + ' 16%, transparent); }',
-      '.' + SHEET_CLASS + ' ' + ROW + '.' + BUSY_CLASS + ' { opacity: .7; }',
-      '.' + SHEET_CLASS + ' ' + ROW + '.' + FAILED_CLASS + ' { box-shadow: inset 0 0 0 2px #e53935; }'
+      SHEET + ' .ytListItemViewModelContainer { padding-left: 36px !important; }',
+      SHEET + ' .' + STAR_CLASS + ' { left: 8px; right: auto; }',
+      SHEET + ' ' + ROW + ' svg, ' + SHEET + ' ' + ROW + ' yt-icon, ' + SHEET + ' ' + ROW + ' yt-icon-shape { display: none !important; }',
+      SHEET + ' ' + ROW + ' { border-radius: 10px; transition: box-shadow .12s, background-color .12s; }',
+      SHEET + ' ' + ROW + '.' + SAVED_CLASS + ' { box-shadow: inset 0 0 0 2px ' + SAVED_COLOUR + '; background-color: color-mix(in srgb, ' + SAVED_COLOUR + ' 16%, transparent); }',
+      SHEET + ' ' + ROW + '.' + BUSY_CLASS + ' { opacity: .7; }',
+      SHEET + ' ' + ROW + '.' + FAILED_CLASS + ' { box-shadow: inset 0 0 0 2px #e53935; }'
     ].join('\n') : '',
     // Same look as YouTube's own pill buttons, in light and dark theme.
     '.' + SAVE_CLASS + ' {',
@@ -845,11 +849,16 @@
   function start(container) {
     // The scroll position is put back at once (before the page is drawn),
     // so a reloaded menu does not show its top first.
+    // A menu with rows not dressed yet (no star) is handled at once, before
+    // the page is drawn; everything else waits for the short delay.
     new MutationObserver(() => {
-      if (pendingScroll) {
-        const sheet = playlistSheet();
-        if (sheet) applyScroll(sheet);
+      const sheet = playlistSheet();
+      if (sheet && sheet.querySelector(ROW + ':not(:has(> .' + STAR_CLASS + '))')) {
+        clearTimeout(timer);
+        scan();
+        return;
       }
+      if (pendingScroll && sheet) applyScroll(sheet);
       schedule();
     }).observe(container, {
       childList: true,
