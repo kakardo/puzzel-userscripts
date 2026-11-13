@@ -8,63 +8,411 @@ Then in Tampermonkey: Dashboard, Utilities, Import (Zip), pick the downloaded fi
 
 ## Structure
 
-- `PCM_Shared_Library/`: shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scripts that read or watch the page's DOM. Keeps DOM/runtime logic (boot/retry, style injection, observers, widget lookup) in one place so feature scripts only handle their own state and styling.
-- `PCM_Ticket_View/`: scripts for the ticket detail page (`/tickets/*`):
-  - `PCM_Ticket_Info_Extractor`: surfaces CustomerID, Customer Name, Company Name and Partner from Customer Intelligence on one compact line, and publishes them for the other scripts (`PCM_TICKET_INFO`, data attributes, fixed elements, `pcm-ticket-info-ready`). Reads the ID from both the `CustomerID` and the newer `AccountNumber` attribute. Uses the shared DOM library.
-  - `PCM_Name_Field_Placeholder`: adds a placeholder name link in Customer Intelligence when no name is set.
-  - `PCM_Image_Viewer`: upgrades the attachment preview modal with an Open in tab button, zoom controls and drag to pan for images. Standalone, purely event-driven.
-  - `PCM_Merge_By_Number`: adds a ticket number field to the Merge Tickets window, because PCM's search list leaves out some tickets it does accept as merge targets (seen with tickets generated from incoming mail). The ticket is looked up and shown first; you still press PCM's own Merge button. Limitation: a ticket created by hand in PCM (no initial channel) cannot be merged in either direction; PCM refuses it, so link such tickets with Parent and Child Tickets instead. Optional automatic lookup from PCM's own search field. Standalone, purely event-driven.
-  - `PCM_Customer_ID_Reminder`: a red "(Reminder: add customer ID)" after the customer's name in Customer Intelligence when the customer's profile has no ID (no Organisations section) and the customer has 5 or more tickets; the tickets are counted from the list PCM loads for Customer Tickets, fetched once and only read. Uses the shared DOM library.
-  - `PCM_Customer_Ticket_Count`: the customer's number of tickets in bold colour in the Customer Tickets heading of Customer Intelligence, for example "Customer Tickets (110)", without opening the section. Shares its one request per customer with `PCM_Customer_ID_Reminder` and `PCM_Customer_Top_List`. Customers with 500 or more tickets are counted in full once a week (5,000 per request, at most 20,000), kept in this browser for 7 days; click the number to count again. Uses the shared DOM library.
-  - `PCM_Customer_Top_List`: a "Top" button in the top bar, right of Help and in the same style (fades in as the page loads), with two lists of the customers with the most tickets: last 30 days (with the share of their all-time total) and all time. Built as you work from the customers you open (name, total and recent ticket times saved in Tampermonkey's own storage, so clearing the browser cache keeps them, one entry per customer profile id, only customers with 5 or more tickets; names link to the profile, with the company after them on the same line (no number; the account id in the tooltip; it opens the organisation in PCM); a Sync button refreshes every customer in both lists, counts and profile (name, company), and shows the time and data it took), so no extra requests. Runs on every PCM page from document-start. Uses the shared DOM library.
-  - `PCM_No_Autoscroll`: keeps a ticket at the top when it opens instead of jumping down to the Timeline. Stops page scrolls started by code for 20 seconds after opening; your own scrolling always works and does not end it (so a small scroll while loading no longer lets the jump through), and clicks and typing do not end it either. Runs at document-start so it is in place before PCM's code. Standalone.
-  - `PCM_Timeline_Preview_Cleanup`: tidies the Timeline Preview window shown when clicking an older ticket in Customer Intelligence. Hides the "Rules applied" entries (which types are hidden is a list at the top), merges entries in the same minute by the same person into one row, shows system events as slim rows, status changes as coloured status labels, shows the previewed ticket's organisation in a bar at the top (read from that ticket's page), and puts an avatar in front of entries done by a person: coloured initials, or their profile picture once their user id has been learned from an Assigned To list (kept in localStorage). Standalone, event-driven via jQuery's ajaxComplete.
-  - `PCM_Jira_Quick_Link`: a split button right of Link Issue in the Jira widget; the key half fills in your saved Jira key and presses Link Issue (when another issue is linked it unlinks that one first, then links the new key), the arrow lets you type the key (remembered per browser). Uses the shared DOM library.
-  - `PCM_No_Access_Redirection_Button`: adds a large Go to ticket list button to the "Ticket reassigned" message shown after sending a ticket to a team you cannot access, skipping the leave-page prompt; PCM's Confirm is replaced by a "stay in this ticket" link. Uses the shared DOM library.
-  - `Attributes/`: scripts scoped to the Attributes widget (Organisation, Team, Assigned To, Status, Priority, Tags):
-    - `Puzzel_Styler_(Ticket_Field)`: highlights Assigned-To, Status and Priority fields (Priority in the tickets list's badge colours). Built on the library's `createFieldRuntime`.
-    - `PCM_Team_Quick_Select`: one-click buttons under the Team dropdown that select configured teams in the Chosen widget, each team in its own colour. Teams are a config array at the top. SAVE_RIGHT_AWAY (off by default) makes a press save right away, once PCM has reloaded Assigned To for the new team (saves every change in Attributes). Uses the shared DOM library.
-    - `PCM_Organisation_Quick_Search`: one-click search buttons under the Organisation dropdown for the Customer ID found on the ticket, the Customer ID entered in Forms (when it differs), and fixed search strings; a single matching organisation is picked automatically. Uses the shared DOM library.
-    - `PCM_Show_Organisation_Info`: shows the Organisation Information module right after an organisation is saved in Attributes, instead of only after a reload, by loading it once from the ticket page in the background. Standalone, event-driven via jQuery's ajaxComplete.
-    - `PCM_Partner_Highlight`: shows the ticket's partner in large purple letters beside the Attributes heading, read from the Ticket Info Extractor; nothing is shown without a partner. Uses the shared DOM library.
-    - `PCM_Collapse_Categories`: folds away the Categories section of Attributes until you click its heading; it opens by itself when a category has a value, and the heading shows how many are set. Uses the shared DOM library.
-    - `PCM_Assign_Buttons`: Me and Unassign buttons beside the Assigned To label; Me picks you (recognised from your profile picture in the top bar) and is greyed out when you are not in the team's list, Unassign picks the empty entry. You still press Save; SAVE_RIGHT_AWAY (off by default) makes a press save right away (saves every change in Attributes). Uses the shared DOM library.
-    - `PCM_PostIt_Quick_Text`: a red button beside the Post-It Note label that writes INCIDENT into the note (as its first line when there is text already, not at all when it is there); the arrow beside it lets you type another text for the button, remembered per browser. You still press Save. Uses the shared DOM library.
-    - `PCM_Unsaved_Attributes_Warning`: snapshot-based unsaved change detection for the Attributes widget; highlights changed fields and dropdowns and shows a warning next to Save. A save pressed by `PCM_Assign_Buttons` or `PCM_Team_Quick_Select` clears the warning too. Uses the shared DOM library.
-  - `Forms/`: scripts scoped to the Forms widget:
-    - `PCM_Form_Buttons`: copy buttons for CustomerId/Name above `Form:`, reading the Extractor's published outputs, plus autofill of empty Customer ID / Customer Ref fields (red ring until saved, the name with capital first letters); a saved Customer Ref name starting with a small letter gets a capital first letter and an orange ring until saved. Uses the shared DOM library. Renamed from `PCM_Organisation_Copy_Buttons` in 3.6, when the Attributes > Organisation button was dropped.
-    - `PCM_Unsaved_Form_Warning`: snapshot-based unsaved change detection for the Forms widget; highlights changed fields and shows a warning next to Save ("Corrected values, please save" in orange when only `PCM_Form_Buttons` corrections are unsaved). Colour, mode, and text are settings at the top. Uses the shared DOM library.
-    - `PCM_Incident_Button`: one button that sets the Forms widget to the platform-incident preset (Form, Puzzel Service, Product Area, cause, Impact, Urgency), waiting for each re-render. Uses the shared DOM library.
-    - `PCM_Change_Completed_Now`: a Now button beside Change Completed that fills in the current date and time with the timezone visible. Uses the shared DOM library.
-  - `Reply_Editor/`: scripts scoped to the Summernote reply editor:
-    - `PCM_Reply_Editor_Autosize`: the reply editor grows with its text from 10 rows and only scrolls past 100 rows. Pure CSS, standalone.
-    - `PCM_Timeline_Box_Autosize`: sizes the Timeline boxes (notes, mails, API entries) to their content between a min and max height, wraps long lines so there is no sideways scrolling (switchable), with a Box Sizing menu next to Timeline Options. Uses the shared DOM library.
-    - `PCM_Mail_Templates`: template buttons and dropdowns above the reply editor, with `{firstName}`, `{fullName}`, `{customer}`, `{partner}` and `{ticket}` placeholders and one-press shortcuts to PCM's own Insert Template entries. A "Fill {{ }}" button fills PCM variables such as `{{customer:name}}` and `{{ticket:ticket_ref}}` in pasted text with the ticket's values. The editor is kept out of browser page translation, so typing is never rewritten and the cursor stays put. Uses the shared DOM library.
-    - `PCM_Subscription_Buttons`: one-press handling of partner telephony subscription tickets (one button per product): fills the Change form fields and appends the confirmation mail, with user details read from the first mail in the ticket. Uses the shared DOM library.
-    - `PCM_Quick_Email`: replaces PCM's Reply and Start Conversation buttons with one always-visible Email button next to Add Note in the Timeline header; presses Reply, or Start Conversation's help option without the menu, and first PCM's own Assign To Me when you are not assigned. Uses the shared DOM library.
-    - `PCM_Quick_Emoji`: one-press emoji buttons in the reply editor toolbar right after the emoji picker, starting with the smiling face; more are a list at the top. Uses the shared DOM library.
-    - `PCM_Template_ID_Viewer`: shows and copies the numeric template id of the selected entry in PCM's Insert Template modal. Standalone, purely event-driven.
-- `PCM_Ticket_List/`: scripts for the ticket list page (`/tickets`) and dashboard (`/`):
-  - `PCM_Auto_Refresh`: auto-reloads the page on an interval with a countdown ring UI. Standalone and light by default; turns dark with the toggle in `PCM_Dark_Mode_(Ticket_List)` when that script is installed (optional link, not a dependency).
-  - `PCM_New_Ticket_Notifier`: alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
-  - `PCM_Hide_Columns`: Hide Columns button with a checkbox panel per column; localStorage persistence with a backup in Tampermonkey storage (restored after a cleared cache) with a FORCE_HIDDEN override at the top. Standalone, drives the DataTables API.
-  - `PCM_Compact_View`: Compact toggle left of Hide Columns (settings backed up in Tampermonkey storage, restored after a cleared cache); tight cell padding, table shrinks to content, Subject clamped to a configurable line count, times shortened (s/m/h/d/w/mo/y, "less than a minute" to <1m). Uses the shared DOM library.
-  - `PCM_Selected_Row_Highlight`: makes selected rows (round checkbox) clear in light and dark mode with a coloured left band, bold coloured text and a tint laid over the row's own colour, so SLA colours still show. Standalone, pure CSS; dark colours follow the toggle in `PCM_Dark_Mode_(Ticket_List)`.
-  - `PCM_Last_Activity_Sort`: makes the Last Activity column sortable (server-side, so the whole list is sorted) and keeps that sort across reloads. Standalone, drives the DataTables API.
-  - `PCM_Ticket_Search_New_Tab`: a small arrow button next to the top bar's Ticket # field (or Ctrl+Enter / Shift+Enter in it) opens that ticket in a new tab (plain Enter as before, or always a new tab with ALWAYS_NEW_TAB). The arrow sits inside the field's right edge, so the field never moves, and fades in while the field has focus and something is typed, so it never covers the text. Runs on every PCM page from document-start. Standalone, one key listener.
-  - `PCM_Bulk_Update_Presets`: preset buttons in the bulk "Updating Ticket(s)" window; Spam fills in Team Spam/Virus Quarantine, Status Closed and Priority Junk. You still press Update. Presets are a list at the top. Standalone, event-driven via shown.bs.modal.
-  - `Dark_Mode/`: dark mode split into three scripts (page background, ticket list table, attributes search module). The Ticket List script puts its on/off toggle in the top bar between the bell and the profile picture and colours every SLA step, with overdue rows in red text. The Ticket List script owns the toggle and marks the page; the toggle also appears on ticket, customer and organisation pages (no table work there), where the background script follows it; the Attributes script follows that mark, so install them together. Only the Attributes script uses the shared DOM library.
-- `PCC_Admin_View/`: scripts for the Puzzel Admin console (app.puzzel.com/admin), a different app from PCM:
-  - `PCC_User_Group_Search`: search box that live-filters the User Group dropdown on the Add/Edit User pages. Standalone (server-rendered pages, no DOM watching to share).
-- `Organisation_Settings/`: scripts for Puzzel Organisation Settings (app.puzzel.com/settings and uk.puzzel.com/settings), a different app from PCM:
-  - `POS_Access_Log_Filter`: filter box above the Access log table; only rows whose Puzzel Id contains the typed text (or any of several comma-separated terms) stay visible. Standalone.
-- `Geckoboard/`: scripts for shared Geckoboard dashboards (share.geckoboard.com, which frames the dashboard from app.geckoboard.com; the scripts run in that frame), a different app from PCM:
-  - `Geckoboard_Full_Numbers`: shows numbers in table widgets in full instead of cut off with an ellipsis ("1,6..." becomes the whole number); right-aligned cells grow into the empty space on their left, names keep their normal shortening. Pure CSS, standalone.
-  - `Geckoboard_Keep_Last_Data`: when Geckoboard's data server fails a widget refresh (for example error 520), retries after 1 and 3 seconds and otherwise gives the widget its last good data, or (when it never loaded) leaves the failed request unanswered so the widget keeps what it shows, instead of "Failed to load widget data"; a note in the corner says when saved data is shown and how old it is. Runs at document-start so it wraps fetch before Geckoboard does. Standalone.
-- `PCC_Agent_View/`: scripts for the agent application (app.puzzel.com/agent), a different app from PCM:
-  - `PCC_Agent_Highlighter`: highlights agent rows by status/profile and badges names in the ARIA agents grid. SPA-safe (grid rebinding, navigation hooks). Standalone.
-  - `PCC_Softphone_Status_Highlight`: colours the Softphone Online/Offline value in the header. Standalone.
-  - `PCC_Request_Alert`: rings (and optionally notifies, flashes the tab title or the screen) when your status leaves Ready or a chat request arrives. Settings in the code and under the main menu. Standalone.
+Click a folder to see its scripts, and a script to read what it does.
+
+<details><summary><b><code>PCM_Shared_Library/</code></b>: the shared DOM helper library</summary>
+
+Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scripts that read or watch the page's DOM. Keeps DOM/runtime logic (boot/retry, style injection, observers, widget lookup) in one place so feature scripts only handle their own state and styling.
+
+</details>
+<details><summary><b><code>PCM_Ticket_View/</code></b>: ticket detail page (<code>/tickets/*</code>), 31 scripts</summary>
+
+Scripts for the ticket detail page (`/tickets/*`).
+
+<ul>
+<li>
+<details><summary><code>PCM_Ticket_Info_Extractor</code>: customer ID, names and partner on one line</summary>
+
+Surfaces CustomerID, Customer Name, Company Name and Partner from Customer Intelligence on one compact line, and publishes them for the other scripts (`PCM_TICKET_INFO`, data attributes, fixed elements, `pcm-ticket-info-ready`). Reads the ID from both the `CustomerID` and the newer `AccountNumber` attribute. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Name_Field_Placeholder</code>: placeholder name link when no name is set</summary>
+
+Adds a placeholder name link in Customer Intelligence when no name is set.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Image_Viewer</code>: zoom, pan and open in tab for attachments</summary>
+
+Upgrades the attachment preview modal with an Open in tab button, zoom controls and drag to pan for images. Standalone, purely event-driven.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Merge_By_Number</code>: merge into a ticket by its number</summary>
+
+Adds a ticket number field to the Merge Tickets window, because PCM's search list leaves out some tickets it does accept as merge targets (seen with tickets generated from incoming mail). The ticket is looked up and shown first; you still press PCM's own Merge button. Limitation: a ticket created by hand in PCM (no initial channel) cannot be merged in either direction; PCM refuses it, so link such tickets with Parent and Child Tickets instead. Optional automatic lookup from PCM's own search field. Standalone, purely event-driven.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Customer_ID_Reminder</code>: reminder when a frequent customer has no ID</summary>
+
+A red "(Reminder: add customer ID)" after the customer's name in Customer Intelligence when the customer's profile has no ID (no Organisations section) and the customer has 5 or more tickets; the tickets are counted from the list PCM loads for Customer Tickets, fetched once and only read. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Customer_Ticket_Count</code>: number of tickets in the Customer Tickets heading</summary>
+
+The customer's number of tickets in bold colour in the Customer Tickets heading of Customer Intelligence, for example "Customer Tickets (110)", without opening the section. Shares its one request per customer with `PCM_Customer_ID_Reminder` and `PCM_Customer_Top_List`. Customers with 500 or more tickets are counted in full once a week (5,000 per request, at most 20,000), kept in this browser for 7 days; click the number to count again. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Customer_Top_List</code>: top list of customers with the most tickets</summary>
+
+A "Top" button in the top bar, right of Help and in the same style (fades in as the page loads), with two lists of the customers with the most tickets: last 30 days (with the share of their all-time total) and all time. Built as you work from the customers you open (name, total and recent ticket times saved in Tampermonkey's own storage, so clearing the browser cache keeps them, one entry per customer profile id, only customers with 5 or more tickets; names link to the profile, with the company after them on the same line (no number; the account id in the tooltip; it opens the organisation in PCM); a Sync button refreshes every customer in both lists, counts and profile (name, company), and shows the time and data it took), so no extra requests. Runs on every PCM page from document-start. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_No_Autoscroll</code>: ticket opens at the top, not at the Timeline</summary>
+
+Keeps a ticket at the top when it opens instead of jumping down to the Timeline. Stops page scrolls started by code for 20 seconds after opening; your own scrolling always works and does not end it (so a small scroll while loading no longer lets the jump through), and clicks and typing do not end it either. Runs at document-start so it is in place before PCM's code. Standalone.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Timeline_Preview_Cleanup</code>: tidier Timeline Preview window</summary>
+
+Tidies the Timeline Preview window shown when clicking an older ticket in Customer Intelligence. Hides the "Rules applied" entries (which types are hidden is a list at the top), merges entries in the same minute by the same person into one row, shows system events as slim rows, status changes as coloured status labels, shows the previewed ticket's organisation in a bar at the top (read from that ticket's page), and puts an avatar in front of entries done by a person: coloured initials, or their profile picture once their user id has been learned from an Assigned To list (kept in localStorage). Standalone, event-driven via jQuery's ajaxComplete.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Jira_Quick_Link</code>: one-press link of your Jira issue</summary>
+
+A split button right of Link Issue in the Jira widget; the key half fills in your saved Jira key and presses Link Issue (when another issue is linked it unlinks that one first, then links the new key), the arrow lets you type the key (remembered per browser). Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_No_Access_Redirection_Button</code>: Go to ticket list after a reassign</summary>
+
+Adds a large Go to ticket list button to the "Ticket reassigned" message shown after sending a ticket to a team you cannot access, skipping the leave-page prompt; PCM's Confirm is replaced by a "stay in this ticket" link. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><b><code>Attributes/</code></b>: the Attributes widget, 9 scripts</summary>
+
+Scripts scoped to the Attributes widget (Organisation, Team, Assigned To, Status, Priority, Tags).
+
+<ul>
+<li>
+<details><summary><code>Puzzel_Styler_(Ticket_Field)</code>: coloured Assigned-To, Status and Priority</summary>
+
+Highlights Assigned-To, Status and Priority fields (Priority in the tickets list's badge colours). Built on the library's `createFieldRuntime`.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Team_Quick_Select</code>: one-click team buttons</summary>
+
+One-click buttons under the Team dropdown that select configured teams in the Chosen widget, each team in its own colour. Teams are a config array at the top. SAVE_RIGHT_AWAY (off by default) makes a press save right away, once PCM has reloaded Assigned To for the new team (saves every change in Attributes). Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Organisation_Quick_Search</code>: one-click organisation searches</summary>
+
+One-click search buttons under the Organisation dropdown for the Customer ID found on the ticket, the Customer ID entered in Forms (when it differs), and fixed search strings; a single matching organisation is picked automatically. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Show_Organisation_Info</code>: organisation info right after saving</summary>
+
+Shows the Organisation Information module right after an organisation is saved in Attributes, instead of only after a reload, by loading it once from the ticket page in the background. Standalone, event-driven via jQuery's ajaxComplete.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Partner_Highlight</code>: partner name beside the Attributes heading</summary>
+
+Shows the ticket's partner in large purple letters beside the Attributes heading, read from the Ticket Info Extractor; nothing is shown without a partner. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Collapse_Categories</code>: Categories folded away until needed</summary>
+
+Folds away the Categories section of Attributes until you click its heading; it opens by itself when a category has a value, and the heading shows how many are set. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Assign_Buttons</code>: Me and Unassign buttons</summary>
+
+Me and Unassign buttons beside the Assigned To label; Me picks you (recognised from your profile picture in the top bar) and is greyed out when you are not in the team's list, Unassign picks the empty entry. You still press Save; SAVE_RIGHT_AWAY (off by default) makes a press save right away (saves every change in Attributes). Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_PostIt_Quick_Text</code>: one-press text for the Post-It Note</summary>
+
+A red button beside the Post-It Note label that writes INCIDENT into the note (as its first line when there is text already, not at all when it is there); the arrow beside it lets you type another text for the button, remembered per browser. You still press Save. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Unsaved_Attributes_Warning</code>: warning for unsaved Attributes changes</summary>
+
+Snapshot-based unsaved change detection for the Attributes widget; highlights changed fields and dropdowns and shows a warning next to Save. A save pressed by `PCM_Assign_Buttons` or `PCM_Team_Quick_Select` clears the warning too. Uses the shared DOM library.
+
+</details>
+</li>
+</ul>
+</details>
+</li>
+<li>
+<details><summary><b><code>Forms/</code></b>: the Forms widget, 4 scripts</summary>
+
+Scripts scoped to the Forms widget.
+
+<ul>
+<li>
+<details><summary><code>PCM_Form_Buttons</code>: copy buttons and autofill for customer fields</summary>
+
+Copy buttons for CustomerId/Name above `Form:`, reading the Extractor's published outputs, plus autofill of empty Customer ID / Customer Ref fields (red ring until saved, the name with capital first letters); a saved Customer Ref name starting with a small letter gets a capital first letter and an orange ring until saved. Uses the shared DOM library. Renamed from `PCM_Organisation_Copy_Buttons` in 3.6, when the Attributes > Organisation button was dropped.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Unsaved_Form_Warning</code>: warning for unsaved Forms changes</summary>
+
+Snapshot-based unsaved change detection for the Forms widget; highlights changed fields and shows a warning next to Save ("Corrected values, please save" in orange when only `PCM_Form_Buttons` corrections are unsaved). Colour, mode, and text are settings at the top. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Incident_Button</code>: one-press platform incident preset</summary>
+
+One button that sets the Forms widget to the platform-incident preset (Form, Puzzel Service, Product Area, cause, Impact, Urgency), waiting for each re-render. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Change_Completed_Now</code>: Now button for Change Completed</summary>
+
+A Now button beside Change Completed that fills in the current date and time with the timezone visible. Uses the shared DOM library.
+
+</details>
+</li>
+</ul>
+</details>
+</li>
+<li>
+<details><summary><b><code>Reply_Editor/</code></b>: the reply editor, 7 scripts</summary>
+
+Scripts scoped to the Summernote reply editor.
+
+<ul>
+<li>
+<details><summary><code>PCM_Reply_Editor_Autosize</code>: reply editor grows with its text</summary>
+
+The reply editor grows with its text from 10 rows and only scrolls past 100 rows. Pure CSS, standalone.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Timeline_Box_Autosize</code>: Timeline boxes sized to their content</summary>
+
+Sizes the Timeline boxes (notes, mails, API entries) to their content between a min and max height, wraps long lines so there is no sideways scrolling (switchable), with a Box Sizing menu next to Timeline Options. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Mail_Templates</code>: mail template buttons and placeholders</summary>
+
+Template buttons and dropdowns above the reply editor, with `{firstName}`, `{fullName}`, `{customer}`, `{partner}` and `{ticket}` placeholders and one-press shortcuts to PCM's own Insert Template entries. A "Fill {{ }}" button fills PCM variables such as `{{customer:name}}` and `{{ticket:ticket_ref}}` in pasted text with the ticket's values. The editor is kept out of browser page translation, so typing is never rewritten and the cursor stays put. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Subscription_Buttons</code>: one-press subscription ticket handling</summary>
+
+One-press handling of partner telephony subscription tickets (one button per product): fills the Change form fields and appends the confirmation mail, with user details read from the first mail in the ticket. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Quick_Email</code>: one Email button next to Add Note</summary>
+
+Replaces PCM's Reply and Start Conversation buttons with one always-visible Email button next to Add Note in the Timeline header; presses Reply, or Start Conversation's help option without the menu, and first PCM's own Assign To Me when you are not assigned. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Quick_Emoji</code>: one-press emoji buttons</summary>
+
+One-press emoji buttons in the reply editor toolbar right after the emoji picker, starting with the smiling face; more are a list at the top. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Template_ID_Viewer</code>: shows and copies a template's id</summary>
+
+Shows and copies the numeric template id of the selected entry in PCM's Insert Template modal. Standalone, purely event-driven.
+
+</details>
+</li>
+</ul>
+</details>
+</li>
+</ul>
+</details>
+<details><summary><b><code>PCM_Ticket_List/</code></b>: ticket list (<code>/tickets</code>) and dashboard (<code>/</code>), 8 scripts</summary>
+
+Scripts for the ticket list page (`/tickets`) and dashboard (`/`).
+
+<ul>
+<li>
+<details><summary><code>PCM_Auto_Refresh</code>: reloads the list on an interval</summary>
+
+Auto-reloads the page on an interval with a countdown ring UI. Standalone and light by default; turns dark with the toggle in `PCM_Dark_Mode_(Ticket_List)` when that script is installed (optional link, not a dependency).
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_New_Ticket_Notifier</code>: alerts on new tickets</summary>
+
+Alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Hide_Columns</code>: choose which columns to show</summary>
+
+Hide Columns button with a checkbox panel per column; localStorage persistence with a backup in Tampermonkey storage (restored after a cleared cache) with a FORCE_HIDDEN override at the top. Standalone, drives the DataTables API.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Compact_View</code>: tighter table with short times</summary>
+
+Compact toggle left of Hide Columns (settings backed up in Tampermonkey storage, restored after a cleared cache); tight cell padding, table shrinks to content, Subject clamped to a configurable line count, times shortened (s/m/h/d/w/mo/y, "less than a minute" to <1m). Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Selected_Row_Highlight</code>: clear marking of selected rows</summary>
+
+Makes selected rows (round checkbox) clear in light and dark mode with a coloured left band, bold coloured text and a tint laid over the row's own colour, so SLA colours still show. Standalone, pure CSS; dark colours follow the toggle in `PCM_Dark_Mode_(Ticket_List)`.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Last_Activity_Sort</code>: sort by Last Activity, kept across reloads</summary>
+
+Makes the Last Activity column sortable (server-side, so the whole list is sorted) and keeps that sort across reloads. Standalone, drives the DataTables API.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Ticket_Search_New_Tab</code>: open a ticket number in a new tab</summary>
+
+A small arrow button next to the top bar's Ticket # field (or Ctrl+Enter / Shift+Enter in it) opens that ticket in a new tab (plain Enter as before, or always a new tab with ALWAYS_NEW_TAB). The arrow sits inside the field's right edge, so the field never moves, and fades in while the field has focus and something is typed, so it never covers the text. Runs on every PCM page from document-start. Standalone, one key listener.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Bulk_Update_Presets</code>: preset buttons for bulk updates</summary>
+
+Preset buttons in the bulk "Updating Ticket(s)" window; Spam fills in Team Spam/Virus Quarantine, Status Closed and Priority Junk. You still press Update. Presets are a list at the top. Standalone, event-driven via shown.bs.modal.
+
+</details>
+</li>
+<li>
+<details><summary><code>Dark_Mode/</code>: dark mode in three scripts</summary>
+
+Dark mode split into three scripts (page background, ticket list table, attributes search module). The Ticket List script puts its on/off toggle in the top bar between the bell and the profile picture and colours every SLA step, with overdue rows in red text. The Ticket List script owns the toggle and marks the page; the toggle also appears on ticket, customer and organisation pages (no table work there), where the background script follows it; the Attributes script follows that mark, so install them together. Only the Attributes script uses the shared DOM library.
+
+</details>
+</li>
+</ul>
+</details>
+<details><summary><b><code>PCC_Admin_View/</code></b>: Admin console (app.puzzel.com/admin), 1 script</summary>
+
+Scripts for the Puzzel Admin console (app.puzzel.com/admin), a different app from PCM.
+
+<ul>
+<li>
+<details><summary><code>PCC_User_Group_Search</code>: search box for the User Group dropdown</summary>
+
+Search box that live-filters the User Group dropdown on the Add/Edit User pages. Standalone (server-rendered pages, no DOM watching to share).
+
+</details>
+</li>
+</ul>
+</details>
+<details><summary><b><code>Organisation_Settings/</code></b>: Organisation Settings (app.puzzel.com/settings), 1 script</summary>
+
+Scripts for Puzzel Organisation Settings (app.puzzel.com/settings and uk.puzzel.com/settings), a different app from PCM.
+
+<ul>
+<li>
+<details><summary><code>POS_Access_Log_Filter</code>: filter for the Access log</summary>
+
+Filter box above the Access log table; only rows whose Puzzel Id contains the typed text (or any of several comma-separated terms) stay visible. Standalone.
+
+</details>
+</li>
+</ul>
+</details>
+<details><summary><b><code>Geckoboard/</code></b>: shared Geckoboard dashboards, 2 scripts</summary>
+
+Scripts for shared Geckoboard dashboards (share.geckoboard.com, which frames the dashboard from app.geckoboard.com; the scripts run in that frame), a different app from PCM.
+
+<ul>
+<li>
+<details><summary><code>Geckoboard_Full_Numbers</code>: full numbers in table widgets</summary>
+
+Shows numbers in table widgets in full instead of cut off with an ellipsis ("1,6..." becomes the whole number); right-aligned cells grow into the empty space on their left, names keep their normal shortening. Pure CSS, standalone.
+
+</details>
+</li>
+<li>
+<details><summary><code>Geckoboard_Keep_Last_Data</code>: keeps the last data when a refresh fails</summary>
+
+When Geckoboard's data server fails a widget refresh (for example error 520), retries after 1 and 3 seconds and otherwise gives the widget its last good data, or (when it never loaded) leaves the failed request unanswered so the widget keeps what it shows, instead of "Failed to load widget data"; a note in the corner says when saved data is shown and how old it is. Runs at document-start so it wraps fetch before Geckoboard does. Standalone.
+
+</details>
+</li>
+</ul>
+</details>
+<details><summary><b><code>PCC_Agent_View/</code></b>: agent application (app.puzzel.com/agent), 3 scripts</summary>
+
+Scripts for the agent application (app.puzzel.com/agent), a different app from PCM.
+
+<ul>
+<li>
+<details><summary><code>PCC_Agent_Highlighter</code>: coloured agent rows and name badges</summary>
+
+Highlights agent rows by status/profile and badges names in the ARIA agents grid. SPA-safe (grid rebinding, navigation hooks). Standalone.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCC_Softphone_Status_Highlight</code>: coloured Softphone status</summary>
+
+Colours the Softphone Online/Offline value in the header. Standalone.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCC_Request_Alert</code>: alert when your status leaves Ready or a chat arrives</summary>
+
+Rings (and optionally notifies, flashes the tab title or the screen) when your status leaves Ready or a chat request arrives. Settings in the code and under the main menu. Standalone.
+
+</details>
+</li>
+</ul>
+</details>
 
 ## Design logic: one shared DOM library per application, not one per folder
 
