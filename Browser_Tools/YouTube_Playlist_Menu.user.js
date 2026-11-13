@@ -1,13 +1,13 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 2.7_2026-11-13
+// @version = 2.9_2026-11-13
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.7_2026-11-13
-// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. A click on a playlist saves or removes the video without reloading the menu: a saved playlist is shown boxed in like a pressed button (YouTube's bookmark icons are hidden, the star sits before the name), and the menu stays open without reloading. While YouTube is still saving, the row shows a small spinner; the box only appears or goes once YouTube has confirmed. Closing the tab while saving asks first. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle; it is kept on screen and reloaded in place once the save is done, so the new tick shows without a blink; should it close anyway, it is opened again once YouTube has finished saving, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
+// @version      2.9_2026-11-13
+// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. A click on a playlist saves or removes the video without reloading the menu: a saved playlist is shown boxed in like a pressed button (YouTube's bookmark icons are hidden, the star sits before the name), and the menu stays open without reloading. While YouTube is still saving, the row shows a small spinner; the box only appears or goes once YouTube has confirmed. Closing the tab while saving asks first. The "New playlist" button sits in the top right corner, on the same line as the menu's title, so the list gets the room of the bottom bar. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle; it is kept on screen and reloaded in place once the save is done, so the new tick shows without a blink; should it close anyway, it is opened again once YouTube has finished saving, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -30,6 +30,7 @@
   const STAR_COLOUR = '#ffcc00';
   const OWN_TOGGLE = true;         // our own saved box and instant save/remove (false = YouTube's icons)
   const SAVED_COLOUR = '#3ea6ff';  // box around a playlist the video is in
+  const NEW_BUTTON_TOP = true;     // "New playlist" in the title line instead of a bar at the bottom
   const COLUMNS = 2;               // playlists side by side (1 = YouTube's single list)
   const COLUMN_WIDTH_PX = 280;     // width of each column
   const GROUP_ROWS = 3;            // a space after this many rows (0 = none)
@@ -142,6 +143,26 @@
     '}',
     '.' + STAR_CLASS + ':hover { color: ' + STAR_COLOUR + '; }',
     '.' + STAR_CLASS + '.kk-on { color: ' + STAR_COLOUR + '; }',
+    // "New playlist": YouTube's bottom bar is lifted out of the flow and
+    // placed in the top right corner, in the title line; the button gets
+    // its normal width instead of the full width of the menu.
+    NEW_BUTTON_TOP ? [
+      SHEET + ' yt-contextual-sheet-layout { position: relative !important; }',
+      SHEET + ' .ytContextualSheetLayoutFooterContainer {',
+      '  position: absolute !important; top: 9px !important; right: 12px !important; z-index: 3;',
+      '  width: auto !important; height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;',
+      '  background: none !important; border: 0 !important; box-shadow: none !important;',
+      '}',
+      SHEET + ' .ytPanelFooterViewModelHost,',
+      SHEET + ' .ytPanelFooterViewModelButtonRow,',
+      SHEET + ' .ytPanelFooterViewModelPrimaryButton { width: auto !important; min-width: 0 !important; flex: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; }',
+      // Discreet: no fill, smaller and dimmed until pointed at.
+      SHEET + ' .ytPanelFooterViewModelPrimaryButton button {',
+      '  width: auto !important; height: 30px !important; padding: 0 10px !important;',
+      '  background: transparent !important; font-size: 13px !important; opacity: .7; transition: opacity .12s, background-color .12s;',
+      '}',
+      SHEET + ' .ytPanelFooterViewModelPrimaryButton button:hover { opacity: 1; background: var(--yt-spec-10-percent-layer, rgba(127,127,127,.15)) !important; }'
+    ].join('\n') : '',
     // Own toggle: star before the name, YouTube's bookmark icons hidden,
     // a saved playlist boxed in like a pressed button.
     OWN_TOGGLE ? [
