@@ -1,13 +1,13 @@
 // @file_name = YouTube_Playlist_Menu.user.js
 // @author = Kardo Rostam
-// @version = 1.8_2026-11-12
+// @version = 1.9_2026-11-13
 // @created = 2026-11-05 11:53
 
 // ==UserScript==
 // @name         YouTube Playlist Menu
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.8_2026-11-12
-// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
+// @version      1.9_2026-11-13
+// @description  Makes YouTube's "Save to..." playlist menu usable with many playlists. Compact rows (no thumbnail or Private/Public line), so about three times as many playlists fit; a filter box at the top that shows only the playlists whose name contains what you type (Enter toggles the first one shown, Escape clears); and a star on every playlist: starred favourites stay at the top. The menu reaches from the top of the window to the bottom, so many more playlists show at once, and it stays open after you save to a playlist (YouTube closes it after every toggle, so it is opened again at once with the same button, keeping the filter and scroll position), so a video can go into several playlists in one go. The playlists are shown in two columns, with a space and a line after every three rows to keep a long list easy to scan. The label at the start of a playlist name (the part before " - ", such as "GAME" in "GAME - Chess") gets its own colour, the same for every playlist with that label. Favourites are kept in Tampermonkey's own storage. Only YouTube's own toggle is used to save, so saving works exactly as before. A Save button with text sits right after Share under the video, also when YouTube has hidden its own Save button for lack of room; it opens the same menu. YouTube's own Save icon is hidden, so there is only one. Event-driven: one MutationObserver on YouTube's popup container (where the menu lives), no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
 // @run-at       document-idle
@@ -31,6 +31,8 @@
   const COLUMN_WIDTH_PX = 280;     // width of each column
   const GROUP_ROWS = 3;            // a space after this many rows (0 = none)
   const GROUP_GAP_PX = 16;         // size of that space
+  const LABEL_COLOURS = true;      // colour the label before " - " in each name
+  const LABEL_HUES = {};           // fixed hues (0-359) per label, e.g. { GAME: 120 }; others are spread evenly
   const GROUP_LINE = 'rgba(170, 170, 170, .55)';  // line in the middle of the space ('' = none)
   const FILTER_PLACEHOLDER = 'Filter playlists';
   const SAVE_BUTTON = true;        // a Save button with text right after Share
@@ -50,6 +52,9 @@
   const FILTER_CLASS = 'kk-ytpl-filter';
   const STAR_CLASS = 'kk-ytpl-star';
   const GAP_CLASS = 'kk-ytpl-gap';
+  const LABEL_CLASS = 'kk-ytpl-label';
+  const LABEL_SEPARATOR = ' - ';
+  const LABEL_MAX_LENGTH = 24;     // longer first parts are a name, not a label
   const SAVE_CLASS = 'kk-ytpl-save';
   const SAVE_LABEL = /^(spara i spellista|save to playlist|spara|save)$/i;
   const SAVE_ITEM = /^(spara|save)\b/i;
@@ -81,6 +86,9 @@
       '.' + SHEET_CLASS + ' ' + ROW + ' { min-width: 0; }'
     ].join('\n') : '',
     '.' + SHEET_CLASS + ' ' + ROW + '.' + GAP_CLASS + ' { margin-bottom: ' + GROUP_GAP_PX + 'px !important; }',
+    // Label colours: darker on the light theme, lighter on the dark one.
+    '.' + LABEL_CLASS + ' { color: hsl(var(--kk-hue) 70% 36%); font-weight: 600; }',
+    'html[dark] .' + LABEL_CLASS + ' { color: hsl(var(--kk-hue) 80% 68%); }',
     // The line runs across both columns (it reaches over the column gap).
     GROUP_LINE ? '.' + SHEET_CLASS + ' ' + ROW + '.' + GAP_CLASS + '::after { content: ""; position: absolute; left: -2px; right: -2px; height: 2px; border-radius: 1px; background: ' + GROUP_LINE + '; bottom: ' + (-Math.round(GROUP_GAP_PX / 2) - 1) + 'px; pointer-events: none; }' : '',
     '.' + SHEET_CLASS + ' ' + ROW + ' { position: relative; }',
@@ -165,8 +173,65 @@
     return title ? title.textContent.trim() : '';
   }
 
+  // LABELS
+  // The first part of a name, before " - ", in its own colour. Each label
+  // found in the menu gets a hue of its own: spread evenly around the
+  // colour wheel in A to Z order, so no two labels share a colour.
+  function labelOf(name) {
+    const at = name.indexOf(LABEL_SEPARATOR);
+    if (at <= 0) return '';
+    const label = name.slice(0, at).trim();
+    return label.length <= LABEL_MAX_LENGTH ? label : '';
+  }
+
+  function labelHues(sheet) {
+    const labels = Array.from(new Set(Array.from(sheet.querySelectorAll(ROW))
+      .map((row) => labelOf(rowName(row)).toUpperCase()).filter(Boolean)))
+      .filter((label) => LABEL_HUES[label] === undefined)
+      .sort();
+    const hues = {};
+    labels.forEach((label, i) => { hues[label] = Math.round(i * 360 / labels.length); });
+    Object.keys(LABEL_HUES).forEach((label) => { hues[label.toUpperCase()] = LABEL_HUES[label]; });
+    return hues;
+  }
+
+  // The label's text is moved into a span of its own inside YouTube's
+  // title; the name as a whole reads the same, so filtering and
+  // favourites are unaffected. Only done when it is not already in place.
+  function colourLabel(row, hues) {
+    const title = row.querySelector(TITLE);
+    if (!title) return;
+    const label = labelOf(rowName(row));
+    const current = title.querySelector('.' + LABEL_CLASS);
+    if (!label) {
+      if (current) current.replaceWith(document.createTextNode(current.textContent));
+      return;
+    }
+    const hue = String(hues[label.toUpperCase()]);
+    if (current && current.textContent === label) {
+      if (current.style.getPropertyValue('--kk-hue') !== hue) current.style.setProperty('--kk-hue', hue);
+      return;
+    }
+    if (current) current.replaceWith(document.createTextNode(current.textContent));
+    const walker = document.createTreeWalker(title, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const at = node.nodeValue.indexOf(label);
+      if (at === -1) continue;
+      const rest = node.splitText(at);
+      rest.splitText(label.length);
+      const span = document.createElement('span');
+      span.className = LABEL_CLASS;
+      span.style.setProperty('--kk-hue', hue);
+      rest.replaceWith(span);
+      span.appendChild(rest);
+      return;
+    }
+  }
+
   // ROWS: star, order and filter. Only written when something differs.
   function decorateRows(sheet) {
+    const hues = LABEL_COLOURS ? labelHues(sheet) : null;
     const favs = favourites();
     const filter = sheet.querySelector('.' + FILTER_CLASS);
     const wanted = filter ? filter.value.trim().toLowerCase() : '';
@@ -199,6 +264,7 @@
       if (row.style.order !== order) row.style.order = order;
       const display = !wanted || name.toLowerCase().indexOf(wanted) !== -1 ? '' : 'none';
       if (row.style.display !== display) row.style.display = display;
+      if (hues) colourLabel(row, hues);
     });
     markGroups(sheet);
   }
