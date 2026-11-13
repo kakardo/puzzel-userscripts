@@ -12,6 +12,8 @@ Click a folder to see its scripts, and a script to read what it does.
 
 <details><summary><b><code>PCM_Shared_Library/</code></b>: the shared DOM helper library, used by 26 scripts</summary>
 
+<blockquote>
+
 Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scripts that read or watch the page's DOM. Keeps DOM/runtime logic (boot/retry, style injection, observers, widget lookup) in one place so feature scripts only handle their own state and styling.
 
 **One library per application, not one per folder.** All PCM scripts target the same web app (puzzel.cm.puzzel.com, SmartAdmin/jarviswidget, Bootstrap accordions, DataTables, Chosen), so the same DOM helpers are valid on every PCM page. One shared library in `PCM_Shared_Library/` avoids per-folder copies drifting apart.
@@ -82,6 +84,8 @@ If ticket-list-specific helpers are ever needed (e.g. DataTables redraw hooks), 
 - `Geckoboard_Keep_Last_Data`: Different app. Wraps fetch for widget data requests only; no observers, no polling
 
 </details>
+
+</blockquote>
 </details>
 <details><summary><b><code>PCM_Ticket_View/</code></b>: ticket detail page (<code>/tickets/*</code>), 31 scripts</summary>
 
