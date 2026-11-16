@@ -1,14 +1,14 @@
 // @file_name = PCM_Mail_Templates.user.js
 // @author = Kardo Rostam
-// @version = 5.6_2026-11-09
+// @version = 5.9_2026-11-16
 // @created = 2026-09-01 10:04
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      5.6_2026-11-09
-// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the Resolve and Password menus are split into English and Svenska, the Swedish entries with Swedish names); a FollowUp menu asks the customer follow-up questions (call example, logs, local admin or IT, testing after a change), while Resolve holds the replies that resolve the ticket. A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Names always get a capital first letter in each part ("anna-lena" becomes "Anna-Lena"). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
+// @version      5.9_2026-11-16
+// @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the Resolve and Password menus are split into English and Svenska, the Swedish entries with Swedish names); a FollowUp menu asks the customer follow-up questions (call example, logs, local admin or IT, testing after a change), while Resolve holds the replies that resolve the ticket and Instructions holds step-by-step guides the customer can follow themselves (with links to Puzzel Help). A template can have variants (the Password resets and the Users instructions: written to the person themselves, or to someone acting on their behalf): the first press inserts the first, pressing the same template again right after switches the inserted text to the next one, round and round, so there is no duplicate entry per wording. A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Names always get a capital first letter in each part ("anna-lena" becomes "Anna-Lena"). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -79,7 +79,8 @@
         evidence: '#e65100',  // asking for call examples and logs
         checkin: '#00838f',   // follow-up questions that keep the ticket going
         closing: '#2f7d2f',   // no-reply and partner replies that resolve it
-        priority: '#3949ab'   // priority change notes
+        priority: '#3949ab',  // priority change notes
+        guide: '#455a64'      // instructions the customer can follow themselves
     };
 
     var TEMPLATES = [
@@ -99,55 +100,54 @@
         },
         // A dropdown: account locked after failed logins, reset the
         // password. "you" writes to the user, "they" to someone writing on
-        // the user's behalf (an admin or partner).
+        // the user's behalf (an admin or partner): one entry with both as
+        // variants, chosen again to switch (see VARIANTS below).
         { label: 'Password', color: COLORS.password, items: [
             {
-                label: 'Reset (you)', group: 'English',
-                text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
-                'It appears that you are unable to log in because your account has been temporarily locked after ' +
-                'multiple failed login attempts.\n\n' +
-                'Please reset your password by following the instructions in the guide below:\n' +
-                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
-                'Once you have completed the password reset, please try logging in again.\n\n' +
-                'If you do not receive the password reset email, please check your spam/junk folder. If the issue ' +
-                'persists, feel free to reply to this email and we\'ll be happy to assist further.\n\n' +
-                'Have a great day!'
+                label: 'Reset (you/they)', group: 'English',
+                variants: [
+                    { name: 'you', text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
+                    'It appears that you are unable to log in because your account has been temporarily locked after ' +
+                    'multiple failed login attempts.\n\n' +
+                    'Please reset your password by following the instructions in the guide below:\n' +
+                    'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
+                    'Once you have completed the password reset, please try logging in again.\n\n' +
+                    'If you do not receive the password reset email, please check your spam/junk folder. If the issue ' +
+                    'persists, feel free to reply to this email and we\'ll be happy to assist further.\n\n' +
+                    'Have a great day!' },
+                    { name: 'they', text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
+                    'It appears that they are unable to log in because their account has been temporarily locked after ' +
+                    'multiple failed login attempts.\n\n' +
+                    'They can reset their password by following the instructions in the guide below:\n' +
+                    'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
+                    'Once they have completed the password reset, ask them to try logging in again.\n\n' +
+                    'If they do not receive the password reset email, please ask them to check their spam/junk folder. ' +
+                    'If the issue persists, feel free to reply to this email and we\'ll be happy to assist further.\n\n' +
+                    'Have a great day!' }
+                ]
             },
             {
-                label: 'Reset (they)', group: 'English',
-                text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
-                'It appears that they are unable to log in because their account has been temporarily locked after ' +
-                'multiple failed login attempts.\n\n' +
-                'They can reset their password by following the instructions in the guide below:\n' +
-                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
-                'Once they have completed the password reset, ask them to try logging in again.\n\n' +
-                'If they do not receive the password reset email, please ask them to check their spam/junk folder. ' +
-                'If the issue persists, feel free to reply to this email and we\'ll be happy to assist further.\n\n' +
-                'Have a great day!'
-            },
-            {
-                label: 'Återställ (du)', group: 'Svenska',
-                text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel Support.\n\n' +
-                'Ditt konto har låsts efter flera misslyckade inloggningsförsök, och därför går det inte ' +
-                'att logga in just nu.\n\n' +
-                'Du kan själv återställa ditt lösenord med hjälp av guiden nedan:\n' +
-                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
-                'Därefter kan du logga in som vanligt igen.\n\n' +
-                'Om mejlet för lösenordsåterställning inte dyker upp, titta gärna i din skräppost. ' +
-                'Kvarstår problemet är du välkommen att svara på det här mejlet, så hjälper vi dig vidare.\n\n' +
-                'Ha en fortsatt fin dag!'
-            },
-            {
-                label: 'Återställ (användare)', group: 'Svenska',
-                text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel Support.\n\n' +
-                'Användarens konto har låsts efter flera misslyckade inloggningsförsök, och därför går det inte ' +
-                'att logga in just nu.\n\n' +
-                'Användaren kan själv återställa sitt lösenord med hjälp av guiden nedan:\n' +
-                'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
-                'Därefter går det att logga in som vanligt igen.\n\n' +
-                'Om mejlet för lösenordsåterställning inte dyker upp, be användaren att titta i sin skräppost. ' +
-                'Kvarstår problemet är du välkommen att svara på det här mejlet, så hjälper vi er vidare.\n\n' +
-                'Ha en fortsatt fin dag!'
+                label: 'Återställ (du/användare)', group: 'Svenska',
+                variants: [
+                    { name: 'du', text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel Support.\n\n' +
+                    'Ditt konto har låsts efter flera misslyckade inloggningsförsök, och därför går det inte ' +
+                    'att logga in just nu.\n\n' +
+                    'Du kan själv återställa ditt lösenord med hjälp av guiden nedan:\n' +
+                    'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
+                    'Därefter kan du logga in som vanligt igen.\n\n' +
+                    'Om mejlet för lösenordsåterställning inte dyker upp, titta gärna i din skräppost. ' +
+                    'Kvarstår problemet är du välkommen att svara på det här mejlet, så hjälper vi dig vidare.\n\n' +
+                    'Ha en fortsatt fin dag!' },
+                    { name: 'användare', text: 'Hej {firstName},\n\nTack för att du kontaktar Puzzel Support.\n\n' +
+                    'Användarens konto har låsts efter flera misslyckade inloggningsförsök, och därför går det inte ' +
+                    'att logga in just nu.\n\n' +
+                    'Användaren kan själv återställa sitt lösenord med hjälp av guiden nedan:\n' +
+                    'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1196\n\n' +
+                    'Därefter går det att logga in som vanligt igen.\n\n' +
+                    'Om mejlet för lösenordsåterställning inte dyker upp, be användaren att titta i sin skräppost. ' +
+                    'Kvarstår problemet är du välkommen att svara på det här mejlet, så hjälper vi er vidare.\n\n' +
+                    'Ha en fortsatt fin dag!' }
+                ]
             }
         ] },
         {
@@ -310,6 +310,35 @@
                 label: 'Test after change',
                 text: 'Hello {firstName},\n\nI just wanted to check in. Have you had a chance to try again since we made ' +
                 'the change? I would love to hear whether it is working for you now.'
+            }
+        ] },
+        // A dropdown: instructions the customer can follow themselves, with
+        // links to the matching Puzzel Help articles. "you" writes to the
+        // administrator, "they" to someone whose administrator does it.
+        { label: 'Instructions', color: COLORS.guide, items: [
+            {
+                label: 'Users (you/they)',
+                variants: [
+                    { name: 'you', text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
+                    'You can manage your users yourself in **Organisation Settings**. Click the profile icon at the top ' +
+                    'right, choose **Organisation Settings**, then click **Configure** under **User Management**. ' +
+                    'More about the top bar here:\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=2417\n\n' +
+                    'There you can add, edit, deactivate and delete users, and choose which products they can use. ' +
+                    'See how here:\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1209\n\n' +
+                    'What a user can see and do depends on their roles. You\'ll find the roles explained here:\n' +
+                    'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253938\n\n' +
+                    'If you have any questions, just reply to this email and we will be happy to help.' },
+                    { name: 'they', text: 'Hello {firstName},\n\nThank you for contacting Puzzel Support.\n\n' +
+                    'Users are managed by your administrator in **Organisation Settings**. They click the profile icon ' +
+                    'at the top right, choose **Organisation Settings**, then click **Configure** under ' +
+                    '**User Management**. More about the top bar here:\n' +
+                    'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=2417\n\n' +
+                    'There they can add, edit, deactivate and delete users, and choose which products each user can use. ' +
+                    'See how here:\nhttps://www.puzzel.com/help?pzlRoute=article&pzlArticleId=1209\n\n' +
+                    'What a user can see and do depends on their roles. You\'ll find the roles explained here:\n' +
+                    'https://www.puzzel.com/help?pzlRoute=article&pzlArticleId=253938\n\n' +
+                    'If you have any questions, just reply to this email and we will be happy to help.' }
+                ]
             }
         ] },
         // A dropdown: replies that resolve the ticket (no reply from the
@@ -732,10 +761,57 @@
         });
     }
 
-    // One click handler for both kinds of template: own text, or PCM's
-    // template fetched by id.
+    // VARIANTS
+    // An entry with "variants" inserts the first one; choosing the same
+    // entry again while the mail is exactly as that insert left it swaps
+    // the inserted text for the next variant (and back), instead of adding
+    // a second copy. Anything typed or inserted in between starts over.
+    var lastInsert = null;
+
+    function summernoteOf(container) {
+        var jq = window.jQuery;
+        var orig = container.previousElementSibling;
+        while (orig && !(jq && jq(orig).data && jq(orig).data('summernote'))) orig = orig.previousElementSibling;
+        return jq && orig ? jq(orig) : null;
+    }
+
+    function editorHtml(container) {
+        if (D.editorIsEmpty(container)) return '';
+        var sn = summernoteOf(container);
+        if (sn) return sn.summernote('code');
+        var editable = container.querySelector('.note-editable');
+        return editable ? editable.innerHTML : '';
+    }
+
+    function setEditorHtml(container, html) {
+        var sn = summernoteOf(container);
+        if (sn) {
+            sn.summernote('code', html);
+            return;
+        }
+        var editable = container.querySelector('.note-editable');
+        if (!editable) return;
+        editable.innerHTML = html;
+        editable.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function insertVariant(entry, container, btn, fontSize) {
+        var again = lastInsert && lastInsert.entry === entry && lastInsert.container === container &&
+            editorHtml(container) === lastInsert.after;
+        var index = again ? (lastInsert.index + 1) % entry.variants.length : 0;
+        var before = again ? lastInsert.before : editorHtml(container);
+        var variant = entry.variants[index];
+        if (again) setEditorHtml(container, before);
+        insertTemplate(container, variant.text, fontSize);
+        lastInsert = { entry: entry, container: container, index: index, before: before, after: editorHtml(container) };
+        if (btn && btn.tagName === 'BUTTON' && variant.name) D.flashLabel(btn, variant.name, 900);
+    }
+
+    // One click handler for every kind of template: own text, own text
+    // with variants, or PCM's template fetched by id.
     function runEntry(entry, container, btn, groupFontSize) {
         if (entry.templateId) insertPcmTemplate(container, entry.templateId, btn);
+        else if (entry.variants && entry.variants.length) insertVariant(entry, container, btn, entry.fontSize || groupFontSize);
         else if (entry.text) insertTemplate(container, entry.text, entry.fontSize || groupFontSize);
     }
 
