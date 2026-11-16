@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 3.5_2026-11-16
+// @version = 3.7_2026-11-16
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.5_2026-11-16
-// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press, and the Puzzel Service in the Forms widget for teams that belong to one service (set once PCM has finished reloading the Forms widget for the new team, and again if a reload in the next 8 seconds puts the old one back; the Forms widget is dimmed meanwhile, so its reloads show as one calm change; left as an unsaved change, so PCM Unsaved Form Warning rings it red until you save; nothing happens when the ticket's form has no Puzzel Service field). A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
+// @version      3.7_2026-11-16
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press, and the Puzzel Service in the Forms widget for teams that belong to one service (set once PCM has finished reloading the Forms widget for the new team, and again if a reload in the next 8 seconds puts the old one back; the Forms widget's fields are hidden meanwhile behind a short "Updating Puzzel Service" note at a fixed height, and fade back in once, so its reloads never show; left as an unsaved change, so PCM Unsaved Form Warning rings it red until you save; nothing happens when the ticket's form has no Puzzel Service field). A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -119,13 +119,17 @@
       cursor: default;
     }
 
-    /* Forms widget while the Puzzel Service is being put in place: dimmed
-       and not clickable, so PCM's reloads do not flash the old value. */
-    .pcm-team-service-busy .widget-body {
-      opacity: 0.35 !important;
-      pointer-events: none !important;
-      transition: opacity 0.15s ease;
+    /* Forms widget while the Puzzel Service is being put in place: the
+       fields are hidden behind a short note (the height is held by the
+       script), so PCM's reloads never show; they fade back in once. */
+    .pcm-team-service-busy .widget-body { position: relative; pointer-events: none !important; }
+    .pcm-team-service-busy .widget-body > * { opacity: 0 !important; }
+    .pcm-team-service-busy .widget-body::after {
+      content: 'Updating Puzzel Service\\2026';
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: #8a8a8a; font-size: 13px; font-style: italic;
     }
+    .pcm-team-service-fade .widget-body > * { transition: opacity 0.25s ease; }
   `);
 
   function getSelect() {
@@ -396,8 +400,16 @@
   // back. A pick by hand in Puzzel Service, or Save, ends that at once.
   // Event-driven (jQuery ajaxSend/ajaxStop); nothing is left listening.
   const SERVICE_GUARD_MS = 8000;
-  const SERVICE_QUIET_MS = 300;
-  const SERVICE_READY_POLL_MS = 150;
+  const SERVICE_QUIET_MS = 120;
+  const SERVICE_READY_POLL_MS = 60;
+  const SERVICE_FADE_MS = 300;
+  // After a team change PCM loads, in a chain: Assigned To, Categories,
+  // then the team's forms and the form itself. The service waits for that
+  // last part (or this long, when a team change brings no form reload),
+  // instead of being set in the short gap after Categories and thrown
+  // away by the form reload.
+  const SERVICE_FORM_WAIT_MS = 2000;
+  const FORM_RELOAD_URL = /\/(assignable_forms|form_fields)\b/;
   let stopServiceGuard = null;
 
   function serviceGuard(name) {
@@ -413,8 +425,22 @@
     const first = getServiceSelect();
     const widget = first && (first.closest('.jarviswidget') || (first.form && first.form.parentElement));
     const BUSY = 'pcm-team-service-busy';
+    const FADE = 'pcm-team-service-fade';
+    const body = widget && widget.querySelector('.widget-body');
+    function hold() {
+      if (!widget) return;
+      // The height stays as it is, so the page below does not jump while
+      // PCM empties and refills the form.
+      if (body) body.style.minHeight = body.offsetHeight + 'px';
+      widget.classList.remove(FADE);
+      widget.classList.add(BUSY);
+    }
     function release() {
-      if (widget) widget.classList.remove(BUSY);
+      if (!widget || !widget.classList.contains(BUSY)) return;
+      widget.classList.add(FADE);
+      widget.classList.remove(BUSY);
+      if (body) body.style.minHeight = '';
+      window.setTimeout(() => widget.classList.remove(FADE), SERVICE_FADE_MS);
     }
 
     function attempt() {
@@ -440,11 +466,23 @@
       // when there is none).
       soon();
     }
+    const formWaitEnds = Date.now() + SERVICE_FORM_WAIT_MS;
+    let formReloaded = false;
     function soon() {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => { if (!jq || !jq.active) attempt(); }, SERVICE_QUIET_MS);
+      timer = window.setTimeout(() => {
+        if (jq && jq.active) return;
+        if (!formReloaded && Date.now() < formWaitEnds) {
+          timer = window.setTimeout(soon, formWaitEnds - Date.now());
+          return;
+        }
+        attempt();
+      }, SERVICE_QUIET_MS);
     }
     const onSend = () => window.clearTimeout(timer);
+    const onComplete = (event, xhr, settings) => {
+      if (settings && FORM_RELOAD_URL.test(settings.url || '')) formReloaded = true;
+    };
     const onHandPick = (event) => {
       const select = getServiceSelect();
       if (event.isTrusted && select && event.target === select) stop();
@@ -465,16 +503,16 @@
       window.clearTimeout(timer);
       if (observer) observer.disconnect();
       release();
-      if (jq) jq(document).off('ajaxSend', onSend).off('ajaxStop', soon);
+      if (jq) jq(document).off('ajaxSend', onSend).off('ajaxComplete', onComplete).off('ajaxStop', soon);
       document.removeEventListener('change', onHandPick, true);
       document.removeEventListener('click', onSave, true);
       document.removeEventListener('submit', onSave, true);
       if (stopServiceGuard === stop) stopServiceGuard = null;
     }
     stopServiceGuard = stop;
-    if (widget && first && findServiceOption(first, name) && first.value !== findServiceOption(first, name).value) widget.classList.add(BUSY);
+    if (widget && first && findServiceOption(first, name) && first.value !== findServiceOption(first, name).value) hold();
     if (observer) observer.observe(widget, { childList: true, subtree: true });
-    if (jq) jq(document).on('ajaxSend', onSend).on('ajaxStop', soon);
+    if (jq) jq(document).on('ajaxSend', onSend).on('ajaxComplete', onComplete).on('ajaxStop', soon);
     document.addEventListener('change', onHandPick, true);
     document.addEventListener('click', onSave, true);
     document.addEventListener('submit', onSave, true);
