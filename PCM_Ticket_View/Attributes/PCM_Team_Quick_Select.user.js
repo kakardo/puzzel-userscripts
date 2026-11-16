@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 2.9_2026-11-06
+// @version = 3.2_2026-11-16
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.9_2026-11-06
-// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press: Spam sets Status to Resolved. A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
+// @version      3.2_2026-11-16
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press. A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -34,7 +34,8 @@
     { label: 'CHG',     team: 'Change Team',                         color: '#455a64' }, // slate grey
     { label: 'CI',      team: 'Conversational Intelligence Support', color: '#6d4c41' }, // brown
     { label: 'PSI',     team: 'Sales Intelligence Support',          color: '#b5179e' }, // magenta
-    { label: 'Spam',    team: 'Spam/Virus Quarantine',               color: '#d32f2f', status: 'Resolved' }, // red
+    { label: 'Spam',    team: 'Spam/Virus Quarantine',               color: '#d32f2f',
+      triage: [{ status: 'Resolved' }, { status: 'Resolved', priority: 'Junk' }] }, // red
     { label: 'Triage',  team: 'Triage Support',                      color: '#2f7d2f' }, // green
     { label: 'Virtual', team: 'Virtual Agents Support',              color: '#00838f' }, // teal
     { label: 'WFM',     team: 'WFM Support',                         color: '#9e7c00' }  // dark gold
@@ -52,6 +53,8 @@
   // change in that form) once PCM has reloaded Assigned To for the new
   // team. false (default): you press Save yourself.
   const SAVE_RIGHT_AWAY = false;
+
+  const TRIAGING_ADDITION = false;
 
   // INTERNAL SETTINGS
   const D = window.PCM_DOM;
@@ -180,15 +183,24 @@
   // The Status dropdown of the Attributes form: by id when PCM uses the
   // same naming as the Team and Assigned To dropdowns, otherwise the
   // select under the "Status:" label.
-  function getStatusSelect() {
-    const byId = document.getElementById('status-select');
+  // The same lookup serves the Priority dropdown.
+  function getFieldSelect(id, labelText) {
+    const byId = document.getElementById(id);
     if (byId && byId.tagName === 'SELECT') return byId;
     const form = D.query('#ticket-attributes-form') || D.query('form.edit_ticket') || document;
     const label = D.queryAll('label', form).find((el) =>
-      D.cleanText(el.textContent).toLowerCase().startsWith('status:')
+      D.cleanText(el.textContent).toLowerCase().startsWith(labelText)
     );
     const section = label && (label.closest('section, .form-group, [class*="col"]') || label.parentElement);
     return section ? section.querySelector('select') : null;
+  }
+
+  function getStatusSelect() {
+    return getFieldSelect('status-select', 'status:');
+  }
+
+  function getPrioritySelect() {
+    return getFieldSelect('priority-select', 'priority:');
   }
 
   // One native change event: PCM and the Styler listen through
@@ -314,13 +326,70 @@
     arm();
   }
 
-  function selectStatus(statusName) {
-    const select = getStatusSelect();
+  function setSelect(select, name) {
     if (!select) return;
-    const option = findOption(select, statusName);
+    const option = findOption(select, name);
     if (!option || select.value === option.value) return;
     select.value = option.value;
     select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function selectStatus(statusName) {
+    setSelect(getStatusSelect(), statusName);
+  }
+
+  function selectedText(select) {
+    return select ? selectedTeamText(select) : '';
+  }
+
+  // TRIAGING ADDITION
+  // Kept in sessionStorage (this tab), so it survives a reload.
+  const PRIORITY_KEY = 'pcm-team-quick-select-priority:';
+
+  function rememberedPriority(ticket) {
+    try { return window.sessionStorage.getItem(PRIORITY_KEY + ticket) || ''; } catch (_) { return ''; }
+  }
+
+  function rememberPriority(ticket, value) {
+    try {
+      if (value) window.sessionStorage.setItem(PRIORITY_KEY + ticket, value);
+      else window.sessionStorage.removeItem(PRIORITY_KEY + ticket);
+    } catch (_) { /* storage blocked */ }
+  }
+
+  function matchesStep(step) {
+    if (step.status && selectedText(getStatusSelect()) !== D.cleanText(step.status).toLowerCase()) return false;
+    if (step.priority && selectedText(getPrioritySelect()) !== D.cleanText(step.priority).toLowerCase()) return false;
+    return true;
+  }
+
+  // The step the ticket is in: of the steps that match, the one that sets
+  // the most fields.
+  function nextStep(entry, wasInTeam) {
+    if (!wasInTeam) return entry.triage[0];
+    let at = -1;
+    let best = -1;
+    entry.triage.forEach((step, i) => {
+      const fields = (step.status ? 1 : 0) + (step.priority ? 1 : 0);
+      if (matchesStep(step) && fields >= best) { at = i; best = fields; }
+    });
+    return entry.triage[at === -1 ? 0 : (at + 1) % entry.triage.length];
+  }
+
+  function applyStep(step) {
+    const priority = getPrioritySelect();
+    const ticket = location.pathname;
+    if (step.priority) {
+      if (priority && selectedText(priority) !== D.cleanText(step.priority).toLowerCase()) {
+        const option = priority.options[priority.selectedIndex];
+        rememberPriority(ticket, option ? option.textContent : '');
+      }
+      setSelect(priority, step.priority);
+    } else if (rememberedPriority(ticket)) {
+      setSelect(priority, rememberedPriority(ticket));
+      rememberPriority(ticket, '');
+    }
+    if (step.status) selectStatus(step.status);
   }
 
   function updateActiveStates() {
@@ -395,7 +464,9 @@
         btn.disabled = true;
         btn.title = 'No option named "' + entry.team + '" in the Team list';
       } else {
-        btn.title = 'Set Team to ' + entry.team + (entry.status ? ' and Status to ' + entry.status : '') + (entry.unassign ? ' and clear Assigned To' : '') + (SAVE_RIGHT_AWAY ? ', then save' : '');
+        const cycles = TRIAGING_ADDITION && Array.isArray(entry.triage) && entry.triage.length;
+        btn.title = 'Set Team to ' + entry.team + (entry.status ? ' and Status to ' + entry.status : '') +
+          (entry.unassign ? ' and clear Assigned To' : '') + (SAVE_RIGHT_AWAY ? ', then save' : '');
         btn.addEventListener('click', (event) => {
           // preventDefault also stops the surrounding label from toggling
           // the select widget.
@@ -405,8 +476,10 @@
             flash(btn, 'Loading\u2026');
             return;
           }
+          const wasInTeam = selectedTeamText(getSelect()) === D.cleanText(entry.team).toLowerCase();
           selectTeam(entry.team);
           if (entry.status) selectStatus(entry.status);
+          if (cycles) applyStep(nextStep(entry, wasInTeam));
           if (entry.unassign) unassignAndGuard();
           recheckForm(getSelect());
           if (SAVE_RIGHT_AWAY) saveWhenQuiet(entry.unassign ? clearAssignee : null);
