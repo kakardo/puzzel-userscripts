@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 3.2_2026-11-16
+// @version = 3.5_2026-11-16
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.2_2026-11-16
-// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press. A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
+// @version      3.5_2026-11-16
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press, and the Puzzel Service in the Forms widget for teams that belong to one service (set once PCM has finished reloading the Forms widget for the new team, and again if a reload in the next 8 seconds puts the old one back; the Forms widget is dimmed meanwhile, so its reloads show as one calm change; left as an unsaved change, so PCM Unsaved Form Warning rings it red until you save; nothing happens when the ticket's form has no Puzzel Service field). A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -27,18 +27,21 @@
   // "status" is set in the Status dropdown at the same press (matched the
   // same way), for teams that always go with one status. "unassign: true"
   // also clears Assigned To, for teams whose queue takes the ticket over.
+  // An optional "service" is set as Puzzel Service in the Forms widget
+  // (matched case-insensitively, spaces ignored, so "Botstudio" also finds
+  // "Bot Studio").
   const TEAM_BUTTONS = [
-    { label: 'Admin',   team: 'Admin Support',                       color: '#1e5bd8' }, // blue
-    { label: 'Agent',   team: 'Agent Support',                       color: '#e65100', unassign: true }, // orange
-    { label: 'Case',    team: 'Case Management Support',             color: '#7b2cbf' }, // purple
-    { label: 'CHG',     team: 'Change Team',                         color: '#455a64' }, // slate grey
-    { label: 'CI',      team: 'Conversational Intelligence Support', color: '#6d4c41' }, // brown
-    { label: 'PSI',     team: 'Sales Intelligence Support',          color: '#b5179e' }, // magenta
+    { label: 'Admin',   team: 'Admin Support',                       color: '#1e5bd8', service: 'Contact Centre' }, // blue
+    { label: 'Agent',   team: 'Agent Support',                       color: '#e65100', service: 'Contact Centre', unassign: true }, // orange
+    { label: 'Case',    team: 'Case Management Support',             color: '#7b2cbf', service: 'Case Management' }, // purple
+    { label: 'CHG',     team: 'Change Team',                         color: '#455a64', service: 'Contact Centre' }, // slate grey
+    { label: 'CI',      team: 'Conversational Intelligence Support', color: '#6d4c41', service: 'Conversational Intelligence' }, // brown
+    { label: 'PSI',     team: 'Sales Intelligence Support',          color: '#b5179e', service: 'Sales Intelligence' }, // magenta
     { label: 'Spam',    team: 'Spam/Virus Quarantine',               color: '#d32f2f',
       triage: [{ status: 'Resolved' }, { status: 'Resolved', priority: 'Junk' }] }, // red
-    { label: 'Triage',  team: 'Triage Support',                      color: '#2f7d2f' }, // green
-    { label: 'Virtual', team: 'Virtual Agents Support',              color: '#00838f' }, // teal
-    { label: 'WFM',     team: 'WFM Support',                         color: '#9e7c00' }  // dark gold
+    { label: 'Triage',  team: 'Triage Support',                      color: '#2f7d2f', service: 'Contact Centre' }, // green
+    { label: 'Virtual', team: 'Virtual Agents Support',              color: '#00838f', service: 'Botstudio' }, // teal
+    { label: 'WFM',     team: 'WFM Support',                         color: '#9e7c00', service: 'WFM' }  // dark gold
   ];
 
   // Where the bubbles sit relative to the Team dropdown.
@@ -114,6 +117,14 @@
     #${WRAP_ID} .pcm-team-btn:disabled {
       opacity: 0.25;
       cursor: default;
+    }
+
+    /* Forms widget while the Puzzel Service is being put in place: dimmed
+       and not clickable, so PCM's reloads do not flash the old value. */
+    .pcm-team-service-busy .widget-body {
+      opacity: 0.35 !important;
+      pointer-events: none !important;
+      transition: opacity 0.15s ease;
     }
   `);
 
@@ -342,6 +353,135 @@
     return select ? selectedTeamText(select) : '';
   }
 
+  // PUZZEL SERVICE (Forms widget)
+  // The Puzzel Service select is the one in the Forms widget whose block is
+  // labelled "Puzzel Service". Options are compared without spaces and
+  // case; an exact match wins, otherwise a single option that starts with
+  // the wanted name (or the other way round), never a guess between two.
+  // Written like a pick by hand (native setter and change event), so PCM
+  // loads the matching Product Area list and PCM Unsaved Form Warning
+  // marks the field until Save.
+  function squash(value) {
+    return D.cleanText(String(value || '')).toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function getServiceSelect() {
+    const root = D.query('#ticket-forms-form') || D.query('form.ticket-forms-form') ||
+      (D.query('#form-fields-wrapper') ? D.query('#form-fields-wrapper').closest('form') : null);
+    if (!root) return null;
+    return D.queryAll('select', root).find((select) => {
+      const block = select.closest('section, .form-group, [class*="col"]') || select.parentElement;
+      const label = block && block.querySelector('label');
+      return !!label && squash(label.textContent).startsWith('puzzelservice');
+    }) || null;
+  }
+
+  function findServiceOption(select, name) {
+    const wanted = squash(name);
+    const options = [...select.options].filter((option) => option.value !== '');
+    const exact = options.filter((option) => squash(option.textContent) === wanted);
+    if (exact.length === 1) return exact[0];
+    const close = options.filter((option) => {
+      const text = squash(option.textContent);
+      return text && (text.startsWith(wanted) || wanted.startsWith(text));
+    });
+    return close.length === 1 ? close[0] : null;
+  }
+
+  // A team change makes PCM reload the Forms widget, which put back the
+  // old service right after it was set. So the service is set once PCM's
+  // requests have gone quiet, after the reloaded form has been recorded
+  // (formReady, or the change would count as the saved value), and set
+  // again whenever another reload within SERVICE_GUARD_MS puts the old one
+  // back. A pick by hand in Puzzel Service, or Save, ends that at once.
+  // Event-driven (jQuery ajaxSend/ajaxStop); nothing is left listening.
+  const SERVICE_GUARD_MS = 8000;
+  const SERVICE_QUIET_MS = 300;
+  const SERVICE_READY_POLL_MS = 150;
+  let stopServiceGuard = null;
+
+  function serviceGuard(name) {
+    if (stopServiceGuard) stopServiceGuard();
+    const jq = window.jQuery;
+    const until = Date.now() + SERVICE_GUARD_MS;
+    let stopped = false;
+    let timer = 0;
+    let reported = false;
+
+    // Dimmed from the press until the service is in place and PCM's
+    // requests are quiet again (or the guard ends).
+    const first = getServiceSelect();
+    const widget = first && (first.closest('.jarviswidget') || (first.form && first.form.parentElement));
+    const BUSY = 'pcm-team-service-busy';
+    function release() {
+      if (widget) widget.classList.remove(BUSY);
+    }
+
+    function attempt() {
+      if (stopped) return;
+      const select = getServiceSelect();
+      if (!select) return release();
+      const option = findServiceOption(select, name);
+      if (!option) {
+        if (!reported) console.info('[PCM Team Quick Select] no single Puzzel Service option matches %o, left alone.', name);
+        reported = true;
+        return release();
+      }
+      if (select.value === option.value) {
+        if (!jq || !jq.active) release();
+        return;
+      }
+      if (!D.formReady(select)) {
+        if (Date.now() < until) timer = window.setTimeout(attempt, SERVICE_READY_POLL_MS);
+        return;
+      }
+      D.setNativeFieldValue(select, option.value);
+      // Released after the Product Area reload this starts (or at once
+      // when there is none).
+      soon();
+    }
+    function soon() {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => { if (!jq || !jq.active) attempt(); }, SERVICE_QUIET_MS);
+    }
+    const onSend = () => window.clearTimeout(timer);
+    const onHandPick = (event) => {
+      const select = getServiceSelect();
+      if (event.isTrusted && select && event.target === select) stop();
+    };
+    const onSave = (event) => {
+      const select = getServiceSelect();
+      const form = select && select.form;
+      const target = event.target;
+      if (!form || !target) return;
+      if (target === form || (target.closest && target.closest('button[type="submit"], input[type="submit"]') && form.contains(target))) stop();
+    };
+    // A reload that does not go through jQuery still shows as the Forms
+    // widget being redrawn.
+    const observer = widget ? new MutationObserver(soon) : null;
+    function stop() {
+      if (stopped) return;
+      stopped = true;
+      window.clearTimeout(timer);
+      if (observer) observer.disconnect();
+      release();
+      if (jq) jq(document).off('ajaxSend', onSend).off('ajaxStop', soon);
+      document.removeEventListener('change', onHandPick, true);
+      document.removeEventListener('click', onSave, true);
+      document.removeEventListener('submit', onSave, true);
+      if (stopServiceGuard === stop) stopServiceGuard = null;
+    }
+    stopServiceGuard = stop;
+    if (widget && first && findServiceOption(first, name) && first.value !== findServiceOption(first, name).value) widget.classList.add(BUSY);
+    if (observer) observer.observe(widget, { childList: true, subtree: true });
+    if (jq) jq(document).on('ajaxSend', onSend).on('ajaxStop', soon);
+    document.addEventListener('change', onHandPick, true);
+    document.addEventListener('click', onSave, true);
+    document.addEventListener('submit', onSave, true);
+    window.setTimeout(stop, SERVICE_GUARD_MS);
+    soon();
+  }
+
   // TRIAGING ADDITION
   // Kept in sessionStorage (this tab), so it survives a reload.
   const PRIORITY_KEY = 'pcm-team-quick-select-priority:';
@@ -466,6 +606,7 @@
       } else {
         const cycles = TRIAGING_ADDITION && Array.isArray(entry.triage) && entry.triage.length;
         btn.title = 'Set Team to ' + entry.team + (entry.status ? ' and Status to ' + entry.status : '') +
+          (entry.service ? ' and Puzzel Service to ' + entry.service : '') +
           (entry.unassign ? ' and clear Assigned To' : '') + (SAVE_RIGHT_AWAY ? ', then save' : '');
         btn.addEventListener('click', (event) => {
           // preventDefault also stops the surrounding label from toggling
@@ -480,6 +621,7 @@
           selectTeam(entry.team);
           if (entry.status) selectStatus(entry.status);
           if (cycles) applyStep(nextStep(entry, wasInTeam));
+          if (entry.service) serviceGuard(entry.service);
           if (entry.unassign) unassignAndGuard();
           recheckForm(getSelect());
           if (SAVE_RIGHT_AWAY) saveWhenQuiet(entry.unassign ? clearAssignee : null);

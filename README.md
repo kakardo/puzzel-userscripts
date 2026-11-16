@@ -176,7 +176,7 @@ Highlights Assigned-To, Status and Priority fields (Priority in the tickets list
 <li>
 <details><summary><code>PCM_Team_Quick_Select</code>: one-click team buttons</summary>
 
-One-click buttons under the Team dropdown that select configured teams in the Chosen widget, each team in its own colour. Teams are a config array at the top. SAVE_RIGHT_AWAY (off by default) makes a press save right away, once PCM has reloaded Assigned To for the new team (saves every change in Attributes). Uses the shared DOM library.
+One-click buttons under the Team dropdown that select configured teams in the Chosen widget, each team in its own colour. Teams tied to one Puzzel Service also set it in the Forms widget, left unsaved (red border until saved). Teams are a config array at the top. SAVE_RIGHT_AWAY (off by default) makes a press save right away, once PCM has reloaded Assigned To for the new team (saves every change in Attributes). Uses the shared DOM library.
 
 </details>
 </li>
