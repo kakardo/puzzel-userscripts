@@ -1,12 +1,12 @@
 // @file_name = PCM_PostIt_Quick_Text.user.js
 // @author = Kardo Rostam
-// @version = 1.3_2026-10-29
+// @version = 1.4_2026-11-16
 // @created = 2026-10-14 11:20
 
 // ==UserScript==
 // @name         PCM PostIt Quick Text
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-10-29
+// @version      1.4_2026-11-16
 // @description  Adds a red button beside the "Post-It Note:" label in the Attributes widget that writes a text in the Post-It Note, INCIDENT unless you choose another. The arrow on its right turns the button into a small text box: type what the button should write and press Enter (Esc cancels, an empty box goes back to INCIDENT); the choice is remembered in this browser. One press writes the text: into an empty note as is, above existing text on its own first line, and not at all when the note already contains it. The text is set the way typing would, so PCM (and the unsaved changes warning) sees the change; you still press Save. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the button says Loading, since PCM would otherwise take the text as the saved one and keep Save grey. The button comes back by itself when PCM rebuilds the widget after a save. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -109,11 +109,19 @@
     // button inside it does not stop a re-run from recognising it. The
     // textarea is the one the label points at, or the one in the same
     // section of the form.
+    // The label's text without what scripts add to it (buttons, our row).
+    // PCM sometimes renders the text inside an element of its own (seen
+    // after picking an organisation), so all text counts, not only the
+    // label's direct text.
     function ownText(el) {
         var value = '';
-        el.childNodes.forEach(function (node) {
-            if (node.nodeType === 3) value += node.nodeValue;
-        });
+        var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        var node;
+        while ((node = walker.nextNode())) {
+            var parent = node.parentElement;
+            if (parent && parent !== el && parent.closest('button, select, textarea, input, #' + WRAP_ID)) continue;
+            value += node.nodeValue;
+        }
         return D.cleanText(value);
     }
 
