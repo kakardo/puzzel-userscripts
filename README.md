@@ -248,7 +248,7 @@ Copy buttons for CustomerId/Name above `Form:`, reading the Extractor's publishe
 <li>
 <details><summary><code>PCM_Unsaved_Form_Warning</code>: warning for unsaved Forms changes</summary>
 
-Snapshot-based unsaved change detection for the Forms widget; highlights changed fields and shows a warning next to Save ("Corrected values, please save" in orange when only `PCM_Form_Buttons` corrections are unsaved). Colour, mode, and text are settings at the top. Uses the shared DOM library.
+Snapshot-based unsaved change detection for the Forms widget; highlights changed fields and shows a warning next to Save ("Corrected values, please save" in orange when only `PCM_Form_Buttons` corrections are unsaved). Colour, mode, and text are settings at the top. When PCM's server fails to load (part of) the form, it takes away the loading overlay PCM leaves up and offers "Try again". Uses the shared DOM library.
 
 </details>
 </li>
