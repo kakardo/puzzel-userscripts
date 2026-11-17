@@ -1,13 +1,13 @@
 // @file_name = PCM_Image_Viewer.user.js
 // @author = Kardo Rostam
-// @version = 1.6_2026-11-17
+// @version = 1.7_2026-11-17
 // @created = 2026-09-03 09:43
 
 // ==UserScript==
 // @name         PCM Image Viewer
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.6_2026-11-17
-// @description  Upgrades the attachment preview modal on the ticket view. Adds an Open in tab button beside Download (same style, own colour) linking the previewed attachment, zoom controls for image previews (one split button with zoom out on the left, the current zoom in per cent in the middle and zoom in on the right, and one button that shows the image at its actual size, reading 1:1, and once pressed or zoomed reads Fit and fits it back), and drag to pan. The preview window fills the browser window (a small margin around it), and an image opens fitted to all of that space, in width and height, centred (small images are enlarged too, FIT_UPSCALE at the top turns that off); it fits again when the window is resized. The window's size rules are in place from the start and the attachment stays hidden until it is fitted, so nothing jumps from the normal size to the large one: grab the image and drag to scroll around it when zoomed. The preview is a same-origin iframe, so zoom and pan act on the image document inside it directly, and controls appear only when the previewed attachment is an image. Purely event-driven via shown.bs.modal and the iframe load event: zero cost while no preview is open, no observers, no polling.
+// @version      1.7_2026-11-17
+// @description  Upgrades the attachment preview modal on the ticket view. Adds an Open in tab button beside Download (same style, own colour) linking the previewed attachment, zoom controls for image previews (one split button with zoom out on the left, the current zoom in per cent in the middle and zoom in on the right, and one button that shows the image at its actual size, reading 1:1, and once pressed or zoomed reads Fit and fits it back, always at the same width so the row never moves), and drag to pan: grab the image and drag to scroll around it when zoomed. The preview window fills the browser window (a small margin around it), and an image opens fitted to all of that space, in width and height, centred (small images are enlarged too, FIT_UPSCALE at the top turns that off); it fits again when the window is resized. The window's size rules are in place from the start and the attachment stays hidden until it is fitted, so nothing jumps from the normal size to the large one. The preview is a same-origin iframe, so zoom and pan act on the image document inside it directly, and controls appear only when the previewed attachment is an image. Purely event-driven via shown.bs.modal and the iframe load event: zero cost while no preview is open, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -283,6 +283,7 @@
         var outer = { borderRadius: cs.borderTopLeftRadius, paddingLeft: cs.paddingLeft, paddingRight: cs.paddingRight, paddingTop: '0', paddingBottom: '0' };
         apply(document.getElementById(OPEN_ID), outer);
         apply(group.querySelector(':scope > .pcm-iv-btn'), outer);
+        fixToggleWidth(group.querySelector(':scope > .pcm-iv-btn'));
         var split = group.querySelector('.pcm-iv-split');
         if (split) {
             var r = cs.borderTopLeftRadius;
@@ -292,6 +293,21 @@
                 apply(part, { borderRadius: '0', borderWidth: '0', paddingTop: '0', paddingBottom: '0' });
             });
         }
+    }
+
+    // The 1:1/Fit button keeps the width of its wider text, so the row
+    // does not shift when the text changes. Measured once per look.
+    function fixToggleWidth(toggle) {
+        if (!toggle) return;
+        var text = toggle.textContent;
+        toggle.style.width = '';
+        var widest = 0;
+        ['1:1', 'Fit'].forEach(function (label) {
+            toggle.textContent = label;
+            widest = Math.max(widest, Math.ceil(toggle.getBoundingClientRect().width));
+        });
+        toggle.textContent = text;
+        if (widest) toggle.style.width = widest + 'px';
     }
 
     // Drag to pan: grab the image and drag to scroll around it. The
@@ -364,6 +380,8 @@
         var img = getFrameImg(modal);
         var group = document.getElementById(GROUP_ID);
         if (group) group.style.display = img ? '' : 'none';
+        // Measured once it is shown (a hidden button has no width).
+        if (group && img && !group.querySelector(':scope > .pcm-iv-btn').style.width) fixToggleWidth(group.querySelector(':scope > .pcm-iv-btn'));
         if (img) attachPan(modal);
 
         applyZoom(modal);
