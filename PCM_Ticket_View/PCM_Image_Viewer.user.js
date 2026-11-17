@@ -1,13 +1,13 @@
 // @file_name = PCM_Image_Viewer.user.js
 // @author = Kardo Rostam
-// @version = 1.7_2026-11-17
+// @version = 2.4_2026-11-17
 // @created = 2026-09-03 09:43
 
 // ==UserScript==
 // @name         PCM Image Viewer
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.7_2026-11-17
-// @description  Upgrades the attachment preview modal on the ticket view. Adds an Open in tab button beside Download (same style, own colour) linking the previewed attachment, zoom controls for image previews (one split button with zoom out on the left, the current zoom in per cent in the middle and zoom in on the right, and one button that shows the image at its actual size, reading 1:1, and once pressed or zoomed reads Fit and fits it back, always at the same width so the row never moves), and drag to pan: grab the image and drag to scroll around it when zoomed. The preview window fills the browser window (a small margin around it), and an image opens fitted to all of that space, in width and height, centred (small images are enlarged too, FIT_UPSCALE at the top turns that off); it fits again when the window is resized. The window's size rules are in place from the start and the attachment stays hidden until it is fitted, so nothing jumps from the normal size to the large one. The preview is a same-origin iframe, so zoom and pan act on the image document inside it directly, and controls appear only when the previewed attachment is an image. Purely event-driven via shown.bs.modal and the iframe load event: zero cost while no preview is open, no observers, no polling.
+// @version      2.4_2026-11-17
+// @description  Upgrades the attachment preview modal on the ticket view. Adds an Open in tab button beside Download (same style, own colour) linking the previewed attachment, zoom controls for image previews (one split button with zoom out on the left, the current zoom in per cent in the middle and zoom in on the right, and one button that shows the image at its actual size, reading 1:1, and once pressed or zoomed reads Fit and fits it back, always at the same width so the row never moves), and drag to pan: grab the image and drag to scroll around it when zoomed. The preview window fills the browser window (a small margin around it), and an image opens fitted to all of that space, in width and height, centred (small images are enlarged too, FIT_UPSCALE at the top turns that off); it fits again when the window is resized. The window's size rules are in place from the start and the attachment stays hidden until it is fitted, so nothing jumps from the normal size to the large one. Escape closes the preview, also while the attachment itself has the focus. PCM's small close cross is replaced by a close button at the right end of the row, in the same style as the others (grey), with the cross and a small "Esc" under it, both centred. The preview is a same-origin iframe, so zoom and pan act on the image document inside it directly, and controls appear only when the previewed attachment is an image. Purely event-driven via shown.bs.modal and the iframe load event: zero cost while no preview is open, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -41,6 +41,8 @@
     var STYLE_ID = 'pcm-image-viewer-style';
     var OPEN_ID = 'pcm-iv-open';
     var GROUP_ID = 'pcm-iv-zoom';
+    var CLOSE_ID = 'pcm-iv-close';
+    var CLOSE_COLOUR = '#6b7280';           // the close button's grey
     var BOOT_MAX_TRIES = 40;
     var BOOT_INTERVAL_MS = 250;
 
@@ -73,6 +75,13 @@
         // keep it to their right, the 1:1/Fit button to its left.
         '#' + OPEN_ID + ' { margin-right: ' + BUTTON_GAP_PX + 'px !important; margin-left: 0 !important; }',
         '#' + GROUP_ID + ' { margin-right: ' + BUTTON_GAP_PX + 'px !important; }',
+        // The Escape hint: small and grey, left of the buttons.
+        // PCM's own small cross is replaced by the close button below.
+        '#' + MODAL_ID + ' .modal-header .close:not(#' + CLOSE_ID + ') { display: none !important; }',
+        '#' + CLOSE_ID + ' { background-color: ' + CLOSE_COLOUR + '; border-color: ' + CLOSE_COLOUR + '; color: #fff; flex-direction: column; min-width: 44px; }',
+        '#' + CLOSE_ID + ':hover, #' + CLOSE_ID + ':focus { background-color: #4b5563; border-color: #4b5563; color: #fff; }',
+        '#' + CLOSE_ID + ' .pcm-iv-x { font-size: 15px; line-height: 1; }',
+        '#' + CLOSE_ID + ' .pcm-iv-esc { font-size: 9px; line-height: 1; margin-top: 2px; opacity: .85; font-weight: normal; }',
         // The preview window takes the whole browser window, and its body
         // (with the attachment's frame) all the height below the header.
         '#' + MODAL_ID + ' .modal-dialog {',
@@ -235,6 +244,8 @@
             anchorParent.insertBefore(group, document.getElementById(OPEN_ID));
         }
 
+
+        placeClose();
         matchLook(download);
 
         var frame = getFrame(modal);
@@ -282,8 +293,16 @@
         }
         var outer = { borderRadius: cs.borderTopLeftRadius, paddingLeft: cs.paddingLeft, paddingRight: cs.paddingRight, paddingTop: '0', paddingBottom: '0' };
         apply(document.getElementById(OPEN_ID), outer);
+        // PCM's own spacing on Download made its gap 10 px; it gets the
+        // same gap as the rest.
+        var gap = BUTTON_GAP_PX + 'px';
+        if (download.style.getPropertyValue('margin-right') !== gap) download.style.setProperty('margin-right', gap, 'important');
+        if (download.style.getPropertyValue('margin-left') !== '0px') download.style.setProperty('margin-left', '0px', 'important');
+        apply(document.getElementById(CLOSE_ID), Object.assign({}, outer, { flexDirection: 'column', paddingLeft: '10px', paddingRight: '10px' }));
         apply(group.querySelector(':scope > .pcm-iv-btn'), outer);
         fixToggleWidth(group.querySelector(':scope > .pcm-iv-btn'));
+
+
         var split = group.querySelector('.pcm-iv-split');
         if (split) {
             var r = cs.borderTopLeftRadius;
@@ -308,6 +327,57 @@
         });
         toggle.textContent = text;
         if (widest) toggle.style.width = widest + 'px';
+    }
+
+    // The close button: the right-most of the row (the buttons float
+    // right, so it goes first in the page), a cross with a small "Esc"
+    // under it, both centred. It closes like PCM's own cross.
+    function placeClose() {
+        var first = document.getElementById(GROUP_ID) || document.getElementById(OPEN_ID);
+        if (!first || !first.parentNode) return;
+        var btn = document.getElementById(CLOSE_ID);
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.type = 'button';
+            btn.id = CLOSE_ID;
+            btn.className = 'btn btn-sm pull-right';
+            btn.title = 'Close the preview (Esc)';
+            var x = document.createElement('span');
+            x.className = 'pcm-iv-x';
+            x.textContent = '\u2715';
+            var esc = document.createElement('span');
+            esc.className = 'pcm-iv-esc';
+            esc.textContent = 'Esc';
+            btn.appendChild(x);
+            btn.appendChild(esc);
+            btn.addEventListener('click', closePreview);
+        }
+        if (btn.nextElementSibling !== first) first.parentNode.insertBefore(btn, first);
+    }
+
+    // ESCAPE
+    // Closes the preview the way its own close button does. Listened for
+    // on the page while the preview is open, and inside the attachment's
+    // frame (which keeps the keys while it has the focus).
+    function closePreview() {
+        var modal = document.getElementById(MODAL_ID);
+        var jq = window.jQuery;
+        if (modal && jq) jq(modal).modal('hide');
+    }
+
+    function onEscape(event) {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        closePreview();
+    }
+
+    function listenInFrame(modal) {
+        var frame = getFrame(modal);
+        var doc;
+        try { doc = frame && frame.contentDocument; } catch (_) { return; }
+        if (!doc || !doc.documentElement || doc.documentElement.dataset.pcmIvEsc) return;
+        doc.documentElement.dataset.pcmIvEsc = '1';
+        doc.addEventListener('keydown', onEscape);
     }
 
     // Drag to pan: grab the image and drag to scroll around it. The
@@ -377,6 +447,7 @@
         var open = document.getElementById(OPEN_ID);
         if (open && frame && frame.src) open.href = frame.src;
 
+        listenInFrame(modal);
         var img = getFrameImg(modal);
         var group = document.getElementById(GROUP_ID);
         if (group) group.style.display = img ? '' : 'none';
@@ -432,7 +503,11 @@
         jq(document).on('shown.bs.modal', function (event) {
             if (event.target && event.target.id === MODAL_ID) {
                 ensureUi(event.target);
+                document.addEventListener('keydown', onEscape, true);
             }
+        });
+        jq(document).on('hidden.bs.modal', function (event) {
+            if (event.target && event.target.id === MODAL_ID) document.removeEventListener('keydown', onEscape, true);
         });
         // A resized browser window: the open preview fits again (only in
         // Fit; a chosen zoom stays). One listener, debounced.
