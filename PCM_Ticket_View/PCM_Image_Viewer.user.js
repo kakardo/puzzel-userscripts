@@ -1,13 +1,13 @@
 // @file_name = PCM_Image_Viewer.user.js
 // @author = Kardo Rostam
-// @version = 1.2_2026-11-17
+// @version = 1.6_2026-11-17
 // @created = 2026-09-03 09:43
 
 // ==UserScript==
 // @name         PCM Image Viewer
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-11-17
-// @description  Upgrades the attachment preview modal on the ticket view. Adds an Open in tab button beside Download (same style, own colour) linking the previewed attachment, zoom controls for image previews (plus, minus, 1:1 actual size, Fit), and drag to pan. The preview window fills the browser window (a small margin around it), and an image opens fitted to all of that space, in width and height, centred (small images are enlarged too, FIT_UPSCALE at the top turns that off); it fits again when the window is resized. The window's size rules are in place from the start and the attachment stays hidden until it is fitted, so nothing jumps from the normal size to the large one: grab the image and drag to scroll around it when zoomed. The preview is a same-origin iframe, so zoom and pan act on the image document inside it directly, and controls appear only when the previewed attachment is an image. Purely event-driven via shown.bs.modal and the iframe load event: zero cost while no preview is open, no observers, no polling.
+// @version      1.6_2026-11-17
+// @description  Upgrades the attachment preview modal on the ticket view. Adds an Open in tab button beside Download (same style, own colour) linking the previewed attachment, zoom controls for image previews (one split button with zoom out on the left, the current zoom in per cent in the middle and zoom in on the right, and one button that shows the image at its actual size, reading 1:1, and once pressed or zoomed reads Fit and fits it back), and drag to pan. The preview window fills the browser window (a small margin around it), and an image opens fitted to all of that space, in width and height, centred (small images are enlarged too, FIT_UPSCALE at the top turns that off); it fits again when the window is resized. The window's size rules are in place from the start and the attachment stays hidden until it is fitted, so nothing jumps from the normal size to the large one: grab the image and drag to scroll around it when zoomed. The preview is a same-origin iframe, so zoom and pan act on the image document inside it directly, and controls appear only when the previewed attachment is an image. Purely event-driven via shown.bs.modal and the iframe load event: zero cost while no preview is open, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -31,6 +31,8 @@
     var FIT_UPSCALE = true;
     // Space kept free around the preview window, in pixels.
     var WINDOW_MARGIN_PX = 16;
+    // Gap between the buttons in the preview's header.
+    var BUTTON_GAP_PX = 8;
 
     /******************************************************************
      * INTERNAL SETTINGS
@@ -57,13 +59,20 @@
         '    border-color: #1f596f;',
         '    color: #fff;',
         '}',
-        '#' + GROUP_ID + ' .pcm-iv-btn {',
-        '    margin-left: 4px;',
-        '    min-width: 34px;',
+        '#' + GROUP_ID + ' > * { vertical-align: middle; }',
+        '#' + GROUP_ID + ' > .pcm-iv-btn { margin-left: ' + BUTTON_GAP_PX + 'px; min-width: 40px; }',
+        // Zoom out | 100% | zoom in, as one button with dividers.
+        '#' + GROUP_ID + ' .pcm-iv-split { display: inline-flex; margin-left: 0; border-radius: 3px; overflow: hidden; }',
+        '#' + GROUP_ID + ' .pcm-iv-split .pcm-iv-btn { margin: 0; min-width: 34px; }',
+        '#' + GROUP_ID + ' .pcm-iv-split .pcm-iv-btn + span, #' + GROUP_ID + ' .pcm-iv-split span + .pcm-iv-btn { box-shadow: inset 1px 0 0 rgba(255,255,255,.35); }',
+        '#' + GROUP_ID + ' .pcm-iv-level {',
+        '    display: inline-flex; align-items: center; justify-content: center; min-width: 50px; padding: 0 6px;',
+        '    background-color: #276a86; color: #fff; font-variant-numeric: tabular-nums; cursor: default;',
         '}',
-        '#' + GROUP_ID + ' {',
-        '    margin-right: 14px;',
-        '}',
+        // One gap between all header buttons: Open in tab and the zoom group
+        // keep it to their right, the 1:1/Fit button to its left.
+        '#' + OPEN_ID + ' { margin-right: ' + BUTTON_GAP_PX + 'px !important; margin-left: 0 !important; }',
+        '#' + GROUP_ID + ' { margin-right: ' + BUTTON_GAP_PX + 'px !important; }',
         // The preview window takes the whole browser window, and its body
         // (with the attachment's frame) all the height below the header.
         '#' + MODAL_ID + ' .modal-dialog {',
@@ -138,6 +147,21 @@
         var vh = (doc.documentElement && doc.documentElement.clientHeight) || 0;
         var h = Math.floor(img.naturalHeight * f);
         img.style.marginTop = Math.max(0, Math.floor((vh - h) / 2)) + 'px';
+        showZoom(f);
+    }
+
+    // The per cent between the zoom buttons, and the size button's text:
+    // 1:1 while fitted, Fit at any other zoom.
+    function showZoom(f) {
+        var group = document.getElementById(GROUP_ID);
+        if (!group) return;
+        var level = group.querySelector('.pcm-iv-level');
+        if (level) level.textContent = Math.round(f * 100) + '%';
+        var toggle = group.querySelector(':scope > .pcm-iv-btn');
+        if (!toggle) return;
+        var fitted = factor === 0;
+        toggle.textContent = fitted ? '1:1' : 'Fit';
+        toggle.title = fitted ? 'Show the image at its actual size (1:1)' : 'Fit the image to the window';
     }
 
     function currentFactor(modal) {
@@ -185,24 +209,33 @@
             var group = document.createElement('span');
             group.id = GROUP_ID;
             group.className = 'pull-right';
-            group.appendChild(makeZoomButton('+', 'Zoom in', function () {
-                factor = clampFactor(currentFactor(modal) * ZOOM_STEP);
-                applyZoom(modal);
-            }));
-            group.appendChild(makeZoomButton('-', 'Zoom out', function () {
+
+            var split = document.createElement('span');
+            split.className = 'pcm-iv-split';
+            split.appendChild(makeZoomButton('\u2212', 'Zoom out', function () {
                 factor = clampFactor(currentFactor(modal) / ZOOM_STEP);
                 applyZoom(modal);
             }));
-            group.appendChild(makeZoomButton('1:1', 'Actual size', function () {
-                factor = 1;
+            var level = document.createElement('span');
+            level.className = 'pcm-iv-level';
+            level.title = 'Current zoom';
+            split.appendChild(level);
+            split.appendChild(makeZoomButton('+', 'Zoom in', function () {
+                factor = clampFactor(currentFactor(modal) * ZOOM_STEP);
                 applyZoom(modal);
             }));
-            group.appendChild(makeZoomButton('Fit', 'Fit to window', function () {
-                factor = 0;
+            group.appendChild(split);
+
+            // One button for both: 1:1 while the image is fitted, Fit once
+            // it is shown at another size.
+            group.appendChild(makeZoomButton('1:1', '', function () {
+                factor = factor === 0 ? 1 : 0;
                 applyZoom(modal);
             }));
             anchorParent.insertBefore(group, document.getElementById(OPEN_ID));
         }
+
+        matchLook(download);
 
         var frame = getFrame(modal);
         if (frame && !frame.dataset.pcmIvHooked) {
@@ -214,6 +247,51 @@
 
         factor = 0;
         syncState(modal);
+    }
+
+    // The new controls look like PCM's own Download button, only in
+    // their own colour: its shape, height, font and border are measured
+    // and copied (so they also follow PCM if it changes that button). The
+    // zoom button's three parts share one rounded outline.
+    var LOOK_PROPS = ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'textTransform', 'borderTopWidth', 'borderStyle'];
+
+    function matchLook(download) {
+        var group = document.getElementById(GROUP_ID);
+        if (!group || !download) return;
+        var cs = window.getComputedStyle(download);
+        var h = Math.round(download.getBoundingClientRect().height);
+        if (!h) return;
+        var look = {};
+        LOOK_PROPS.forEach(function (prop) { look[prop] = cs[prop]; });
+        look.borderWidth = cs.borderTopWidth;
+        delete look.borderTopWidth;
+        look.height = h + 'px';
+        look.boxSizing = 'border-box';
+        look.display = 'inline-flex';
+        look.alignItems = 'center';
+        look.justifyContent = 'center';
+        look.lineHeight = 'normal';
+        look.verticalAlign = 'middle';
+
+        function apply(el, extra) {
+            if (!el) return;
+            var wanted = Object.assign({}, look, extra || {});
+            Object.keys(wanted).forEach(function (prop) {
+                if (el.style[prop] !== wanted[prop]) el.style[prop] = wanted[prop];
+            });
+        }
+        var outer = { borderRadius: cs.borderTopLeftRadius, paddingLeft: cs.paddingLeft, paddingRight: cs.paddingRight, paddingTop: '0', paddingBottom: '0' };
+        apply(document.getElementById(OPEN_ID), outer);
+        apply(group.querySelector(':scope > .pcm-iv-btn'), outer);
+        var split = group.querySelector('.pcm-iv-split');
+        if (split) {
+            var r = cs.borderTopLeftRadius;
+            if (split.style.borderRadius !== r) split.style.borderRadius = r;
+            if (split.style.height !== look.height) split.style.height = look.height;
+            Array.prototype.forEach.call(split.children, function (part) {
+                apply(part, { borderRadius: '0', borderWidth: '0', paddingTop: '0', paddingBottom: '0' });
+            });
+        }
     }
 
     // Drag to pan: grab the image and drag to scroll around it. The
