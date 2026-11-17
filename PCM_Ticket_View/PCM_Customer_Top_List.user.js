@@ -1,6 +1,6 @@
 // @file_name = PCM_Customer_Top_List.user.js
 // @author = Kardo Rostam
-// @version = 2.3_2026-11-04
+// @version = 2.5_2026-11-17
 // @created = 2026-11-02 12:03
 // @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails, companies, account ids and ticket counts are read from the page at runtime and kept only in this browser's Tampermonkey storage, never written here.
 // @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
@@ -8,8 +8,8 @@
 // ==UserScript==
 // @name         PCM Customer Top List
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.3_2026-11-04
-// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top), each step under a heading in its own colour from red to blue. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile, with the company after it on the same line, without its number (the account id is in the tooltip) and opening the organisation in PCM when clicked (from PCM Ticket Info Extractor or the ticket's Organisation, split from names like "123 Name", "Name 123", "123 - Name" or "Name (123)"). Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. A Sync button in the footer fetches the ticket list and the profile page (current name and company) of every customer in both lists again (one request at a time) and shows how long it took and how much data it drew. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate.
+// @version      2.5_2026-11-17
+// @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top), each step under a heading in its own colour from red to blue. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile, with the company after it on the same line, without its number (the account id is in the tooltip) and opening the organisation in PCM when clicked (from PCM Ticket Info Extractor or the ticket's Organisation, split from names like "123 Name", "Name 123", "123 - Name" or "Name (123)"). Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. A Sync button in the footer fetches the ticket list and the profile page (current name and company) of every customer in both lists again (one request at a time) and shows how long it took and how much data it drew. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate. A third tab, Stats, counts your visits in this browser (today, this week, all time): tickets visited (every time a ticket page opens) and the ticket list visited (opened or refreshed with F5; PCM Auto Refresh only reloads the list itself, not the page, so it does not count). One stored number per visit, nothing else.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
 // @run-at       document-start
@@ -108,6 +108,7 @@
         '#' + PANEL_ID + ' tr:nth-child(even) td { background: #f5f7fa; }',
         '#' + PANEL_ID + ' td.pcm-tl-rank { width: 1%; color: #999; text-align: right; }',
         '#' + PANEL_ID + ' td.pcm-tl-count { width: 1%; text-align: right; font-weight: 700; color: #1e5bd8; }',
+        '#' + PANEL_ID + ' td.pcm-tl-stat-head { width: 1%; text-align: right; white-space: nowrap; color: #78808f; font-size: 11px; }',
         // Step headings: a tinted strip with a coloured left edge and bold
         // text in the step's colour (the colour comes inline per step).
         '#' + PANEL_ID + ' tr.pcm-tl-band td {',
@@ -468,6 +469,68 @@
     // remembered.
     var SYNC_PAUSE_MS = 150;
     var SYNC_KEY = 'pcmCustomerTopListLastSync';
+
+    // VISIT COUNTERS
+    // Counted once per page load: a ticket page (/tickets/<number>) or the
+    // ticket list (/tickets). PCM Auto Refresh reloads only the list's
+    // table, not the page, so it never counts. Kept in
+    // Tampermonkey's storage as three numbers per counter (today, this
+    // week, all time); a new day or week starts its number at 0.
+    var COUNT_KEY = 'pcmVisitCounters';
+
+    function dayKey(date) {
+        return date.getFullYear() + '-' + (date.getMonth() + 1) + '-' + date.getDate();
+    }
+
+    // ISO week: the week with the year's first Thursday is week 1.
+    function weekKey(date) {
+        var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        var start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return d.getUTCFullYear() + '-W' + Math.ceil(((d - start) / 86400000 + 1) / 7);
+    }
+
+    function readCounts() {
+        var data = null;
+        try { data = GM_getValue(COUNT_KEY, null); } catch (_) { data = null; }
+        data = data && typeof data === 'object' ? data : {};
+        var now = new Date();
+        var today = dayKey(now);
+        var week = weekKey(now);
+        ['tickets', 'list'].forEach(function (name) {
+            var c = data[name] || {};
+            data[name] = {
+                day: today,
+                today: c.day === today ? c.today || 0 : 0,
+                week: c.weekKey === week ? c.week || 0 : 0,
+                weekKey: week,
+                all: c.all || 0
+            };
+        });
+        return data;
+    }
+
+    function countVisit() {
+        var name = /^\/tickets\/\d+/.test(location.pathname) ? 'tickets'
+            : /^\/tickets\/?$/.test(location.pathname) ? 'list' : '';
+        if (!name) return;
+        var data = readCounts();
+        data[name].today += 1;
+        data[name].week += 1;
+        data[name].all += 1;
+        try { GM_setValue(COUNT_KEY, data); } catch (_) { /* storage blocked */ }
+    }
+
+    function statsHtml() {
+        var data = readCounts();
+        var row = function (label, c) {
+            return '<tr><td>' + label + '</td><td class="pcm-tl-count">' + c.today + '</td><td class="pcm-tl-count">' +
+                c.week + '</td><td class="pcm-tl-count">' + c.all + '</td></tr>';
+        };
+        return '<table><tr><td></td><td class="pcm-tl-stat-head">Today</td><td class="pcm-tl-stat-head">This week</td>' +
+            '<td class="pcm-tl-stat-head">All time</td></tr>' +
+            row('Tickets visited', data.tickets) + row('Ticket list visited', data.list) + '</table>';
+    }
     var sync = { running: false, done: 0, total: 0 };
 
     function lastSync() {
@@ -615,13 +678,16 @@
             '<button type="button" data-tab="recent"' + (tab === 'recent' ? ' class="pcm-tl-on"' : '') +
             '>Last ' + RECENT_DAYS + ' days</button>' +
             '<button type="button" data-tab="total"' + (tab === 'total' ? ' class="pcm-tl-on"' : '') +
-            '>All time</button></div>' +
-            '<div class="pcm-tl-body">' + rowsHtml(data[tab], tab) + '</div>' +
+            '>All time</button>' +
+            '<button type="button" data-tab="stats"' + (tab === 'stats' ? ' class="pcm-tl-on"' : '') +
+            '>Stats</button></div>' +
+            '<div class="pcm-tl-body">' + (tab === 'stats' ? statsHtml() : rowsHtml(data[tab], tab)) + '</div>' +
+            (tab === 'stats' ? '<div class="pcm-tl-foot"><span>Counted in this browser</span></div>' :
             '<div class="pcm-tl-foot"><span>From the ' + data.known + (data.known === 1 ? ' customer' : ' customers') +
             ' with ' + MIN_TICKETS + ' or more tickets you have opened in this browser</span>' +
             '<div class="pcm-tl-sync"><button type="button" data-action="sync"' + (sync.running ? ' disabled' : '') +
             ' title="Fetch the ticket lists of every customer in both lists again">Sync</button>' +
-            '<span class="pcm-tl-sync-status">' + D.escapeHtml(syncText()) + '</span></div></div>';
+            '<span class="pcm-tl-sync-status">' + D.escapeHtml(syncText()) + '</span></div></div>');
     }
 
     function closePanel() {
@@ -736,6 +802,8 @@
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
         else fn();
     }
+
+    countVisit();
 
     whenReady(function () {
         syncIcon();
