@@ -1,13 +1,13 @@
 // @file_name = PCM_Team_Quick_Select.user.js
 // @author = Kardo Rostam
-// @version = 3.7_2026-11-16
+// @version = 3.8_2026-11-17
 // @created = 2026-08-27 12:59
 
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.7_2026-11-16
-// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press, and the Puzzel Service in the Forms widget for teams that belong to one service (set once PCM has finished reloading the Forms widget for the new team, and again if a reload in the next 8 seconds puts the old one back; the Forms widget's fields are hidden meanwhile behind a short "Updating Puzzel Service" note at a fixed height, and fade back in once, so its reloads never show; left as an unsaved change, so PCM Unsaved Form Warning rings it red until you save; nothing happens when the ticket's form has no Puzzel Service field). A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
+// @version      3.8_2026-11-17
+// @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press, and the Puzzel Service in the Forms widget for teams that belong to one service (set once PCM has finished reloading the Forms widget for the new team, and again if a reload in the next 8 seconds puts the old one back; the Forms widget's fields are hidden meanwhile behind a short "Updating Puzzel Service" note at a fixed height, and fade back in once, so its reloads never show; left as an unsaved change, so PCM Unsaved Form Warning rings it red until you save. When the ticket's form has no Puzzel Service field yet, the service is remembered and set as soon as you pick a Form that has the field, as long as the team is still the same and the field is still Unassigned). A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -412,6 +412,34 @@
   const FORM_RELOAD_URL = /\/(assignable_forms|form_fields)\b/;
   let stopServiceGuard = null;
 
+  // A service whose field was not there at the press (no Form picked yet)
+  // waits here, for this ticket and team. When PCM then loads a form (you
+  // pick one) and the field shows Unassigned while the team is unchanged,
+  // the service is set the same way as at a press. Your own choice of a
+  // service is never overwritten: only an Unassigned field is filled.
+  let pendingService = null;
+
+  function serviceUnassigned(select) {
+    const option = select.options[select.selectedIndex];
+    return !select.value || !option || squash(option.textContent) === 'unassigned';
+  }
+
+  function onFormLoaded(event, xhr, settings) {
+    if (!pendingService || !settings || !FORM_RELOAD_URL.test(settings.url || '')) return;
+    if (pendingService.ticket !== location.pathname ||
+        selectedTeamText(getSelect()) !== D.cleanText(pendingService.team).toLowerCase()) {
+      pendingService = null;
+      return;
+    }
+    const select = getServiceSelect();
+    if (!select || !serviceUnassigned(select)) return;
+    const service = pendingService.service;
+    pendingService = null;
+    serviceGuard(service);
+  }
+
+  if (window.jQuery) window.jQuery(document).on('ajaxComplete', onFormLoaded);
+
   function serviceGuard(name) {
     if (stopServiceGuard) stopServiceGuard();
     const jq = window.jQuery;
@@ -461,6 +489,7 @@
         if (Date.now() < until) timer = window.setTimeout(attempt, SERVICE_READY_POLL_MS);
         return;
       }
+      pendingService = null;
       D.setNativeFieldValue(select, option.value);
       // Released after the Product Area reload this starts (or at once
       // when there is none).
@@ -659,6 +688,7 @@
           selectTeam(entry.team);
           if (entry.status) selectStatus(entry.status);
           if (cycles) applyStep(nextStep(entry, wasInTeam));
+          pendingService = entry.service ? { ticket: location.pathname, team: entry.team, service: entry.service } : null;
           if (entry.service) serviceGuard(entry.service);
           if (entry.unassign) unassignAndGuard();
           recheckForm(getSelect());
