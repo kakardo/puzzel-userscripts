@@ -100,7 +100,7 @@ Adds a placeholder name link in Customer Intelligence when no name is set.
 <li>
 <details><summary><code>PCM_Image_Viewer</code>: zoom, pan and open in tab for attachments</summary>
 
-Upgrades the attachment preview modal with an Open in tab button, zoom controls and drag to pan for images. Standalone, purely event-driven.
+Upgrades the attachment preview modal with an Open in tab button, zoom controls and drag to pan for images. The preview fills the browser window, and an image opens fitted to all of it. Standalone, purely event-driven.
 
 </details>
 </li>

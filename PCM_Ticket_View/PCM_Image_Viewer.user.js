@@ -1,13 +1,13 @@
 // @file_name = PCM_Image_Viewer.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-09-03
+// @version = 1.2_2026-11-17
 // @created = 2026-09-03 09:43
 
 // ==UserScript==
 // @name         PCM Image Viewer
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-09-03
-// @description  Upgrades the attachment preview modal on the ticket view. Adds an Open in tab button beside Download (same style, own colour) linking the previewed attachment, zoom controls for image previews (plus, minus, 1:1 actual size, Fit), and drag to pan: grab the image and drag to scroll around it when zoomed. The preview is a same-origin iframe, so zoom and pan act on the image document inside it directly, and controls appear only when the previewed attachment is an image. Purely event-driven via shown.bs.modal and the iframe load event: zero cost while no preview is open, no observers, no polling.
+// @version      1.2_2026-11-17
+// @description  Upgrades the attachment preview modal on the ticket view. Adds an Open in tab button beside Download (same style, own colour) linking the previewed attachment, zoom controls for image previews (plus, minus, 1:1 actual size, Fit), and drag to pan. The preview window fills the browser window (a small margin around it), and an image opens fitted to all of that space, in width and height, centred (small images are enlarged too, FIT_UPSCALE at the top turns that off); it fits again when the window is resized. The window's size rules are in place from the start and the attachment stays hidden until it is fitted, so nothing jumps from the normal size to the large one: grab the image and drag to scroll around it when zoomed. The preview is a same-origin iframe, so zoom and pan act on the image document inside it directly, and controls appear only when the previewed attachment is an image. Purely event-driven via shown.bs.modal and the iframe load event: zero cost while no preview is open, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -26,6 +26,11 @@
     var ZOOM_STEP = 1.25;
     var ZOOM_MIN = 0.1;
     var ZOOM_MAX = 8;
+    // Fit also enlarges images smaller than the space (false: never above
+    // their actual size).
+    var FIT_UPSCALE = true;
+    // Space kept free around the preview window, in pixels.
+    var WINDOW_MARGIN_PX = 16;
 
     /******************************************************************
      * INTERNAL SETTINGS
@@ -58,7 +63,19 @@
         '}',
         '#' + GROUP_ID + ' {',
         '    margin-right: 14px;',
-        '}'
+        '}',
+        // The preview window takes the whole browser window, and its body
+        // (with the attachment's frame) all the height below the header.
+        '#' + MODAL_ID + ' .modal-dialog {',
+        '    width: calc(100vw - ' + (WINDOW_MARGIN_PX * 2) + 'px) !important; max-width: none !important;',
+        '    height: calc(100vh - ' + (WINDOW_MARGIN_PX * 2) + 'px) !important; margin: ' + WINDOW_MARGIN_PX + 'px auto !important;',
+        '}',
+        '#' + MODAL_ID + ' .modal-content { height: 100% !important; display: flex !important; flex-direction: column !important; }',
+        '#' + MODAL_ID + ' .modal-body { flex: 1 1 auto !important; min-height: 0 !important; padding: 8px !important; }',
+        '#' + MODAL_ID + ' .modal-body iframe { width: 100% !important; height: 100% !important; min-height: 0 !important; border: 0; }',
+        // Hidden until the attachment has loaded and been fitted, so it is
+        // never seen at its own size first.
+        '#' + MODAL_ID + ' .modal-body iframe:not([data-pcm-iv-ready]) { visibility: hidden; }'
     ].join('\n');
 
     function ensureStyle() {
@@ -97,7 +114,8 @@
         var doc = frame.contentDocument;
         var vw = (doc.documentElement && doc.documentElement.clientWidth) || frame.clientWidth;
         var vh = (doc.documentElement && doc.documentElement.clientHeight) || frame.clientHeight;
-        var f = Math.min(vw / img.naturalWidth, vh / img.naturalHeight, 1);
+        var f = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
+        if (!FIT_UPSCALE) f = Math.min(f, 1);
         return (f > 0 && isFinite(f)) ? f : 1;
     }
 
@@ -106,8 +124,20 @@
         if (!img || !img.naturalWidth) return;
         var f = factor === 0 ? fitFactor(modal) : factor;
         img.style.maxWidth = 'none';
+        img.style.maxHeight = 'none';
         img.style.height = 'auto';
         img.style.width = Math.floor(img.naturalWidth * f) + 'px';
+        // Centred: across by auto margins, down by a top margin while the
+        // image is lower than the space (0 when it is taller, so it can be
+        // scrolled from its top).
+        var doc = img.ownerDocument;
+        if (doc.body && doc.body.style.margin !== '0px') doc.body.style.margin = '0';
+        img.style.display = 'block';
+        img.style.marginLeft = 'auto';
+        img.style.marginRight = 'auto';
+        var vh = (doc.documentElement && doc.documentElement.clientHeight) || 0;
+        var h = Math.floor(img.naturalHeight * f);
+        img.style.marginTop = Math.max(0, Math.floor((vh - h) / 2)) + 'px';
     }
 
     function currentFactor(modal) {
@@ -259,6 +289,32 @@
         if (img) attachPan(modal);
 
         applyZoom(modal);
+        reveal(frame);
+    }
+
+    // Shown once its document has finished loading (the load event calls
+    // syncState again otherwise); REVEAL_MAX_MS shows it in any case.
+    var REVEAL_MAX_MS = 3000;
+    var revealTimer = 0;
+
+    function reveal(frame) {
+        if (!frame) return;
+        var done = false;
+        // An empty frame (about:blank, before PCM gives it the attachment)
+        // also reports complete, so it must be showing a real address.
+        try {
+            var doc = frame.contentDocument;
+            done = !doc || (doc.readyState === 'complete' && doc.location.href !== 'about:blank');
+        } catch (_) { done = true; }
+        if (done) frame.dataset.pcmIvReady = '1';
+    }
+
+    function hideUntilReady(modal) {
+        var frame = getFrame(modal);
+        if (!frame) return;
+        delete frame.dataset.pcmIvReady;
+        window.clearTimeout(revealTimer);
+        revealTimer = window.setTimeout(function () { frame.dataset.pcmIvReady = '1'; }, REVEAL_MAX_MS);
     }
 
     // Bounded boot: only jQuery with Bootstrap's modal plugin is needed,
@@ -271,10 +327,26 @@
             if (tries < BOOT_MAX_TRIES) window.setTimeout(start, BOOT_INTERVAL_MS);
             return;
         }
+        // The size rules go in at once, so the window opens at its full
+        // size; the attachment is hidden from the moment it starts to open.
+        ensureStyle();
+        jq(document).on('show.bs.modal', function (event) {
+            if (event.target && event.target.id === MODAL_ID) hideUntilReady(event.target);
+        });
         jq(document).on('shown.bs.modal', function (event) {
             if (event.target && event.target.id === MODAL_ID) {
                 ensureUi(event.target);
             }
+        });
+        // A resized browser window: the open preview fits again (only in
+        // Fit; a chosen zoom stays). One listener, debounced.
+        var resizeTimer = 0;
+        window.addEventListener('resize', function () {
+            window.clearTimeout(resizeTimer);
+            resizeTimer = window.setTimeout(function () {
+                var modal = document.getElementById(MODAL_ID);
+                if (modal && factor === 0 && modal.getClientRects().length) applyZoom(modal);
+            }, 150);
         });
     }
 
