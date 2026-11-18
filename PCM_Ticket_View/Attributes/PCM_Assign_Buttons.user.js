@@ -1,12 +1,12 @@
 // @file_name = PCM_Assign_Buttons.user.js
 // @author = Kardo Rostam
-// @version = 1.9_2026-11-16
+// @version = 2.0_2026-11-18
 // @created = 2026-10-14 11:25
 
 // ==UserScript==
 // @name         PCM Assign Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.9_2026-11-16
+// @version      2.0_2026-11-18
 // @description  Adds two buttons on a row of their own under the "Assigned To:" label in the Attributes widget (so they and the field stay put when PCM's "(User is online)" note comes and goes): Me selects you in the Assigned To list, Unassign selects the empty entry. You are recognised from your profile picture in the top bar (its address holds your user id), so no id is written in the script. Each button is greyed out when it would change nothing: Me while you are not in the selected team's list or already assigned, Unassign while nobody is assigned; the tooltip says why. The choice is made the way picking it by hand would, so PCM (and the unsaved changes warning) sees it; you still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead (once PCM has no requests running; this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so). A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the button says Loading, since PCM would otherwise take the new value as the saved one and keep Save grey; after each change PCM is asked to re-check the form. The buttons come back by themselves when PCM rebuilds the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -83,11 +83,10 @@
     }
 
     // FINDING THE FIELD
-    // The label's text without what scripts add to it (buttons, our row).
-    // PCM sometimes renders the text inside an element of its own (seen
-    // after picking an organisation), so all text counts, not only the
-    // label's direct text.
+    // The label's text however PCM wraps it (shared since lib 2.8; the
+    // same rule kept here for an older cached library).
     function ownText(el) {
+        if (D.labelText) return D.labelText(el);
         var value = '';
         var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
         var node;

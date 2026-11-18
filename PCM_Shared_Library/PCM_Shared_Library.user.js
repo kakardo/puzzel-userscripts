@@ -1,6 +1,6 @@
 // @file_name = PCM_Shared_Library.user.js
 // @author = Kardo Rostam
-// @version = 2.7_2026-11-06
+// @version = 2.8_2026-11-18
 // @created = 2026-03-30 18:35 (v1.0)
 
 /*
@@ -53,6 +53,9 @@
       optional repairFormCheck gives PCM's form check the saved value back
       when it took an unsaved value as the original (v2.6), also checked when
       the pointer reaches the Save area (v2.7)
+    - labelText: a field label's text however PCM wraps it, without what
+      scripts add inside the label; used by the unsaved-change watcher and
+      by every script that finds a field by its label (v2.8)
 
     Backward compatibility:
     - Existing exports are kept unchanged
@@ -865,6 +868,32 @@
 
     // Briefly swaps an element's text (e.g. a button label) and restores
     // it. Re-entrant safe via a dataset guard.
+    // A field label's text. The label's OWN text (its direct text nodes)
+    // comes first: its full text would also take in whatever sits inside
+    // it, such as PCM's "(User is online)" note or buttons scripts place
+    // there, which come and go and would change the text. When PCM wraps
+    // the text in an element of its own (seen after picking an
+    // organisation), the own text is empty; then all text counts, except
+    // inside buttons, fields and the scripts' own elements (ids "pcm-").
+    function labelText(label) {
+        if (!label) return '';
+        let own = '';
+        label.childNodes.forEach(function(node) {
+            if (node.nodeType === 3) own += node.nodeValue;
+        });
+        own = cleanText(own);
+        if (own) return own;
+        let deep = '';
+        const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            const parent = node.parentElement;
+            if (parent && parent !== label && parent.closest('button, select, textarea, input, [id^="pcm-"]')) continue;
+            deep += node.nodeValue;
+        }
+        return cleanText(deep);
+    }
+
     function flashLabel(element, message, holdMs) {
         if (!element || element.dataset.pcmDomFlashing) return;
         element.dataset.pcmDomFlashing = '1';
@@ -1009,21 +1038,7 @@
             return cleanText(fieldEl.value) !== '';
         }
 
-        // The label's OWN text (its direct text nodes) names the field.
-        // Its full textContent would also take in whatever sits inside the
-        // label: PCM's "(User is online)" note, or buttons other scripts
-        // place there. That text comes and goes with re-renders, so the
-        // same field would get a different key before and after a save and
-        // be marked unsaved. Labels with no direct text (the text wrapped
-        // in a child) fall back to the full text.
-        function labelText(label) {
-            if (!label) return '';
-            let own = '';
-            label.childNodes.forEach(function(node) {
-                if (node.nodeType === 3) own += node.nodeValue;
-            });
-            return cleanText(own) || cleanText(label.textContent);
-        }
+        // The label's text names the field (lib labelText, v2.8).
 
         function fieldLabel(fieldEl) {
             const section = fieldEl.closest('section, .form-group, .col-md-5, [class*="col"]');
@@ -1296,7 +1311,7 @@
     }
 
     global.PCM_DOM = {
-        LIB_VERSION: '2.7_2026-11-06',
+        LIB_VERSION: '2.8_2026-11-18',
         DEFAULT_CONFIG: assignDefined({}, DEFAULT_CONFIG),
         mergeConfig: mergeConfig,
         clearTimer: clearTimer,
@@ -1338,6 +1353,7 @@
         formReady: formReady,
         recheckForm: recheckForm,
         flashLabel: flashLabel,
+        labelText: labelText,
         createFieldFinder: createFieldFinder,
         createUnsavedWatcher: createUnsavedWatcher
     };
