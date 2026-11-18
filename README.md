@@ -48,7 +48,7 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 </details>
 </li>
 <li>
-<details><summary>Scripts that do not use it (23)</summary>
+<details><summary>Scripts that do not use it (25)</summary>
 
 - `PCM_Name_Field_Placeholder` (since 1.8): Calls no lib functions; bounded one-shot retries, so it stays dependency-free
 - `PCM Dark Mode (Ticket List)`: Mostly CSS plus a small toggle; marginal benefit
@@ -70,6 +70,8 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 - `POS_Access_Log_Filter`: Different app (Organisation Settings), server-rendered, bounded boot plus one row observer
 - `PCC_Agent_Highlighter`: Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines
 - `PCC_Request_Alert`: Different app. Watches one status element and adds one main menu entry; nothing to share
+- `PCM_Settings_Keeper`: Only reads and writes browser storage at load and when a page is left; no DOM work
+- `PCC_Shortcut_Bar_Keeper`: Different app. Only reads and writes browser storage at load and when the page is left; no DOM work
 - `PCC_Softphone_Status_Highlight`: Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection
 - `Geckoboard_Full_Numbers`: Different app (Geckoboard). Pure CSS, a single style tag
 - `Geckoboard_Keep_Last_Data`: Different app. Wraps fetch for widget data requests only; no observers, no polling
@@ -78,7 +80,7 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 </li>
 </ul>
 </details>
-<details><summary><b><code>PCM_Ticket_View/</code></b>: ticket detail page (<code>/tickets/*</code>), 31 scripts</summary>
+<details><summary><b><code>PCM_Ticket_View/</code></b>: ticket detail page (<code>/tickets/*</code>), 32 scripts</summary>
 
 Scripts for the ticket detail page (`/tickets/*`).
 
@@ -129,6 +131,13 @@ The customer's number of tickets in bold colour in the Customer Tickets heading 
 <details><summary><code>PCM_Customer_Top_List</code>: top list of customers with the most tickets</summary>
 
 A "Top" button in the top bar, right of Help and in the same style (fades in as the page loads), with two lists of the customers with the most tickets: last 30 days (with the share of their all-time total) and all time. Built as you work from the customers you open (name, total and recent ticket times saved in Tampermonkey's own storage, so clearing the browser cache keeps them, one entry per customer profile id, only customers with 5 or more tickets; names link to the profile, with the company after them on the same line (no number; the account id in the tooltip; it opens the organisation in PCM); a Sync button refreshes every customer in both lists, counts and profile (name, company), and shows the time and data it took), so no extra requests. A Stats tab counts your visits in this browser (today, this week, all time): tickets visited and the ticket list visited (F5 counts; Auto Refresh only reloads the table, so it does not). Runs on every PCM page from document-start. Uses the shared DOM library.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCM_Settings_Keeper</code>: PCM settings survive a cleared cache</summary>
+
+Keeps a copy of the PCM settings kept in the browser (widget layout per page, the ticket list's page length, sorting and auto-submit, and the settings of Jira Quick Link, PostIt Quick Text, Last Activity Sort, Auto Refresh and Timeline Preview Cleanup) in Tampermonkey's storage, and puts back missing ones after the cache is cleared, before PCM reads them. Hide Columns and Compact View keep their own copy. Runs on every PCM page from document-start. Standalone.
 
 </details>
 </li>
@@ -448,7 +457,7 @@ When Geckoboard's data server fails a widget refresh (for example error 520), re
 </li>
 </ul>
 </details>
-<details><summary><b><code>PCC_Agent_View/</code></b>: agent application (app.puzzel.com/agent), 3 scripts</summary>
+<details><summary><b><code>PCC_Agent_View/</code></b>: agent application (app.puzzel.com/agent), 4 scripts</summary>
 
 Scripts for the agent application (app.puzzel.com/agent), a different app from PCM.
 
@@ -471,6 +480,13 @@ Colours the Softphone Online/Offline value in the header. Standalone.
 <details><summary><code>PCC_Request_Alert</code>: alert when your status leaves Ready or a chat arrives</summary>
 
 Rings (and optionally notifies, flashes the tab title or the screen) when your status leaves Ready or a chat request arrives. Settings in the code and under the main menu. Standalone.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCC_Shortcut_Bar_Keeper</code>: the shortcut bar survives a cleared cache</summary>
+
+Keeps a copy of the shortcut bar (and the PCC Request Alert settings and sound) in Tampermonkey's storage, never sign-in data; the application's own settings are saved on Puzzel's server and need no copy. After the browser cache is cleared it puts them back once you are signed in, and reloads the page once. Per agent account. Runs at document-start. Standalone.
 
 </details>
 </li>
