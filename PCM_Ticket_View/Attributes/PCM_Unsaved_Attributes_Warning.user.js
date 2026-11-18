@@ -1,13 +1,13 @@
 // @file_name = PCM_Unsaved_Attributes_Warning.user.js
 // @author = Kardo Rostam
-// @version = 1.6_2026-11-06
+// @version = 1.7_2026-11-18
 // @created = 2026-09-04 15:43
 
 // ==UserScript==
 // @name         PCM Unsaved Attributes Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.6_2026-11-06
-// @description  Snapshot-based unsaved change detection for the ticket Attributes widget, built on the shared library's createUnsavedWatcher engine (lib 2.0). Highlights changed fields and dropdowns (including the Chosen-based Team select, where the ring lands on the visible container) and shows a warning next to the Attributes Save button. Saving in Attributes clears only this widget's warning. Colour, mode, and text are settings at the top. Since 1.3, SELF_SAVING_BUTTONS treats a real click on a header control that persists an Attributes value by itself (Assign To Me) as a save: the baseline is rebased once the new value lands, so the field is not left marked unsaved. Since 1.5, a save pressed by PCM Assign Buttons or PCM Team Quick Select (announced with the pcm-attributes-save event) also counts as a save.
+// @version      1.7_2026-11-18
+// @description  Snapshot-based unsaved change detection for the ticket Attributes widget, built on the shared library's createUnsavedWatcher engine (lib 2.0). Highlights changed fields and dropdowns (including the Chosen-based Team select, where the ring lands on the visible container) and shows a warning next to the Attributes Save button. Saving in Attributes clears only this widget's warning. Colour, mode, and text are settings at the top. Since 1.3, SELF_SAVING_BUTTONS treats a real click on a header control that persists an Attributes value by itself (Assign To Me) as a save: the baseline is rebased once the new value lands, so the field is not left marked unsaved. Since 1.5, a save pressed by PCM Assign Buttons or PCM Team Quick Select (announced with the pcm-attributes-save event) also counts as a save. Since 1.7 it also catches a failed Attributes load: when PCM's server answers the request for the new team's Assigned To or Categories list with an error, PCM can leave its loading overlay up for good; the overlay is then taken away and a short note with "Try again" asks PCM for that list once more (or offers a page reload when the field cannot be found). Event-driven via jQuery's ajaxComplete, only acting on a failed request.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
@@ -219,4 +219,91 @@
   watcher.start();
   installSelfSavingButtons();
   installScriptSaves();
+
+  // FAILED LOADS
+  // The same safety net as in PCM Unsaved Form Warning, for this widget:
+  // changing the team makes PCM load that team's Assigned To and
+  // Categories lists under a white loading overlay, which PCM only removes
+  // when the answer is good. After a failed request the overlay is hidden
+  // and a note offers to load it again by choosing the same team once
+  // more, which makes PCM ask again.
+  const FAIL_ID = 'pcm-attributes-load-failed';
+  const LOAD_URL = /\/assignable_(users|categories)\b/;
+  const FAIL_CHECK_MS = 400;
+
+  D.ensureStyleTag('pcm-attributes-load-failed-style', `
+    #${FAIL_ID} {
+      margin: 6px 0 10px; padding: 7px 10px; border: 1px solid #e0b4b4; border-radius: 4px;
+      background: #fff6f6; color: #9f3a38; font-size: 13px;
+    }
+    #${FAIL_ID} a { margin-left: 6px; font-weight: 600; cursor: pointer; }
+  `);
+
+  function attributesWidget() {
+    const form = findForm();
+    return form ? (form.closest('.jarviswidget') || form.parentElement) : null;
+  }
+
+  function stuckOverlays(widget) {
+    return D.queryAll('.white_overlay', widget).filter((el) => el.getClientRects().length && el.querySelector('.pcm-loader'));
+  }
+
+  // The field the failed list belongs to: the select whose value is the
+  // request's team_id (the Team dropdown).
+  function sourceField(url) {
+    let teamId = '';
+    try { teamId = new URL(url, window.location.origin).searchParams.get('team_id') || ''; } catch (_) { teamId = ''; }
+    const form = findForm();
+    if (!teamId || !form) return null;
+    return D.queryAll('select', form).find((select) => select.value === teamId) || null;
+  }
+
+  function clearNote() {
+    const note = document.getElementById(FAIL_ID);
+    if (note) note.remove();
+  }
+
+  function showNote(status, field) {
+    clearNote();
+    const form = findForm();
+    if (!form) return;
+    const note = document.createElement('div');
+    note.id = FAIL_ID;
+    note.textContent = 'Part of Attributes could not be loaded' + (status ? ' (server error ' + status + ')' : '') + '.';
+    const link = document.createElement('a');
+    link.textContent = field ? 'Try again' : 'Reload the page';
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      clearNote();
+      if (!field || !field.isConnected) {
+        window.location.reload();
+        return;
+      }
+      const jq = window.jQuery;
+      if (jq) jq(field).trigger('change');
+      else field.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    note.appendChild(link);
+    form.insertBefore(note, form.firstChild);
+  }
+
+  function onLoad(event, xhr, settings) {
+    if (!settings || !LOAD_URL.test(settings.url || '')) return;
+    if (xhr.status >= 200 && xhr.status < 400) {
+      clearNote();
+      return;
+    }
+    if (xhr.statusText === 'abort') return;
+    window.setTimeout(() => {
+      const widget = attributesWidget();
+      if (!widget) return;
+      const stuck = stuckOverlays(widget);
+      if (!stuck.length) return;
+      stuck.forEach((overlay) => { overlay.style.display = 'none'; });
+      console.warn('[PCM Unsaved Attributes Warning] an Attributes request failed (%s), the loading overlay was taken away.', xhr.status, settings.url);
+      showNote(xhr.status, sourceField(settings.url));
+    }, FAIL_CHECK_MS);
+  }
+
+  if (window.jQuery) window.jQuery(document).on('ajaxComplete', onLoad);
 })();
