@@ -1,6 +1,6 @@
 # Puzzel Userscripts
 
-Tampermonkey scripts for the Puzzel web applications: PCM (ticketing), the Admin console, the agent application and Organisation Settings, plus the shared Geckoboard dashboards.
+Tampermonkey scripts for the Puzzel web applications: PCM (ticketing), the Admin console, the agent application and Organisation Settings, plus the shared Geckoboard dashboards and the Help Centre's knowledge base.
 
 [![Download all scripts (zip)](https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20Download%20all%20scripts-Puzzel__Userscripts.zip-2ea44f?style=for-the-badge)](https://github.com/kakardo/puzzel-userscripts/releases/download/latest/Puzzel_Userscripts.zip)
 
@@ -48,7 +48,7 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 </details>
 </li>
 <li>
-<details><summary>Scripts that do not use it (25)</summary>
+<details><summary>Scripts that do not use it (26)</summary>
 
 - `PCM_Name_Field_Placeholder` (since 1.8): Calls no lib functions; bounded one-shot retries, so it stays dependency-free
 - `PCM Dark Mode (Ticket List)`: Mostly CSS plus a small toggle; marginal benefit
@@ -70,6 +70,7 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 - `POS_Access_Log_Filter`: Different app (Organisation Settings), server-rendered, bounded boot plus one row observer
 - `PCC_Agent_Highlighter`: Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines
 - `PCC_Request_Alert`: Different app. Watches one status element and adds one main menu entry; nothing to share
+- `Help_Centre_Results_Per_Page`: Different app (the Help Centre). Wraps fetch for one settings file only; one observer on the knowledge base area
 - `PCM_Settings_Keeper`: Only reads and writes browser storage at load and when a page is left; no DOM work
 - `PCC_Shortcut_Bar_Keeper`: Different app. Only reads and writes browser storage at load and when the page is left; no DOM work
 - `PCC_Softphone_Status_Highlight`: Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection
@@ -487,6 +488,21 @@ Rings (and optionally notifies, flashes the tab title or the screen) when your s
 <details><summary><code>PCC_Shortcut_Bar_Keeper</code>: the shortcut bar survives a cleared cache</summary>
 
 Keeps a copy of the shortcut bar (and the PCC Request Alert settings and sound) in Tampermonkey's storage, never sign-in data; the application's own settings are saved on Puzzel's server and need no copy. After the browser cache is cleared it puts them back once you are signed in, and reloads the page once. Per agent account. Runs at document-start. Standalone.
+
+</details>
+</li>
+</ul>
+</details>
+
+<details><summary><b><code>Help_Centre/</code></b>: Puzzel Help Centre (www.puzzel.com/help), 1 script</summary>
+
+Scripts for the public Puzzel Help Centre and its knowledge base, a different app from PCM.
+
+<ul>
+<li>
+<details><summary><code>Help_Centre_Results_Per_Page</code>: more search results per page</summary>
+
+Shows 20 knowledge base search results per page instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). It changes the number in the knowledge base's own settings file as the page loads, so the knowledge base pages the results itself. The server returns at most 25 results per search, so 25 is the highest choice. Runs at document-start. Standalone.
 
 </details>
 </li>
