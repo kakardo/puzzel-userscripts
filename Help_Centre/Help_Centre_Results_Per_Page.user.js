@@ -1,14 +1,14 @@
 // @file_name = Help_Centre_Results_Per_Page.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-11-19
+// @version = 1.1_2026-11-19
 // @created = 2026-11-19 10:02
 // @note = run-at document-start on purpose: the Help Centre's settings are fetched while the page loads, and fetch has to be wrapped before that to change the number of search results per page.
 
 // ==UserScript==
 // @name         Help Centre Results Per Page
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-11-19
-// @description  Shows more search results per page in the Puzzel Help Centre knowledge base: 20 instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). The Help Centre reads the number from its own settings file when the page loads; the script changes that number in the file as it arrives, so the knowledge base itself shows the chosen number, with its own paging. The choice is remembered in this browser; changing it reloads the results once. The knowledge base's server returns at most 25 results per search, so 25 is the highest choice. Event-driven: one fetch wrapper that only touches the settings file, and the dropdown is put back when the results are redrawn (one observer on the knowledge base area, only on the search results page).
+// @version      1.1_2026-11-19
+// @description  Shows more search results per page in the Puzzel Help Centre knowledge base: 20 instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). The Help Centre reads the number from its own settings file when the page loads; the script changes that number in the file as it arrives, so the knowledge base itself shows the chosen number, with its own paging. On the results page the empty space is taken out (under the search box, around the breadcrumb and above the results) and "Search Results", the result count and the dropdown sit on one line. The choice is remembered in this browser; changing it reloads the results once. The knowledge base's server returns at most 25 results per search, so 25 is the highest choice. Event-driven: one fetch wrapper that only touches the settings file, and the dropdown is put back when the results are redrawn (one observer on the knowledge base area, only on the search results page).
 // @author       Kardo Rostam
 // @match        https://www.puzzel.com/help*
 // @run-at       document-start
@@ -102,7 +102,7 @@
     function makeSelect() {
         var label = document.createElement('label');
         label.id = SELECT_ID;
-        label.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:16px;font-size:14px;font-weight:normal;color:#4b5563;';
+        label.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:14px;font-weight:normal;color:#4b5563;';
         label.appendChild(document.createTextNode('Results per page'));
         var select = document.createElement('select');
         select.style.cssText = 'padding:3px 6px;border:1px solid #9ca3af;border-radius:4px;background:#fff;color:#111827;font-size:14px;';
@@ -124,10 +124,47 @@
         return label;
     }
 
+    // COMPACT RESULTS PAGE
+    // The knowledge base leaves a lot of space on its results page. The
+    // parts are found by what they hold (the search field, the breadcrumb
+    // with Home, the "Search Results" heading), not by the knowledge
+    // base's generated class names, which change with its releases. Only
+    // values that differ are written.
+    function setStyle(el, prop, value) {
+        if (el && el.style[prop] !== value) el.style[prop] = value;
+    }
+
+    function compact(count) {
+        var area = document.querySelector('.knowledgebase');
+        if (!area) return;
+        var input = area.querySelector('input');
+        if (input && input.parentElement) setStyle(input.parentElement, 'marginBottom', '12px');
+        var home = Array.prototype.find.call(area.querySelectorAll('nav button'), function (b) { return b.textContent.trim() === 'Home'; });
+        var crumbs = home && home.closest('nav');
+        if (crumbs) {
+            setStyle(crumbs, 'paddingTop', '0');
+            setStyle(crumbs, 'paddingBottom', '0');
+        }
+        // "Search Results", the count and the dropdown on one line, the
+        // dropdown to the right.
+        var header = count.parentElement;
+        var heading = header && header.querySelector('h1, h2, h3');
+        if (!header || !heading) return;
+        setStyle(header, 'display', 'flex');
+        setStyle(header, 'flexWrap', 'wrap');
+        setStyle(header, 'alignItems', 'baseline');
+        setStyle(header, 'columnGap', '16px');
+        setStyle(header, 'rowGap', '4px');
+        setStyle(header, 'marginBottom', '16px');
+        setStyle(heading, 'margin', '0');
+        if (header.parentElement) setStyle(header.parentElement, 'paddingTop', '0');
+    }
+
     function placeSelect() {
         if (!/[?&]pzlRoute=searchResults?\b/.test(window.location.search)) return;
         var count = countElement();
         if (!count) return;
+        compact(count);
         var existing = document.getElementById(SELECT_ID);
         if (existing && existing.previousSibling === count) return;
         if (existing) existing.remove();
