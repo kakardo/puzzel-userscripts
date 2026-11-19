@@ -48,7 +48,7 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 </details>
 </li>
 <li>
-<details><summary>Scripts that do not use it (26)</summary>
+<details><summary>Scripts that do not use it (28)</summary>
 
 - `PCM_Name_Field_Placeholder` (since 1.8): Calls no lib functions; bounded one-shot retries, so it stays dependency-free
 - `PCM Dark Mode (Ticket List)`: Mostly CSS plus a small toggle; marginal benefit
@@ -71,6 +71,8 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 - `PCC_Agent_Highlighter`: Different app (app.puzzel.com). Its SPA machinery (grid rebind, dirty-row tracking, nav hooks) has no PCM_DOM equivalent; overlap is ~15 lines
 - `PCC_Request_Alert`: Different app. Watches one status element and adds one main menu entry; nothing to share
 - `Help_Centre_Results_Per_Page`: Different app (the Help Centre). Wraps fetch for one settings file only; one observer on the knowledge base area
+- `Help_Centre_Tree_View`: Different app. Wraps fetch only to read the search answer; one observer on the knowledge base area
+- `Help_Centre_Compact_Layout`: Different app. One stylesheet plus one observer on the knowledge base area
 - `PCM_Settings_Keeper`: Only reads and writes browser storage at load and when a page is left; no DOM work
 - `PCC_Shortcut_Bar_Keeper`: Different app. Only reads and writes browser storage at load and when the page is left; no DOM work
 - `PCC_Softphone_Status_Highlight`: Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection
@@ -494,7 +496,7 @@ Keeps a copy of the shortcut bar (and the PCC Request Alert settings and sound) 
 </ul>
 </details>
 
-<details><summary><b><code>Help_Centre/</code></b>: Puzzel Help Centre (www.puzzel.com/help), 1 script</summary>
+<details><summary><b><code>Help_Centre/</code></b>: Puzzel Help Centre (www.puzzel.com/help), 3 scripts</summary>
 
 Scripts for the public Puzzel Help Centre and its knowledge base, a different app from PCM.
 
@@ -502,7 +504,21 @@ Scripts for the public Puzzel Help Centre and its knowledge base, a different ap
 <li>
 <details><summary><code>Help_Centre_Results_Per_Page</code>: more search results per page</summary>
 
-Shows 20 knowledge base search results per page instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). It changes the number in the knowledge base's own settings file as the page loads, so the knowledge base pages the results itself. The server returns at most 25 results per search, so 25 is the highest choice. A "Tree view" button shows all results of a search as a tree grouped by the parts of their titles. Runs at document-start. Standalone.
+Shows 20 knowledge base search results per page instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). It changes the number in the knowledge base's own settings file as the page loads, so the knowledge base pages the results itself. The server returns at most 25 results per search; at that limit a short note beside the count says so. Runs at document-start. Standalone.
+
+</details>
+</li>
+<li>
+<details><summary><code>Help_Centre_Tree_View</code>: search results as a tree</summary>
+
+A "Tree view" button shows all results of a search as a tree grouped by the parts of their titles, each group folding open and shut; "List view" goes back. Read from the search answer the knowledge base already receives, so no extra requests. Runs at document-start. Standalone.
+
+</details>
+</li>
+<li>
+<details><summary><code>Help_Centre_Compact_Layout</code>: less empty space on every page</summary>
+
+A lower banner, less space around System Status, the ticket buttons, the search field and the breadcrumb, the results heading on one line, and less space around an article's title. Runs at document-start. Standalone.
 
 </details>
 </li>
