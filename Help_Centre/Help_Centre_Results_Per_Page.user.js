@@ -1,14 +1,14 @@
 // @file_name = Help_Centre_Results_Per_Page.user.js
 // @author = Kardo Rostam
-// @version = 1.1_2026-11-19
+// @version = 1.3_2026-11-19
 // @created = 2026-11-19 10:02
 // @note = run-at document-start on purpose: the Help Centre's settings are fetched while the page loads, and fetch has to be wrapped before that to change the number of search results per page.
 
 // ==UserScript==
 // @name         Help Centre Results Per Page
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-11-19
-// @description  Shows more search results per page in the Puzzel Help Centre knowledge base: 20 instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). The Help Centre reads the number from its own settings file when the page loads; the script changes that number in the file as it arrives, so the knowledge base itself shows the chosen number, with its own paging. On the results page the empty space is taken out (under the search box, around the breadcrumb and above the results) and "Search Results", the result count and the dropdown sit on one line. The choice is remembered in this browser; changing it reloads the results once. The knowledge base's server returns at most 25 results per search, so 25 is the highest choice. Event-driven: one fetch wrapper that only touches the settings file, and the dropdown is put back when the results are redrawn (one observer on the knowledge base area, only on the search results page).
+// @version      1.3_2026-11-19
+// @description  Shows more search results per page in the Puzzel Help Centre knowledge base: 20 instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). The Help Centre reads the number from its own settings file when the page loads; the script changes that number in the file as it arrives, so the knowledge base itself shows the chosen number, with its own paging. On the results page the empty space is taken out (under the search box, around the breadcrumb and above the results) and "Search Results", the result count and the dropdown sit on one line. When a search reaches the server's limit of 25 results, a short note beside the count says so: "max reached, more may exist, refine your search". The top of every Help Centre page is tightened too: a lower banner and less space around System Status and the ticket buttons. The choice is remembered in this browser; changing it reloads the results once. The knowledge base's server returns at most 25 results per search, so 25 is the highest choice. Event-driven: one fetch wrapper that only touches the settings file, and the dropdown is put back when the results are redrawn (one observer on the knowledge base area, only on the search results page).
 // @author       Kardo Rostam
 // @match        https://www.puzzel.com/help*
 // @run-at       document-start
@@ -36,6 +36,22 @@
     // The knowledge base's settings ("interactions") files on Puzzel's CDN.
     var SETTINGS_URL = /^https:\/\/app-cdn\.puzzel\.com\/public\/config\/.+\/interactions\/[^/]+\.json/;
     var LOG = '[Help Centre Results Per Page]';
+    var SERVER_MAX = 25;
+    var CAP_ID = 'kk-help-cap';
+    var CAP_TEXT = 'max reached, more may exist, refine your search';
+    // Tighter top of the page. These are the Help Centre page's own
+    // building blocks (the banner, the status line, the ticket buttons and
+    // the knowledge base's section); found by what they hold where
+    // possible, so a renamed section simply keeps its normal spacing.
+    var TOP_CSS = [
+        'section.c-hero-with-image-and-content { padding-top: 24px !important; padding-bottom: 24px !important; }',
+        'section.c-hero-with-image-and-content [class*="__image-container"] { margin-bottom: 0 !important; }',
+        'section.c-hero-with-image-and-content [class*="__image-container"] img { max-height: 220px !important; width: auto !important; object-fit: contain; }',
+        'section:has(.statusio-badge) { padding-top: 20px !important; padding-bottom: 0 !important; }',
+        'section:has(.statusio-badge) .statusio-badge { margin-bottom: 8px !important; }',
+        'section:has(.c-text-block__button-container) { padding-top: 8px !important; padding-bottom: 12px !important; }',
+        'section:has(.knowledgebase) { padding-top: 8px !important; }'
+    ].join('\n');
 
     function chosen() {
         var value = 0;
@@ -58,6 +74,14 @@
         });
         return found;
     }
+
+    // The top of the page is tightened from the start, before it is drawn.
+    (function addTopStyle() {
+        var style = document.createElement('style');
+        style.id = 'kk-help-compact-top';
+        style.textContent = TOP_CSS;
+        (document.head || document.documentElement).appendChild(style);
+    })();
 
     // THE SETTINGS FILE
     // Only that file is touched: its answer is read, the number changed and
@@ -165,10 +189,27 @@
         var count = countElement();
         if (!count) return;
         compact(count);
+        // Count, then the note (only at the limit), then the dropdown.
+        var cap = document.getElementById(CAP_ID);
+        var atLimit = parseInt(count.textContent, 10) >= SERVER_MAX;
+        if (atLimit && !cap) {
+            cap = document.createElement('span');
+            cap.id = CAP_ID;
+            cap.style.cssText = 'font-size:13px;font-weight:normal;color:#6b7280;font-style:italic;';
+            cap.textContent = CAP_TEXT;
+            cap.title = 'The Help Centre returns at most ' + SERVER_MAX + ' results per search, so there may be more articles that match.';
+        }
+        if (!atLimit && cap) {
+            cap.remove();
+            cap = null;
+        }
+        var after = count;
+        if (cap && after.nextSibling !== cap) count.parentNode.insertBefore(cap, after.nextSibling);
+        if (cap) after = cap;
         var existing = document.getElementById(SELECT_ID);
-        if (existing && existing.previousSibling === count) return;
+        if (existing && existing.previousSibling === after) return;
         if (existing) existing.remove();
-        count.parentNode.insertBefore(makeSelect(), count.nextSibling);
+        count.parentNode.insertBefore(makeSelect(), after.nextSibling);
     }
 
     // The knowledge base draws itself after the page has loaded and redraws
