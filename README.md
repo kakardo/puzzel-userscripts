@@ -502,7 +502,7 @@ Scripts for the public Puzzel Help Centre and its knowledge base, a different ap
 <li>
 <details><summary><code>Help_Centre_Results_Per_Page</code>: more search results per page</summary>
 
-Shows 20 knowledge base search results per page instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). It changes the number in the knowledge base's own settings file as the page loads, so the knowledge base pages the results itself. The server returns at most 25 results per search, so 25 is the highest choice. Runs at document-start. Standalone.
+Shows 20 knowledge base search results per page instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). It changes the number in the knowledge base's own settings file as the page loads, so the knowledge base pages the results itself. The server returns at most 25 results per search, so 25 is the highest choice. A "Tree view" button shows all results of a search as a tree grouped by the parts of their titles. Runs at document-start. Standalone.
 
 </details>
 </li>
