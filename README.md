@@ -19,7 +19,7 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 <details><summary>Scripts that use the library (26)</summary>
 
 - `PCM_Ticket_Info_Extractor`: Reads CI widget, accordion rows, tables; helpers aliased to the lib since 6.1
-- `PCM_New_Ticket_Notifier`: Table reading, observers, dedupe and JSON storage from the lib
+- `PCM_New_Ticket_Notifier` [Paused]: Table reading, observers, dedupe and JSON storage from the lib
 - `Puzzel_Styler_(Ticket_Field)`: Entirely built on `createFieldRuntime`
 - `PCM_Form_Buttons`: General DOM work via `PCM_DOM`; GitHub `@require` since 2.3
 - `PCM_Unsaved_Form_Warning`: `bootUntil`, `ensureStyleTag`, `createVisibilityGate`, snapshot diffing over form fields
@@ -355,9 +355,9 @@ Auto-reloads the page on an interval with a countdown ring UI. Standalone and li
 </details>
 </li>
 <li>
-<details><summary><code>PCM_New_Ticket_Notifier</code>: alerts on new tickets</summary>
+<details><summary><code>PCM_New_Ticket_Notifier</code>: [Paused] alerts on new tickets</summary>
 
-Alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
+**Paused:** it does nothing until `ENABLED` at the top of the script is set to true. Alerts on new tickets in the PCM ticket list. Uses the shared DOM library.
 
 </details>
 </li>
