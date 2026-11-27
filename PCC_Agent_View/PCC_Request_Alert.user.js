@@ -1,13 +1,13 @@
 // @file_name = PCC_Request_Alert.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-10-06
+// @version = 1.1_2026-11-27
 // @created = 2026-10-06 13:56
 
 // ==UserScript==
 // @name         PCC Request Alert
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-06
-// @description  Alerts you when your status leaves Ready (a call or chat was offered or accepted), and optionally when a new chat request arrives (the + in "(0+)"). Ringtone with volume, built-in tones or your own sound, plus optional desktop notification, flashing tab title and screen flash. Settings in the code and under the main menu (the three lines, top left). Changing your status yourself does not trigger it. A bell (under the main menu icon, next to your status, or hidden) and a switch in the settings turn it on and off.
+// @version      1.1_2026-11-27
+// @description  Alerts you when your status leaves Ready (a call or chat was offered or accepted), and optionally when a new chat request arrives (the + in "(0+)"). Ringtone with volume, built-in tones or your own sound, plus optional desktop notification, flashing tab title and screen flash. Settings in the code and under the main menu (the three lines, top left). Changing your status yourself does not trigger it, and neither does a narrow window: there the agent app reuses the status text for your profile name, so only text in the status form "Name (0)" counts as a status. A bell (under the main menu icon, next to your status, or hidden) and a switch in the settings turn it on and off.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent/*
 // @run-at       document-idle
@@ -386,9 +386,18 @@
     var last = null;
     var manualAt = 0;
 
+    // Only text in the status form "Name (0)" counts. On a narrow window
+    // the agent app shows the profile ("Triaging Nordic") in a status-text
+    // element too, and may reuse the one that held the status for it; read
+    // as a status, that looked like leaving Ready and rang the alert.
+    var STATUS_FORM = /\(\d+\+?\)\s*$/;
+
     function findStatusEl() {
-        return document.querySelector('aa-dropdown[data-auid^="status-menu"] span.status-text') ||
-            document.querySelector('section.header span.status-text');
+        var all = document.querySelectorAll('aa-dropdown[data-auid^="status-menu"] span.status-text, section.header span.status-text');
+        for (var i = 0; i < all.length; i += 1) {
+            if (STATUS_FORM.test((all[i].textContent || '').replace(/\s+/g, ' ').trim())) return all[i];
+        }
+        return null;
     }
 
     function parseStatus(text) {
@@ -399,13 +408,23 @@
             text: t,
             name: name,
             ready: READY_NAMES.some(function (r) { return r.toLowerCase() === name.toLowerCase(); }),
-            request: !!(m && m[3])
+            request: !!(m && m[3]),
+            isStatus: !!m
         };
     }
 
     function onStatusChange() {
         if (!statusEl) return;
         var now = parseStatus(statusEl.textContent);
+        // Not a status any more (the element now shows something else):
+        // the status is looked up again, and nothing is compared.
+        if (!now.isStatus) {
+            statusEl = null;
+            if (statusObserver) statusObserver.disconnect();
+            statusObserver = null;
+            hookStatus();
+            return;
+        }
         var prev = last;
         if (prev && now.text === prev.text) return;
         last = now;
@@ -427,7 +446,14 @@
         if (!el || el === statusEl) return !!el;
         if (statusObserver) statusObserver.disconnect();
         statusEl = el;
-        last = parseStatus(el.textContent);
+        var found = parseStatus(el.textContent);
+        // A real change while the status was being looked up again still
+        // counts: the earlier reading stays the one to compare with.
+        if (last && last.text !== found.text) {
+            onStatusChange();
+        } else {
+            last = found;
+        }
         statusObserver = new MutationObserver(onStatusChange);
         statusObserver.observe(el, { childList: true, characterData: true, subtree: true });
         hookToggle();
