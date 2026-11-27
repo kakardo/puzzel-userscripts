@@ -497,7 +497,7 @@ Keeps a copy of the shortcut bar (and the PCC Request Alert settings and sound) 
 <li>
 <details><summary><code>PCC_Chat_Quick_Emoji</code>: one-press emojis in the chat</summary>
 
-One-press emoji buttons in the chat, right after the buttons under the message box; a press puts the emoji where the cursor is, as if typed. The emojis are a list at the top. They appear as soon as a chat is on screen (checked after the page loads, after clicks and when the message box gets the focus), no observers. Standalone.
+One-press emoji buttons in the chat, right after the buttons under the message box; a press puts the emoji where the cursor is, as if typed. Typing :1 to :4 (after a space or at the start of a line) turns into the emoji at that place; hovering a button shows its shortcut. The emojis are a list at the top. They appear as soon as a chat is on screen (checked after the page loads, after clicks and when the message box gets the focus), no observers. Standalone.
 
 </details>
 </li>

@@ -1,13 +1,13 @@
 // @file_name = PCC_Chat_Quick_Emoji.user.js
 // @author = Kardo Rostam
-// @version = 1.0_2026-11-27
+// @version = 1.1_2026-11-27
 // @created = 2026-11-27 09:40
 
 // ==UserScript==
 // @name         PCC Chat Quick Emoji
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-11-27
-// @description  One-press emoji buttons in the agent application's chat, in the row under the message box right after its own buttons (emoji picker, attachment and the rest), like PCM Quick Emoji does for PCM replies. A press puts the emoji where the cursor is in the message, as if typed, so the chat sees it as normal text; the cursor stays in the message. The emojis are a list at the top. The buttons appear as soon as a chat is on screen: checked a few times after the page has loaded, and shortly after each click on the page (opening or switching to a chat) and each time the message box gets the focus, so they also come back if the application redraws the chat. Event-driven: one click and one focus listener on the page, no observers, no polling.
+// @version      1.1_2026-11-27
+// @description  One-press emoji buttons in the agent application's chat, in the row under the message box right after its own buttons (emoji picker, attachment and the rest), like PCM Quick Emoji does for PCM replies. A press puts the emoji where the cursor is in the message, as if typed, so the chat sees it as normal text; the cursor stays in the message. Each also has a shortcut: typing :1, :2 and so on (after a space or at the start of a line) changes it into the emoji at that place in the row right away; hovering a button shows its shortcut. The emojis are a list at the top. The buttons appear as soon as a chat is on screen: checked a few times after the page has loaded, and shortly after each click on the page (opening or switching to a chat) and each time the message box gets the focus, so they also come back if the application redraws the chat. Event-driven: one click and one focus listener on the page, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
 // @run-at       document-idle
@@ -96,12 +96,12 @@
     function buildGroup() {
         var group = document.createElement('span');
         group.id = GROUP_ID;
-        EMOJIS.forEach(function (code) {
+        EMOJIS.forEach(function (code, index) {
             var emoji = String.fromCodePoint(code);
             var button = document.createElement('button');
             button.type = 'button';
             button.textContent = emoji;
-            button.title = 'Add ' + emoji + ' to the message';
+            button.title = 'Add ' + emoji + ' to the message (shortcut :' + (index + 1) + ')';
             // Pressing must not take the focus (and the cursor) away from
             // the message.
             button.addEventListener('mousedown', function (event) { event.preventDefault(); });
@@ -149,6 +149,48 @@
     document.addEventListener('click', function () {
         window.clearTimeout(clickTimer);
         clickTimer = window.setTimeout(placeSoon, AFTER_CLICK_MS);
+    }, true);
+
+    // SHORTCUTS
+    // ":1" typed in the message becomes the first emoji of the row, ":2"
+    // the second and so on, as soon as the number is typed. Only after a
+    // space or at the start of a line, so a time such as 12:15 is left
+    // alone. The two characters are selected and replaced the way typing
+    // would, so the chat sees a normal edit.
+    var SHORTCUT_RE = new RegExp('(^|\\s):([1-' + Math.min(EMOJIS.length, 9) + '])$');
+
+    function textBeforeCaret(composer) {
+        if (composer.tagName === 'TEXTAREA' || composer.tagName === 'INPUT') {
+            return composer.value.slice(0, composer.selectionStart || 0);
+        }
+        var sel = window.getSelection();
+        if (!sel || !sel.rangeCount || !sel.isCollapsed) return '';
+        var range = sel.getRangeAt(0).cloneRange();
+        range.setStart(composer, 0);
+        return range.toString();
+    }
+
+    function selectBack(composer, chars) {
+        if (composer.tagName === 'TEXTAREA' || composer.tagName === 'INPUT') {
+            var end = composer.selectionStart || 0;
+            composer.setSelectionRange(end - chars, end);
+            return true;
+        }
+        var sel = window.getSelection();
+        if (!sel || typeof sel.modify !== 'function') return false;
+        for (var i = 0; i < chars; i += 1) sel.modify('extend', 'backward', 'character');
+        return sel.toString().length === chars;
+    }
+
+    document.addEventListener('input', function (event) {
+        if (event.isComposing || (event.inputType && event.inputType !== 'insertText')) return;
+        var path = event.composedPath ? event.composedPath() : [event.target];
+        var composer = path[0];
+        if (!isComposer(composer)) return;
+        var match = textBeforeCaret(composer).match(SHORTCUT_RE);
+        if (!match) return;
+        var emoji = String.fromCodePoint(EMOJIS[Number(match[2]) - 1]);
+        if (selectBack(composer, 2)) insert(composer, emoji);
     }, true);
 
     // The real element that got the focus, also inside a component's own
