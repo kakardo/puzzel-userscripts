@@ -48,7 +48,7 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 </details>
 </li>
 <li>
-<details><summary>Scripts that do not use it (28)</summary>
+<details><summary>Scripts that do not use it (29)</summary>
 
 - `PCM_Name_Field_Placeholder` (since 1.8): Calls no lib functions; bounded one-shot retries, so it stays dependency-free
 - `PCM Dark Mode (Ticket List)`: Mostly CSS plus a small toggle; marginal benefit
@@ -74,6 +74,7 @@ Shared DOM helper library (`PCM_Shared_Library`), loaded via `@require` by scrip
 - `Help_Centre_Tree_View`: Different app. Wraps fetch only to read the search answer; one observer on the knowledge base area
 - `Help_Centre_Compact_Layout`: Different app. One stylesheet plus one observer on the knowledge base area
 - `PCM_Settings_Keeper`: Only reads and writes browser storage at load and when a page is left; no DOM work
+- `PCC_Chat_Quick_Emoji`: Different app. One click and one focus listener; inserts through the browser's own text input
 - `PCC_Shortcut_Bar_Keeper`: Different app. Only reads and writes browser storage at load and when the page is left; no DOM work
 - `PCC_Softphone_Status_Highlight`: Different app. 99 lines, self-contained, rAF-throttled; only overlap is style injection
 - `Geckoboard_Full_Numbers`: Different app (Geckoboard). Pure CSS, a single style tag
@@ -460,7 +461,7 @@ When Geckoboard's data server fails a widget refresh (for example error 520), re
 </li>
 </ul>
 </details>
-<details><summary><b><code>PCC_Agent_View/</code></b>: agent application (app.puzzel.com/agent), 4 scripts</summary>
+<details><summary><b><code>PCC_Agent_View/</code></b>: agent application (app.puzzel.com/agent), 5 scripts</summary>
 
 Scripts for the agent application (app.puzzel.com/agent), a different app from PCM.
 
@@ -490,6 +491,13 @@ Rings (and optionally notifies, flashes the tab title or the screen) when your s
 <details><summary><code>PCC_Shortcut_Bar_Keeper</code>: the shortcut bar survives a cleared cache</summary>
 
 Keeps a copy of the shortcut bar (and the PCC Request Alert settings and sound) in Tampermonkey's storage, never sign-in data; the application's own settings are saved on Puzzel's server and need no copy. After the browser cache is cleared it puts them back once you are signed in, and reloads the page once. Per agent account. Runs at document-start. Standalone.
+
+</details>
+</li>
+<li>
+<details><summary><code>PCC_Chat_Quick_Emoji</code>: one-press emojis in the chat</summary>
+
+One-press emoji buttons in the chat, right after the buttons under the message box; a press puts the emoji where the cursor is, as if typed. The emojis are a list at the top. They appear as soon as a chat is on screen (checked after the page loads, after clicks and when the message box gets the focus), no observers. Standalone.
 
 </details>
 </li>
