@@ -1,12 +1,7 @@
-// @file_name = PCM_Bulk_Update_Presets.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-27
-// @created = 2026-10-27 14:04
-
 // ==UserScript==
 // @name         PCM Bulk Update Presets
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-27
+// @version      1.1_2026-11-27
 // @description  Adds preset buttons to the "Updating Ticket(s)" window of the ticket list. One press fills in Team, Status and Priority from the preset, for example Spam: Team Spam/Virus Quarantine, Status Closed, Priority Junk. The fields are chosen the way picking them by hand would, so PCM refills Assigned To for the new team as usual. Nothing is saved until you press Update yourself. Presets are a list at the top. Standalone, event-driven via shown.bs.modal: no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -15,8 +10,9 @@
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Bulk_Update_Presets.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Bulk_Update_Presets.user.js
 // ==/UserScript==
+
+// @created = 2026-10-27 14:04
 
 (function () {
     'use strict';

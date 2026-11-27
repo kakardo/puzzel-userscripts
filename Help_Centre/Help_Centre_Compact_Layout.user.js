@@ -1,22 +1,18 @@
-// @file_name = Help_Centre_Compact_Layout.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-11-19
-// @created = 2026-11-19 16:05
-// @note = run-at document-start on purpose: the page's spacing rules are in place before it is drawn, so nothing jumps.
-// @note = Split off from Help Centre Results Per Page, where the compact layout was added in 1.1 to 1.6.
-
 // ==UserScript==
 // @name         Help Centre Compact Layout
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-11-19
+// @version      1.1_2026-11-27
 // @description  Takes the empty space out of the Puzzel Help Centre (www.puzzel.com/help). On every page: a lower banner (its illustration in a smaller box), less space around System Status and the ticket buttons, and less space under the knowledge base's search field and around its breadcrumb. On the search results page "Search Results", the result count and any controls other scripts add there sit on one line; on an article there is less space around its title. The page's own sections are found by their names or what they hold, and the knowledge base's parts by what they hold (the search field, the breadcrumb with Home, the headings), not by its generated class names, which change with its releases; a part that is not found keeps its normal spacing. Event-driven: one stylesheet added before the page is drawn, and one observer on the knowledge base area.
 // @author       Kardo Rostam
 // @match        https://www.puzzel.com/help*
 // @run-at       document-start
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Help_Centre/Help_Centre_Compact_Layout.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Help_Centre/Help_Centre_Compact_Layout.user.js
 // ==/UserScript==
+
+// @created = 2026-11-19 16:05
+// @note = run-at document-start on purpose: the page's spacing rules are in place before it is drawn, so nothing jumps.
+// @note = Split off from Help Centre Results Per Page, where the compact layout was added in 1.1 to 1.6.
 
 (function () {
     'use strict';

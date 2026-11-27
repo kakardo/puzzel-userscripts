@@ -1,12 +1,7 @@
-// @file_name = PCM_Ticket_Info_Extractor.user.js
-// @author = Kardo Rostam
-// @version = 7.5_2026-11-05
-// @created = 2026-03-20 (v1.0)
-
 // ==UserScript==
 // @name         PCM Ticket Info Extractor
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      7.5_2026-11-05
+// @version      7.6_2026-11-27
 // @description  Present CustomerID, Customer Name (the name link in Customer Intelligence; notes other scripts add to that heading are ignored), Company Name and Partner side by side on one compact line (wrapping on narrow screens). The ticket's own organisation in the Organisation Information widget (AccountNumber, Partner and name) is used first, Customer Intelligence organisations second. Read the currently available CI organisation rows once on load without turning pagination pages. Organisation rows already in the page are read without opening CI Organisations; only when they load on opening is it opened briefly and closed again once its animation has finished, so it no longer stays open. Expose machine-friendly hooks for other scripts. Reads again when PCM Show Organisation Info signals that the Organisation Information module was added or changed after an Attributes save (event pcm-organisation-info-refreshed), and announces the new values the same way, so the scripts that use them update without a reload. The panel is put back automatically when PCM rebuilds the ticket header after an Attributes save.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Ticket_Info_Extractor.user.js
 // ==/UserScript==
+
+// @created = 2026-03-20 (v1.0)
 
 (function() {
   'use strict';

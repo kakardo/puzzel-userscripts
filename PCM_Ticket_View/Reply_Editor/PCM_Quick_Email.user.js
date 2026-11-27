@@ -1,12 +1,7 @@
-// @file_name = PCM_Quick_Email.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-30
-// @created = 2026-10-30 11:27
-
 // ==UserScript==
 // @name         PCM Quick Email
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-30
+// @version      1.1_2026-11-27
 // @description  Replaces PCM's Reply and Start Conversation buttons with one always-visible Email button in the Timeline header, next to Add Note, that opens a new email in one press (PCM's own buttons are hidden and pressed by the script; Forward stays). The button keeps one text and width, so the row does not jump; while it works it is dimmed and its tooltip says why. When PCM shows Reply it presses Reply; when PCM shows Start Conversation it presses its "help" option straight away, without opening the menu; when you are not assigned it first presses PCM's own Assign To Me, waits for PCM to show its buttons (at most 10 seconds) and then continues. The script only presses PCM's own controls, so the email opens exactly as by hand. If PCM does not show the buttons after assigning, the tooltip says so. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Quick_Email.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Quick_Email.user.js
 // ==/UserScript==
+
+// @created = 2026-10-30 11:27
 
 (function () {
     'use strict';

@@ -1,13 +1,7 @@
-// @file_name = PCC_Shortcut_Bar_Keeper.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-11-18
-// @created = 2026-11-18 09:12
-// @note = run-at document-start on purpose: settings are put back before the agent application reads them, so a restore often needs no reload.
-
 // ==UserScript==
 // @name         PCC Shortcut Bar Keeper
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-11-18
+// @version      1.1_2026-11-27
 // @description  Keeps the shortcut bar at the top of the agent application (and the PCC Request Alert settings and sound) when the browser cache or site data is cleared. These are the only ones kept in the browser's site storage, which a clear wipes; the application's own settings (softphone, ringtone and the rest) are saved on Puzzel's server and survive a clear by themselves. A copy of only these (never sign-in data) is kept in Tampermonkey's own storage, which survives a clear, and updated when you leave or switch away from the page. After a clear, once you are signed in again, the missing settings are put back and the page reloads once so the application picks them up. Settings are kept per agent account, so another account in the same browser never gets yours. No polling: a check when the page opens and a few bounded checks while you sign in.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
@@ -15,8 +9,10 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Shortcut_Bar_Keeper.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Shortcut_Bar_Keeper.user.js
 // ==/UserScript==
+
+// @created = 2026-11-18 09:12
+// @note = run-at document-start on purpose: settings are put back before the agent application reads them, so a restore often needs no reload.
 
 (function () {
     'use strict';

@@ -1,13 +1,7 @@
-// @file_name = PCM_Customer_Ticket_Count.user.js
-// @author = Kardo Rostam
-// @version = 1.2_2026-11-02
-// @created = 2026-11-02 11:51
-// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The customer's email is read from the page at runtime (only to ask PCM for the ticket list), never written here.
-
 // ==UserScript==
 // @name         PCM Customer Ticket Count
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.2_2026-11-02
+// @version      1.3_2026-11-27
 // @description  Shows how many tickets the customer has in the Customer Tickets heading of Customer Intelligence, as a bold coloured "(110)", without opening the section. The number comes from the same list PCM loads when you open Customer Tickets, fetched once per customer in the background with room for 500 tickets and only read, never run. The request is shared with PCM Customer ID Reminder and PCM Customer Top List, so they never ask twice. Customers with 500 or more tickets are counted in full in the background (5,000 per request, at most 20,000), once a week: the total is kept in this browser for 7 days, the tooltip says when it was counted, and a click on the number counts again now. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -15,8 +9,10 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Customer_Ticket_Count.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Customer_Ticket_Count.user.js
 // ==/UserScript==
+
+// @created = 2026-11-02 11:51
+// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The customer's email is read from the page at runtime (only to ask PCM for the ticket list), never written here.
 
 (function () {
     'use strict';

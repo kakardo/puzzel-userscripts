@@ -570,7 +570,7 @@ Tampermonkey detects the `.user.js` extension and offers to install it directly.
 
 ## Auto-updates
 
-Scripts with `@downloadURL` and `@updateURL` point at their own raw GitHub URL. Filenames are stable (no version or date), so these URLs never change; Tampermonkey periodically checks `@updateURL` for a higher `@version` and, if found, pulls the new file from `@downloadURL`.
+Every script's `@downloadURL` points at its own raw GitHub URL. Filenames are stable (no version or date), so the URL never changes; Tampermonkey periodically checks it for a higher `@version` and, if found, installs the new file from it. There is no separate `@updateURL`: without one, Tampermonkey checks `@downloadURL`.
 
 ## Shared DOM library
 
@@ -584,7 +584,7 @@ Important: Tampermonkey fetches `@require` content once and caches it. It only r
 
 Two GitHub Actions workflows run automatically:
 
-- `lint_scripts.yml`: on every push and pull request, syntax-checks all userscripts and enforces the repo rules via `tools/lint_scripts.py`: uniform headers, matching `@version` fields, correct download/update URLs, version format, no em/en dashes, and a bumped `@version` on every changed script. (The library cascade check was removed in lint 1.2: requiring scripts are refreshed manually instead, see Shared DOM library.)
+- `lint_scripts.yml`: on every push and pull request, syntax-checks all userscripts and enforces the repo rules via `tools/lint_scripts.py`: uniform headers (the `==UserScript==` block first, then `@created` and any `@note` lines right under it), a correct `@downloadURL`, version format, no em/en dashes, and a bumped `@version` on every changed script. (The library cascade check was removed in lint 1.2: requiring scripts are refreshed manually instead, see Shared DOM library.)
 - `build_script_bundle.yml`: rebuilds the download bundle on script changes (see Installing).
 
 ## Energy efficiency rules

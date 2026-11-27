@@ -1,13 +1,7 @@
-// @file_name = PCM_Auto_Refresh.user.js
-// @author = Kardo Rostam
-// @version = 2.5_2026-10-02
-// @created = 2026-02-19 11:08
-// @note = Light by default and fully working on its own. Dark colours are an optional link to PCM Dark Mode (Ticket List), which owns the dark mode toggle and marks the page root with data-pz-tickets-pagebg="on" while dark; without that script this one simply stays light.
-
 // ==UserScript==
 // @name         PCM Auto Refresh
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.5_2026-10-02
+// @version      2.6_2026-11-27
 // @description  Auto-refresh PCM dashboard and ticket list with native-looking dt-button UI that follows the dark mode toggle (light and dark), ring on right (top-aligned). Battery friendly: ring painting is skipped while the tab is hidden, and the ticket list refreshes via the DataTable's own ajax reload when available (full page reload as fallback), so the reload schedule keeps background refreshes (and the New Ticket Notifier) working.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -15,8 +9,10 @@
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Auto_Refresh.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Auto_Refresh.user.js
 // ==/UserScript==
+
+// @created = 2026-02-19 11:08
+// @note = Light by default and fully working on its own. Dark colours are an optional link to PCM Dark Mode (Ticket List), which owns the dark mode toggle and marks the page root with data-pz-tickets-pagebg="on" while dark; without that script this one simply stays light.
 
 (function () {
   'use strict';

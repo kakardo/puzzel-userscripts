@@ -1,12 +1,7 @@
-// @file_name = Geckoboard_Full_Numbers.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-13
-// @created = 2026-10-13 14:05
-
 // ==UserScript==
 // @name         Geckoboard Full Numbers
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-13
+// @version      1.1_2026-11-27
 // @description  Shows numbers in Geckoboard table widgets in full instead of cut off with an ellipsis ("1,6..." becomes "1,623"). The number cells are right-aligned and have room to their left that Geckoboard does not use, so a number that does not fit now extends into that space instead of being shortened. Left-aligned cells (names) keep their normal shortening, and Geckoboard's own column widths are left as they are. The shared page only frames the dashboard, which loads from app.geckoboard.com, so the script runs there too. Pure CSS: no observers, no polling, works for every table on the dashboard including ones that load or refresh later.
 // @author       Kardo Rostam
 // @match        https://share.geckoboard.com/dashboards/*
@@ -14,8 +9,9 @@
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Geckoboard/Geckoboard_Full_Numbers.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Geckoboard/Geckoboard_Full_Numbers.user.js
 // ==/UserScript==
+
+// @created = 2026-10-13 14:05
 
 (function () {
     'use strict';

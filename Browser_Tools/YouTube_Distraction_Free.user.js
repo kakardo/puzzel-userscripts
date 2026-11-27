@@ -1,15 +1,7 @@
-// @file_name = YouTube_Distraction_Free.user.js
-// @author = Kardo Rostam
-// @version = 1.3_2026-11-13
-// @created = 2026-11-13 22:05
-// @note = Replaces the "DF Tube (Distraction Free for YouTube)" and "Hide shorts for YouTube" browser extensions, with their main options as the settings at the top. That extension started up about twelve times on each page load; this script adds its rules once.
-// @note = Measured on 2026-11-13 (load times, three reloads each): no real difference in page load between the extension and this script. About 1.4 s goes to YouTube's server answering and about 3 s to the browser working through YouTube's page code and every extension hooked into it, and neither of the two changes that. Kept for being simpler, adjustable and free of flashes.
-// @note = run-at document-start on purpose: the hiding rules are in place before YouTube draws anything, so hidden parts never flash up while the page loads.
-
 // ==UserScript==
 // @name         YouTube Distraction Free
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-11-13
+// @version      1.4_2026-11-27
 // @description  Hides the distracting parts of YouTube, each one switched on or off in the settings at the top: the recommended videos next to (or under) the video, the suggested videos at the end of a video, the Trending entry in the menu, merchandise shelves and Shorts (shelves, single Shorts in lists, the channel tab, notifications and the menu entry) and YouTube Playables (games). Shows four videos per row on the home, subscriptions and channel pages (a setting; YouTube's own choice depends on the window width). Optionally it also hides the notification bell, the home feed, the subscriptions list in the menu, live chat, the playlist panel and comments. Also turns off "autoplay next video". Almost everything is plain CSS, added before YouTube draws the page, so nothing flashes up; the only code that runs is a short check of the autoplay switch after a video page loads. No observers, no polling.
 // @author       Kardo Rostam
 // @match        https://www.youtube.com/*
@@ -17,8 +9,12 @@
 // @noframes
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Browser_Tools/YouTube_Distraction_Free.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Browser_Tools/YouTube_Distraction_Free.user.js
 // ==/UserScript==
+
+// @created = 2026-11-13 22:05
+// @note = Replaces the "DF Tube (Distraction Free for YouTube)" and "Hide shorts for YouTube" browser extensions, with their main options as the settings at the top. That extension started up about twelve times on each page load; this script adds its rules once.
+// @note = Measured on 2026-11-13 (load times, three reloads each): no real difference in page load between the extension and this script. About 1.4 s goes to YouTube's server answering and about 3 s to the browser working through YouTube's page code and every extension hooked into it, and neither of the two changes that. Kept for being simpler, adjustable and free of flashes.
+// @note = run-at document-start on purpose: the hiding rules are in place before YouTube draws anything, so hidden parts never flash up while the page loads.
 
 (() => {
   'use strict';

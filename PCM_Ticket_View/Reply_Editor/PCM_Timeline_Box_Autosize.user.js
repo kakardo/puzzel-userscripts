@@ -1,13 +1,7 @@
-// @file_name = PCM_Timeline_Box_Autosize.user.js
-// @author = Kardo Rostam
-// @version = 1.6_2026-10-13
-// @created = 2026-09-09 10:12
-// @note = The timeline bodies are same-origin iframes with ids shaped email-<n>, note-<n> and api-<n>. PCM already sizes email iframes to their content with an inline height and never sizes notes, which take a flat height from a stylesheet and clip. This script sizes every type the same way.
-
 // ==UserScript==
 // @name         PCM Timeline Box Autosize
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.6_2026-10-13
+// @version      1.7_2026-11-27
 // @description  Sizes the Timeline message boxes to their own content so notes, mails and API entries stop clipping behind a scrollbar. Each box is a same-origin iframe measured from the inside, then clamped between a minimum and a maximum height, with optional full width. Long lines wrap inside the box by default (no sideways scrolling), with a menu switch to turn that off. Dragging a box's resize handle pins that box to the dragged height and is remembered per box. A settings dropdown left of Timeline Options carries the on/off switch, the min and max, full width, line wrapping, which box types are handled, and a button to forget pinned sizes. A box in a collapsed entry (such as a note PCM adds minimised) is left alone until the entry is opened, then sized. Event-driven: a ResizeObserver per open box and one scoped MutationObserver for new boxes, all behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -15,8 +9,10 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Timeline_Box_Autosize.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Timeline_Box_Autosize.user.js
 // ==/UserScript==
+
+// @created = 2026-09-09 10:12
+// @note = The timeline bodies are same-origin iframes with ids shaped email-<n>, note-<n> and api-<n>. PCM already sizes email iframes to their content with an inline height and never sizes notes, which take a flat height from a stylesheet and clip. This script sizes every type the same way.
 
 (function () {
     'use strict';

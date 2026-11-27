@@ -1,21 +1,17 @@
-// @file_name = PCM_Timeline_Preview_Cleanup.user.js
-// @author = Kardo Rostam
-// @version = 1.5_2026-10-13
-// @created = 2026-10-12 12:34
-// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). User names and ids are read from the page at runtime and kept in localStorage, never written here.
-
 // ==UserScript==
 // @name         PCM Timeline Preview Cleanup
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.5_2026-10-13
+// @version      1.6_2026-11-27
 // @description  Makes the Timeline Preview window (opened by clicking an older ticket in Customer Intelligence) easier to read. Hides the "Rules applied" entries, which fill most of the window with rule lists; which entry types are hidden is a list at the top. Entries in the same minute by the same person, or all via API, are merged into one row with the person named once, and "Tag ... added" lines in it are joined into one "Tags added: ..." line. System events are shown as slim boxed rows with a small grey dot instead of the big pink icon, so mails and notes stand out and every event has a clear edge, and status changes are shown as PCM's coloured status labels (OPEN → RESOLVED). Mails all start collapsed and only open when you click them; PCM no longer opens the newest one by itself. A bar at the top shows the previewed ticket's organisation (number as a copy button, name in large text), read once per ticket from that ticket's own page in the background. Puts an avatar in front of every entry done by a person ("... by First Last"): a coloured circle with their initials, replaced by their profile picture once the script has learned who they are. PCM has no full user list, so names and user ids are learned from the Assigned To lists as they load (team changes included) and remembered in localStorage; pictures appear for more people the more teams you visit. Only the preview window is affected. Event-driven via jQuery's ajaxComplete and the modal's shown event, and only while the preview is open and the tab is visible: no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Timeline_Preview_Cleanup.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Timeline_Preview_Cleanup.user.js
 // ==/UserScript==
+
+// @created = 2026-10-12 12:34
+// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). User names and ids are read from the page at runtime and kept in localStorage, never written here.
 
 (function () {
     'use strict';

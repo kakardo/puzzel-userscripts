@@ -1,12 +1,7 @@
-// @file_name = PCM_No_Access_Redirection_Button.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-01
-// @created = 2026-10-01 14:01
-
 // ==UserScript==
 // @name         PCM No Access Redirection Button
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-01
+// @version      1.1_2026-11-27
 // @description  Adds a large "Go to ticket list" button to PCM's "Ticket reassigned" message, shown after a ticket is sent to a team you cannot access. PCM's Confirm button is hidden and replaced by a "Press here to stay in this ticket" link under the message. The button drops PCM's leave-page prompt and opens the tickets list directly, so there is no Confirm, no "Leave site?" question and no second click. Event-driven: one MutationObserver on the direct children of body, where PCM adds its message boxes, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_No_Access_Redirection_Button.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_No_Access_Redirection_Button.user.js
 // ==/UserScript==
+
+// @created = 2026-10-01 14:01
 
 (function () {
   'use strict';

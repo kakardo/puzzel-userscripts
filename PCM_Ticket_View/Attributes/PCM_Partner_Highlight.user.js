@@ -1,13 +1,7 @@
-// @file_name = PCM_Partner_Highlight.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-01
-// @created = 2026-10-01 15:08
-// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The partner name is read from the page at runtime, never written here.
-
 // ==UserScript==
 // @name         PCM Partner Highlight
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-01
+// @version      1.1_2026-11-27
 // @description  Shows the ticket's partner in large coloured letters next to the "Attributes" heading in the Attributes widget, so a partner ticket is impossible to miss. The partner is read from the PCM Ticket Info Extractor outputs (Partner attribute of the Customer Intelligence organisation); nothing is shown when the ticket has no partner. Event-driven: listens for the extractor's ready event and re-places the badge when PCM re-renders the widget, through a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -15,8 +9,10 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Partner_Highlight.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Partner_Highlight.user.js
 // ==/UserScript==
+
+// @created = 2026-10-01 15:08
+// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). The partner name is read from the page at runtime, never written here.
 
 (function () {
   'use strict';

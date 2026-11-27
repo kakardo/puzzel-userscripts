@@ -1,16 +1,7 @@
-// @file_name = PCM_Form_Buttons.user.js
-// @author = Kardo Rostam
-// @version = 4.7_2026-11-04
-// @created = 2026-03-23 15:48
-// @dependency = PCM Ticket Info Extractor
-// @note = Converted from .txt to a standard installable userscript in v2.3.
-// @note = Reads customer data only from the extractor outputs published by the PCM Ticket Info Extractor script.
-// @note = Renamed from PCM Organisation Copy Buttons in v3.6, when the Attributes > Organisation button was dropped and the script became Forms only.
-
 // ==UserScript==
 // @name         PCM Form Buttons
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.7_2026-11-04
+// @version      4.8_2026-11-27
 // @description  Adds a row above Form: in the Puzzel Ticketing Forms widget with CustomerId / Name buttons from the PCM Ticket Info Extractor outputs. Autofills empty Customer ID and Customer Ref form fields (with a red ring until saved; the name with capital first letters), gives a saved name in Customer Ref that starts with a small letter a capital first letter (also after PCM redraws the field, with an orange ring until saved, so you only press Save), and colour-codes buttons and fields (blue = CustomerId, teal = Name). Unsaved-change marking lives in PCM Unsaved Form Warning. Uses the shared PCM DOM library. Optimized as a bounded retry injector per ticket route. When the Extractor announces new values after the form was handled (for example an organisation saved later), the buttons and mismatch markers update; autofill does not run again, so typed values are never overwritten.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -18,8 +9,13 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Form_Buttons.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Form_Buttons.user.js
 // ==/UserScript==
+
+// @created = 2026-03-23 15:48
+// @dependency = PCM Ticket Info Extractor
+// @note = Converted from .txt to a standard installable userscript in v2.3.
+// @note = Reads customer data only from the extractor outputs published by the PCM Ticket Info Extractor script.
+// @note = Renamed from PCM Organisation Copy Buttons in v3.6, when the Attributes > Organisation button was dropped and the script became Forms only.
 
 (function () {
   'use strict';
@@ -32,7 +28,7 @@
   }
 
   const SCRIPT_NAME = 'PCM Form Buttons';
-  const SCRIPT_VERSION = '4.7_2026-11-04';
+  const SCRIPT_VERSION = '4.8_2026-11-27';
   const REQUIRED_SCRIPT_NAME = 'PCM Ticket Info Extractor';
 
   const FORMS_INJECT_ID = 'kardo-forms-customer-copy';

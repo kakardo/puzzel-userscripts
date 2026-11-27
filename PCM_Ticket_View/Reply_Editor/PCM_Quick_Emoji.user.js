@@ -1,12 +1,7 @@
-// @file_name = PCM_Quick_Emoji.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-28
-// @created = 2026-10-28 13:43
-
 // ==UserScript==
 // @name         PCM Quick Emoji
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-28
+// @version      1.1_2026-11-27
 // @description  Adds one-press emoji buttons to the reply editor's toolbar, right after the emoji picker button, so a favourite emoji goes in where the cursor is without opening the picker. Starts with the smiling face; more are a list at the top. Uses the editor's own button style and inserts at the live cursor like typing, so rapid presses each add one and undo works as usual. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Quick_Emoji.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Quick_Emoji.user.js
 // ==/UserScript==
+
+// @created = 2026-10-28 13:43
 
 (function () {
     'use strict';

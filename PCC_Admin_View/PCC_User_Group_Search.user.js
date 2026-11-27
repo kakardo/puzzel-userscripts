@@ -1,12 +1,7 @@
-// @file_name = PCC_User_Group_Search.user.js
-// @author = Kardo Rostam
-// @version = 1.1_2026-09-08
-// @created = 2026-09-08 08:24
-
 // ==UserScript==
 // @name         PCC User Group Search
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-09-08
+// @version      1.2_2026-11-27
 // @description  Adds a search box above the User Group dropdown on the Puzzel Admin Add User and Edit User pages. Typing opens a panel listing EVERY matching group; click one or use arrow keys plus Enter to pick it (a change event fires so the page registers it). Escape closes and clears, no match shows a red edge, and the native dropdown itself is never modified. Standalone: the Admin console is server-rendered, so a bounded boot is all the machinery needed, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/admin/UsersUsers/NewUser*
@@ -14,8 +9,9 @@
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Admin_View/PCC_User_Group_Search.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Admin_View/PCC_User_Group_Search.user.js
 // ==/UserScript==
+
+// @created = 2026-09-08 08:24
 
 (function () {
     'use strict';

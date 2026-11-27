@@ -1,12 +1,7 @@
-// @file_name = PCM_Last_Activity_Sort.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-01
-// @created = 2026-10-01 11:13
-
 // ==UserScript==
 // @name         PCM Last Activity Sort
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-01
+// @version      1.1_2026-11-27
 // @description  Makes the Last Activity column in the tickets list sortable. The server already sorts by it (the column carries the last_activity sort name), PCM only marks it as not orderable, so this re-enables ordering on the DataTables column: click the header to sort the whole list, shift-click to add it as a sub-sort. PCM drops such a sort on reload, so a sort that includes an unlocked column is remembered in localStorage and put back after the table has loaded. More columns can be listed in UNLOCK_COLUMNS. Event-driven: reapplies on DataTables re-init, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -15,8 +10,9 @@
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Last_Activity_Sort.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Last_Activity_Sort.user.js
 // ==/UserScript==
+
+// @created = 2026-10-01 11:13
 
 (function () {
     'use strict';

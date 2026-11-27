@@ -1,12 +1,7 @@
-// @file_name = PCM_Dark_Mode_(Ticket_List).user.js
-// @author = Kardo Rostam
-// @version = 7.1_2026-11-04
-// @created = 2026-03-26 (v5.5)
-
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket List)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      7.1_2026-11-04
+// @version      7.2_2026-11-27
 // @description  Dark mode for Puzzel Tickets using stable blue stripes plus CSS-based SLA alert row colors. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the observer rescopes from body to the table wrapper once DataTables renders. The on/off toggle sits in the top bar left of the profile picture (BUTTON_PLACEMENT), falling back to the bottom-right corner when the top bar is not found. The toggle is also shown on ticket, customer and organisation pages, where it marks the page data-pz-dark-mode on/off for PCM Dark Mode (Ticket, Org, Customer Background) to follow; no table work or observers run there.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -21,8 +16,9 @@
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/Dark_Mode/PCM_Dark_Mode_(Ticket_List).user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/Dark_Mode/PCM_Dark_Mode_(Ticket_List).user.js
 // ==/UserScript==
+
+// @created = 2026-03-26 (v5.5)
 
 (() => {
   'use strict';

@@ -1,20 +1,16 @@
-// @file_name = PCM_Image_Viewer.user.js
-// @author = Kardo Rostam
-// @version = 2.4_2026-11-17
-// @created = 2026-09-03 09:43
-
 // ==UserScript==
 // @name         PCM Image Viewer
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.4_2026-11-17
+// @version      2.5_2026-11-27
 // @description  Upgrades the attachment preview modal on the ticket view. Adds an Open in tab button beside Download (same style, own colour) linking the previewed attachment, zoom controls for image previews (one split button with zoom out on the left, the current zoom in per cent in the middle and zoom in on the right, and one button that shows the image at its actual size, reading 1:1, and once pressed or zoomed reads Fit and fits it back, always at the same width so the row never moves), and drag to pan: grab the image and drag to scroll around it when zoomed. The preview window fills the browser window (a small margin around it), and an image opens fitted to all of that space, in width and height, centred (small images are enlarged too, FIT_UPSCALE at the top turns that off); it fits again when the window is resized. The window's size rules are in place from the start and the attachment stays hidden until it is fitted, so nothing jumps from the normal size to the large one. Escape closes the preview, also while the attachment itself has the focus. PCM's small close cross is replaced by a close button at the right end of the row, in the same style as the others (grey), with the cross and a small "Esc" under it, both centred. The preview is a same-origin iframe, so zoom and pan act on the image document inside it directly, and controls appear only when the previewed attachment is an image. Purely event-driven via shown.bs.modal and the iframe load event: zero cost while no preview is open, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Image_Viewer.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Image_Viewer.user.js
 // ==/UserScript==
+
+// @created = 2026-09-03 09:43
 
 (function () {
     'use strict';

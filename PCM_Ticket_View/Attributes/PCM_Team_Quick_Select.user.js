@@ -1,12 +1,7 @@
-// @file_name = PCM_Team_Quick_Select.user.js
-// @author = Kardo Rostam
-// @version = 3.9_2026-11-18
-// @created = 2026-08-27 12:59
-
 // ==UserScript==
 // @name         PCM Team Quick Select
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      3.9_2026-11-18
+// @version      4.0_2026-11-27
 // @description  Adds one-click buttons that select a configured team in the Chosen widget. Teams are a config array at the top, and BUTTON_PLACEMENT puts the row below the dropdown (default) or inline beside the Team: label. The button for the currently selected team is marked active. A bubble can also set a Status at the same press, and the Puzzel Service in the Forms widget for teams that belong to one service (set once PCM has finished reloading the Forms widget for the new team, and again if a reload in the next 8 seconds puts the old one back; the Forms widget's fields are hidden meanwhile behind a short "Updating Puzzel Service" note at a fixed height, and fade back in once, so its reloads never show; left as an unsaved change, so PCM Unsaved Form Warning rings it red until you save. When the ticket's form has no Puzzel Service field yet, the service is remembered and set as soon as you pick a Form that has the field, as long as the team is still the same and the field is still Unassigned). A bubble can also clear Assigned To: at once, and again whenever PCM's reload for the new team puts a name back during the next 8 seconds (a pick by hand or Save ends that): Agent does. A team change is reported to PCM once. A press made before PCM has finished preparing the form (the first moment after a ticket opens) is ignored and the bubble says Loading, since PCM would otherwise take the new team as the saved one and keep Save grey; after each change PCM is asked to re-check the form. You still press Save. With SAVE_RIGHT_AWAY at the top turned on (off by default), PCM's Save in Attributes is pressed right away instead, once PCM has reloaded Assigned To for the new team (no requests running; at most 8 seconds); this saves every change in the Attributes form, and PCM Unsaved Attributes Warning is told so.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Team_Quick_Select.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Team_Quick_Select.user.js
 // ==/UserScript==
+
+// @created = 2026-08-27 12:59
 
 (function () {
   'use strict';

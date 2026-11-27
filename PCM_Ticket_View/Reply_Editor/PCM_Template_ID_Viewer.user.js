@@ -1,20 +1,16 @@
-// @file_name = PCM_Template_ID_Viewer.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-09-01
-// @created = 2026-09-01 11:32
-
 // ==UserScript==
 // @name         PCM Template ID Viewer
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-09-01
+// @version      1.1_2026-11-27
 // @description  Shows the numeric template id of the currently selected entry in PCM's Insert Template modal, next to the dropdown. Click the badge to copy the id (ready for PCM_TEMPLATE_BUTTONS in PCM Mail Templates). Purely event-driven via Bootstrap's shown.bs.modal and the select's change event: zero cost while no modal is open, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Template_ID_Viewer.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Template_ID_Viewer.user.js
 // ==/UserScript==
+
+// @created = 2026-09-01 11:32
 
 (function () {
     'use strict';

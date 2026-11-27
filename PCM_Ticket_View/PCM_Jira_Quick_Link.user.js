@@ -1,12 +1,7 @@
-// @file_name = PCM_Jira_Quick_Link.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-15
-// @created = 2026-10-15 14:57
-
 // ==UserScript==
 // @name         PCM Jira Quick Link
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-15
+// @version      1.1_2026-11-27
 // @description  Adds a split button right of Link Issue in the Jira widget. The key half fills the field with your saved Jira key, lets PCM know it was typed (PCM enables Link Issue on a key press), waits until PCM has finished its own requests and presses Link Issue; it checks that PCM really sent the link and otherwise tries once more, then says "Press Link Issue", so one press links the ticket. The arrow on its right turns the button into a small text box: type the key and press Enter (Esc cancels); the key is remembered in this browser. With no key saved yet the button reads "Set key" and opens the text box. When another issue is linked, one press replaces it: PCM's own unlink is pressed first, and the new key is linked once PCM has finished unlinking (nothing more happens if the unlink fails). When the saved key is the one already linked, nothing is done. The button only shows while the key field is there and comes back by itself when PCM reloads the widget. Event-driven: one scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Jira_Quick_Link.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Jira_Quick_Link.user.js
 // ==/UserScript==
+
+// @created = 2026-10-15 14:57
 
 (function () {
     'use strict';

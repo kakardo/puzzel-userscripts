@@ -1,12 +1,7 @@
-// @file_name = PCM_Unsaved_Form_Warning.user.js
-// @author = Kardo Rostam
-// @version = 2.0_2026-11-16
-// @created = 2026-08-27 09:37
-
 // ==UserScript==
 // @name         PCM Unsaved Form Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.0_2026-11-16
+// @version      2.1_2026-11-27
 // @description  Snapshot-based unsaved change detection for the ticket Forms widget. Highlights every field whose value differs from the loaded state (including values typed by the Form Buttons autofill) and shows a warning text next to the Save button. When every unsaved field is a correction PCM Form Buttons made to a saved value (its orange ring), the warning reads "Corrected values, please save" in orange instead (needs lib 2.4; with an older lib the normal warning shows). Highlight colour/mode and warning texts are settings at the top. Since 1.5 the watcher engine lives in the shared library (createUnsavedWatcher), so this script only supplies the Forms zone configuration and styling; Save clicks clear this zone only. Since 2.0 it also catches a failed Forms load: when PCM's server answers a request for (part of) the form with an error (seen as a 502 for the fields under Puzzel Service), PCM leaves its loading overlay up for good; the overlay is then taken away and a short note with "Try again" asks PCM for that part once more (or offers a page reload when the field cannot be found). Event-driven via jQuery's ajaxComplete, only acting on a failed form request.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Unsaved_Form_Warning.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Unsaved_Form_Warning.user.js
 // ==/UserScript==
+
+// @created = 2026-08-27 09:37
 
 (function () {
   'use strict';

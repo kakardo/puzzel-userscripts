@@ -1,22 +1,18 @@
-// @file_name = PCM_No_Autoscroll.user.js
-// @author = Kardo Rostam
-// @version = 2.3_2026-10-30
-// @created = 2026-02-06 (v1.0)
-// @note = Continues PCM Ticket Anti-Autoscroll (1.0), which hid the Timeline and pulled the page up every frame while loading. From 2.0 the jump itself is stopped instead.
-// @note = run-at document-start on purpose: the guard has to be in place before PCM's own code runs, or the jump has already happened.
-
 // ==UserScript==
 // @name         PCM No Autoscroll
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.3_2026-10-30
+// @version      2.4_2026-11-27
 // @description  Stops a ticket from jumping down to the Timeline when it opens; the page stays at the top. While the ticket loads, page scrolls started by code are ignored and a field that takes focus does not pull the page along. A jump that still happens (for example from the browser itself) is undone once. Stays on for 20 seconds after opening. Your own scrolling (wheel, touch, scrollbar, scroll keys) always works and does not end it, so scrolling a little while the ticket loads no longer lets the later jump through; once you have scrolled, the page is never pulled back up. Clicking or typing does not end it either. Links to a specific note (an address with #) still go to that note; PCM's own #collapse-... parts, which it adds when a mail is opened, do not count as such a link. Set localStorage 'pcm-no-autoscroll-debug' to '1' to log in the console what was stopped and where it came from.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-start
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_No_Autoscroll.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_No_Autoscroll.user.js
 // ==/UserScript==
+
+// @created = 2026-02-06 (v1.0)
+// @note = Continues PCM Ticket Anti-Autoscroll (1.0), which hid the Timeline and pulled the page up every frame while loading. From 2.0 the jump itself is stopped instead.
+// @note = run-at document-start on purpose: the guard has to be in place before PCM's own code runs, or the jump has already happened.
 
 (function () {
     'use strict';

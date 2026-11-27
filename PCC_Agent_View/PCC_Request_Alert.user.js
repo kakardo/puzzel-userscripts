@@ -1,20 +1,16 @@
-// @file_name = PCC_Request_Alert.user.js
-// @author = Kardo Rostam
-// @version = 1.1_2026-11-27
-// @created = 2026-10-06 13:56
-
 // ==UserScript==
 // @name         PCC Request Alert
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-11-27
+// @version      1.2_2026-11-27
 // @description  Alerts you when your status leaves Ready (a call or chat was offered or accepted), and optionally when a new chat request arrives (the + in "(0+)"). Ringtone with volume, built-in tones or your own sound, plus optional desktop notification, flashing tab title and screen flash. Settings in the code and under the main menu (the three lines, top left). Changing your status yourself does not trigger it, and neither does a narrow window: there the agent app reuses the status text for your profile name, so only text in the status form "Name (0)" counts as a status. A bell (under the main menu icon, next to your status, or hidden) and a switch in the settings turn it on and off.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent/*
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Request_Alert.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Request_Alert.user.js
 // ==/UserScript==
+
+// @created = 2026-10-06 13:56
 
 (function () {
     'use strict';

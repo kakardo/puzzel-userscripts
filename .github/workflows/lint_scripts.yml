@@ -1,12 +1,12 @@
 # @file_name = lint_scripts.yml
 # @author = Kardo Rostam
-# @version = 1.0_2026-08-27
+# @version = 1.1_2026-11-27
 # @created = 2026-08-27 06:20
 
 # Runs on every push and pull request: syntax-checks every userscript with
-# node, then enforces the repo rules (uniform headers, version format, both
-# @version fields matching, correct download/update URLs, no em/en dashes,
-# version bumped on change, DOM library cascade) via tools/lint_scripts.py.
+# node, then enforces the repo rules (uniform headers, version format,
+# correct @downloadURL, no em/en dashes, version bumped on change) via
+# tools/lint_scripts.py.
 
 name: Lint scripts
 

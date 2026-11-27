@@ -1,22 +1,23 @@
 # @file_name = lint_scripts.py
 # @author = Kardo Rostam
-# @version = 1.3_2026-10-08
+# @version = 1.4_2026-11-27
 # @created = 2026-08-27 06:20
 
 # Lints every userscript against the repo rules:
-#   - metadata block: @file_name matches the real filename, @author, @version
-#     in X.Y_YYYY-MM-DD format with a single-digit minor, @created present
-#   - uniform ==UserScript== block: fixed key order, shared @namespace,
-#     both @version fields identical, @downloadURL/@updateURL matching the
-#     file's actual repo path (DOM library exempt: it has no block)
-#   - @run-at document-idle; document-start only with a metadata @note
-#     that explains why (since 1.3, for scripts that must act before
-#     PCM's own code, e.g. stopping its scroll on load)
+#   - the file starts with the ==UserScript== block: fixed key order, shared
+#     @namespace, @author, @version in X.Y_YYYY-MM-DD format with a
+#     single-digit minor, and @downloadURL matching the file's actual repo
+#     path (which also covers the file name). No @updateURL: Tampermonkey
+#     checks @downloadURL for updates when it is missing.
+#   - right under the block, after one blank line: // @created = ..., then
+#     any // @note = ... (or // @dependency = ...) lines directly below it,
+#     then a blank line before the code. These labels appear nowhere else.
+#   - @run-at document-idle; document-start only with an @note that
+#     explains why (for scripts that must act before the page's own code)
+#   - the shared library has no ==UserScript== block, so it keeps the
+#     labels at the top instead: @file_name, @author, @version, @created
 #   - no em dashes or en dashes anywhere (also checked in .md and .yml)
 #   - with --check-bump (CI): changed scripts must have a bumped @version.
-#     (The library cascade check was removed in 1.2: per the repo rules,
-#     unchanged requiring scripts are refreshed manually in Tampermonkey
-#     instead of being version-bumped.)
 #
 # Usage: python3 tools/lint_scripts.py [--check-bump]
 
@@ -30,10 +31,13 @@ RAW = "https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/"
 NAMESPACE = "https://github.com/kakardo/puzzel-userscripts"
 AUTHOR = "Kardo Rostam"
 VERSION_RE = re.compile(r"^\d+\.\d_\d{4}-\d{2}-\d{2}$")
-DASHES = "–—"
+DASHES = "\u2013\u2014"
 BLOCK_KEY_ORDER = ["name", "namespace", "version", "description", "author",
-                   "match", "run-at", "require", "grant", "downloadURL", "updateURL"]
+                   "match", "run-at", "require", "grant", "downloadURL"]
 OPTIONAL_KEYS = {"require"}
+REQUIRED_KEYS = [key for key in BLOCK_KEY_ORDER if key not in OPTIONAL_KEYS]
+LABEL_RE = re.compile(r"^// @([A-Za-z_]+) = ")
+UNDER_BLOCK_LABELS = {"note", "dependency"}
 LIB_RELPATH = "PCM_Shared_Library/PCM_Shared_Library.user.js"
 
 errors = []
@@ -87,30 +91,70 @@ def parse_block(lines):
     return start, end, entries
 
 
+def version_of(content):
+    """The @version of a file: from its block, or from the top labels
+    (the shared library, and files from before 1.4)."""
+    lines = content.split("\n")
+    start, end, entries = parse_block(lines)
+    if entries:
+        for key, value in entries:
+            if key == "version":
+                return value
+    return meta_value(lines, "version")
+
+
+def check_library(relpath, lines):
+    if meta_value(lines, "file_name") != relpath.split("/")[-1]:
+        err(relpath, "@file_name missing or not the real file name")
+    if meta_value(lines, "author") != AUTHOR:
+        err(relpath, "@author missing or wrong")
+    version = meta_value(lines, "version")
+    if not version or not VERSION_RE.match(version):
+        err(relpath, "@version %r does not match X.Y_YYYY-MM-DD" % version)
+    if not meta_value(lines, "created"):
+        err(relpath, "@created missing")
+
+
+def check_under_block(relpath, lines, end):
+    """@created, then the notes, right under the block."""
+    rest = lines[end + 1:]
+    if len(rest) < 2 or rest[0] != "" or not rest[1].startswith("// @created = "):
+        err(relpath, "@created must follow the block after one blank line")
+        return []
+    group = []
+    for line in rest[2:]:
+        match = LABEL_RE.match(line)
+        if not match:
+            break
+        if match.group(1) not in UNDER_BLOCK_LABELS:
+            err(relpath, "unexpected label @%s under the block" % match.group(1))
+        group.append(line)
+    after = 2 + len(group)
+    if after < len(rest) and rest[after] != "":
+        err(relpath, "a blank line must follow the notes, before the code")
+    expected = 1 + len(group)
+    found = sum(1 for line in lines if LABEL_RE.match(line))
+    if found != expected:
+        err(relpath, "@created and @note lines must sit together, @created first, "
+                     "right under the block, and nowhere else")
+    return group
+
+
 def check_userscript(relpath):
     content = read(relpath)
     check_dashes(relpath, content)
     lines = content.split("\n")
 
-    filename = relpath.split("/")[-1]
-    fn = meta_value(lines, "file_name")
-    if fn != filename:
-        err(relpath, "@file_name is %r, expected %r" % (fn, filename))
-    if meta_value(lines, "author") != AUTHOR:
-        err(relpath, "metadata @author missing or wrong")
-    version = meta_value(lines, "version")
-    if not version or not VERSION_RE.match(version):
-        err(relpath, "metadata @version %r does not match X.Y_YYYY-MM-DD" % version)
-    if not meta_value(lines, "created"):
-        err(relpath, "metadata @created missing")
-
     if relpath == LIB_RELPATH:
+        check_library(relpath, lines)
         return  # library has no ==UserScript== block by design
 
     start, end, entries = parse_block(lines)
     if start is None:
         err(relpath, "missing ==UserScript== block")
         return
+    if start != 0:
+        err(relpath, "the file must start with the ==UserScript== block")
 
     keys = [key for key, _ in entries]
     values = dict(entries)  # last wins; fine for single-value keys checked below
@@ -125,28 +169,29 @@ def check_userscript(relpath):
     if order_positions != sorted(order_positions):
         err(relpath, "block keys out of the fixed order")
 
-    for required in ["name", "namespace", "version", "description", "author",
-                     "match", "run-at", "grant", "downloadURL", "updateURL"]:
+    for required in REQUIRED_KEYS:
         if required not in keys:
             err(relpath, "block missing @" + required)
 
     if values.get("namespace") != NAMESPACE:
         err(relpath, "@namespace is %r, expected %r" % (values.get("namespace"), NAMESPACE))
     if values.get("author") != AUTHOR:
-        err(relpath, "block @author missing or wrong")
-    if values.get("version") != version:
-        err(relpath, "block @version %r differs from metadata %r" % (values.get("version"), version))
+        err(relpath, "@author missing or wrong")
+    version = values.get("version")
+    if not version or not VERSION_RE.match(version):
+        err(relpath, "@version %r does not match X.Y_YYYY-MM-DD" % version)
+
+    notes = check_under_block(relpath, lines, end)
     run_at = values.get("run-at")
-    explained_start = any(line.startswith("// @note = ") and "document-start" in line for line in lines)
+    explained_start = any(line.startswith("// @note = ") and "document-start" in line for line in notes)
     if run_at == "document-start" and not explained_start:
-        err(relpath, "@run-at document-start needs a metadata @note explaining why")
+        err(relpath, "@run-at document-start needs an @note explaining why")
     elif run_at not in ("document-idle", "document-start"):
         err(relpath, "@run-at must be document-idle")
 
     expected_url = RAW + relpath
-    for key in ("downloadURL", "updateURL"):
-        if key in values and values[key] != expected_url:
-            err(relpath, "@%s is %r, expected %r" % (key, values[key], expected_url))
+    if "downloadURL" in values and values["downloadURL"] != expected_url:
+        err(relpath, "@downloadURL is %r, expected %r" % (values["downloadURL"], expected_url))
 
 
 def head_parent_exists():
@@ -176,8 +221,8 @@ def check_bumps():
         new = git_show("HEAD", relpath)
         if new is None:
             continue  # deleted file
-        old_version = meta_value(old.split("\n"), "version")
-        new_version = meta_value(new.split("\n"), "version")
+        old_version = version_of(old)
+        new_version = version_of(new)
         if old_version == new_version:
             err(relpath, "changed without bumping @version (still %r)" % new_version)
 

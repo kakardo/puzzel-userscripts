@@ -1,12 +1,7 @@
-// @file_name = PCM_Change_Completed_Now.user.js
-// @author = Kardo Rostam
-// @version = 1.5_2026-10-29
-// @created = 2026-09-02 13:43
-
 // ==UserScript==
 // @name         PCM Change Completed Now
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.5_2026-10-29
+// @version      1.6_2026-11-27
 // @description  Adds a small Now button beside the Change Completed label in the Forms widget (rendered when Form is Change). Pressing it fills the field with the current date and time in the agent's local time with the timezone visible (2026-09-02 15:47 BST), or in GMT for everyone via the TIMESTAMP_MODE setting. Field and label texts are settings at the top. Event-driven: a widget-scoped MutationObserver behind the shared visibility gate re-adds the button after re-renders, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Change_Completed_Now.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Forms/PCM_Change_Completed_Now.user.js
 // ==/UserScript==
+
+// @created = 2026-09-02 13:43
 
 (function () {
     'use strict';

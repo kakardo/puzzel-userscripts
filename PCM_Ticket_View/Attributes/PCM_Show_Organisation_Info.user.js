@@ -1,20 +1,16 @@
-// @file_name = PCM_Show_Organisation_Info.user.js
-// @author = Kardo Rostam
-// @version = 1.1_2026-10-08
-// @created = 2026-10-08 08:45
-
 // ==UserScript==
 // @name         PCM Show Organisation Info
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-10-08
+// @version      1.2_2026-11-27
 // @description  Shows the Organisation Information module right after you save an organisation in Attributes, without reloading the page. PCM only builds that module when the page loads, so on a ticket that had no organisation it stayed missing until a reload. After an Attributes save that changed the organisation, the script loads the ticket page once in the background and puts its Organisation Information module in place (or updates it, or removes it when the organisation was cleared). Event-driven via jQuery's ajaxComplete: no observers, no polling, one background request per organisation change. Afterwards it signals the PCM Ticket Info Extractor (event pcm-organisation-info-refreshed) to read the ticket again, so the scripts that use its values update too.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Show_Organisation_Info.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Show_Organisation_Info.user.js
 // ==/UserScript==
+
+// @created = 2026-10-08 08:45
 
 (function () {
     'use strict';

@@ -1,12 +1,7 @@
-// @file_name = Puzzel_Styler_(Ticket_Field).user.js
-// @author = Kardo Rostam
-// @version = 4.4_2026-11-03
-// @created = 2026-03-31 00:00
-
 // ==UserScript==
 // @name         Puzzel Styler (Ticket Field)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      4.4_2026-11-03
+// @version      4.5_2026-11-27
 // @description  Highlights Assigned-To, Status and Priority fields with safer refresh after programmatic updates and scroll return. Priority uses the same colours as the priority badges in the tickets list (Junk grey, Lowest light blue, Low blue, Normal green, High orange, Highest red), for the field and for each entry in its open list. A click on Priority opens the script's own list in the same style as the Priority search in the tickets list (rounded colour blocks, the current one faded, a white ring under the mouse); a pick sets the field like a pick by hand, and the keyboard keeps the browser's own behaviour.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/Puzzel_Styler_(Ticket_Field).user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/Puzzel_Styler_(Ticket_Field).user.js
 // ==/UserScript==
+
+// @created = 2026-03-31 00:00
 
 (function() {
     'use strict';

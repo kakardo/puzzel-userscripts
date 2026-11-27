@@ -1,12 +1,7 @@
-// @file_name = PCM_Unsaved_Attributes_Warning.user.js
-// @author = Kardo Rostam
-// @version = 1.7_2026-11-18
-// @created = 2026-09-04 15:43
-
 // ==UserScript==
 // @name         PCM Unsaved Attributes Warning
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.7_2026-11-18
+// @version      1.8_2026-11-27
 // @description  Snapshot-based unsaved change detection for the ticket Attributes widget, built on the shared library's createUnsavedWatcher engine (lib 2.0). Highlights changed fields and dropdowns (including the Chosen-based Team select, where the ring lands on the visible container) and shows a warning next to the Attributes Save button. Saving in Attributes clears only this widget's warning. Colour, mode, and text are settings at the top. Since 1.3, SELF_SAVING_BUTTONS treats a real click on a header control that persists an Attributes value by itself (Assign To Me) as a save: the baseline is rebased once the new value lands, so the field is not left marked unsaved. Since 1.5, a save pressed by PCM Assign Buttons or PCM Team Quick Select (announced with the pcm-attributes-save event) also counts as a save. Since 1.7 it also catches a failed Attributes load: when PCM's server answers the request for the new team's Assigned To or Categories list with an error, PCM can leave its loading overlay up for good; the overlay is then taken away and a short note with "Try again" asks PCM for that list once more (or offers a page reload when the field cannot be found). Event-driven via jQuery's ajaxComplete, only acting on a failed request.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -14,8 +9,9 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Unsaved_Attributes_Warning.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Unsaved_Attributes_Warning.user.js
 // ==/UserScript==
+
+// @created = 2026-09-04 15:43
 
 (function () {
   'use strict';

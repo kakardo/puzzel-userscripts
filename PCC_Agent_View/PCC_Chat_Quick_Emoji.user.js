@@ -1,20 +1,16 @@
-// @file_name = PCC_Chat_Quick_Emoji.user.js
-// @author = Kardo Rostam
-// @version = 1.1_2026-11-27
-// @created = 2026-11-27 09:40
-
 // ==UserScript==
 // @name         PCC Chat Quick Emoji
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.1_2026-11-27
+// @version      1.2_2026-11-27
 // @description  One-press emoji buttons in the agent application's chat, in the row under the message box right after its own buttons (emoji picker, attachment and the rest), like PCM Quick Emoji does for PCM replies. A press puts the emoji where the cursor is in the message, as if typed, so the chat sees it as normal text; the cursor stays in the message. Each also has a shortcut: typing :1, :2 and so on (after a space or at the start of a line) changes it into the emoji at that place in the row right away; hovering a button shows its shortcut. The emojis are a list at the top. The buttons appear as soon as a chat is on screen: checked a few times after the page has loaded, and shortly after each click on the page (opening or switching to a chat) and each time the message box gets the focus, so they also come back if the application redraws the chat. Event-driven: one click and one focus listener on the page, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://app.puzzel.com/agent*
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Chat_Quick_Emoji.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCC_Agent_View/PCC_Chat_Quick_Emoji.user.js
 // ==/UserScript==
+
+// @created = 2026-11-27 09:40
 
 (function () {
     'use strict';

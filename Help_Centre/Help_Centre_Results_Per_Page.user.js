@@ -1,22 +1,18 @@
-// @file_name = Help_Centre_Results_Per_Page.user.js
-// @author = Kardo Rostam
-// @version = 1.7_2026-11-19
-// @created = 2026-11-19 10:02
-// @note = run-at document-start on purpose: the Help Centre's settings are fetched while the page loads, and fetch has to be wrapped before that to change the number of search results per page.
-// @note = The tree view and the compact layout it held in 1.4 to 1.6 are their own scripts since 1.7: Help Centre Tree View and Help Centre Compact Layout.
-
 // ==UserScript==
 // @name         Help Centre Results Per Page
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.7_2026-11-19
+// @version      1.8_2026-11-27
 // @description  Shows more search results per page in the Puzzel Help Centre knowledge base: 20 instead of 5, with a "Results per page" dropdown next to the result count (5, 10, 20 or 25). The Help Centre reads the number from its own settings file when the page loads; the script changes that number in the file as it arrives, so the knowledge base itself shows the chosen number, with its own paging. The choice is remembered in this browser; changing it reloads the results once. The server returns at most 25 results per search, so 25 is the highest choice, and at that limit a short note beside the count says "max reached, more may exist, refine your search". Event-driven: one fetch wrapper that only touches the settings file, and one observer on the knowledge base area that puts the dropdown back when the results are redrawn.
 // @author       Kardo Rostam
 // @match        https://www.puzzel.com/help*
 // @run-at       document-start
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Help_Centre/Help_Centre_Results_Per_Page.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Help_Centre/Help_Centre_Results_Per_Page.user.js
 // ==/UserScript==
+
+// @created = 2026-11-19 10:02
+// @note = run-at document-start on purpose: the Help Centre's settings are fetched while the page loads, and fetch has to be wrapped before that to change the number of search results per page.
+// @note = The tree view and the compact layout it held in 1.4 to 1.6 are their own scripts since 1.7: Help Centre Tree View and Help Centre Compact Layout.
 
 (function () {
     'use strict';

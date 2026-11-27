@@ -1,13 +1,7 @@
-// @file_name = Geckoboard_Keep_Last_Data.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-13
-// @created = 2026-10-13 14:08
-// @note = run-at document-start on purpose: fetch has to be wrapped before Geckoboard's own code takes its reference to it, or its data requests go past the wrapper.
-
 // ==UserScript==
 // @name         Geckoboard Keep Last Data
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-13
+// @version      1.1_2026-11-27
 // @description  Stops a Geckoboard widget from switching to "Failed to load widget data" when one data refresh fails. Geckoboard's data server sometimes answers a widget's refresh with a server error (for example 520). The request is then tried again after 1 and 3 seconds; if it still fails, the widget gets the last data that did load, so it keeps showing numbers. A widget whose data request has never succeeded keeps what it already shows (its first data comes with the page and the live connection): the failed request is left unanswered instead of handing Geckoboard the error. Either way a small note in the bottom-left corner says which widgets could not refresh and since when. The last good data is kept for the browser tab (sessionStorage), so a reload during an outage still has something to show. The shared page only frames the dashboard, which loads from app.geckoboard.com and makes the data requests there, so the script runs in that frame. Only GET requests to Geckoboard's widget data addresses are touched. No observers, no polling: work happens only when Geckoboard itself asks for data.
 // @author       Kardo Rostam
 // @match        https://share.geckoboard.com/dashboards/*
@@ -15,8 +9,10 @@
 // @run-at       document-start
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Geckoboard/Geckoboard_Keep_Last_Data.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Geckoboard/Geckoboard_Keep_Last_Data.user.js
 // ==/UserScript==
+
+// @created = 2026-10-13 14:08
+// @note = run-at document-start on purpose: fetch has to be wrapped before Geckoboard's own code takes its reference to it, or its data requests go past the wrapper.
 
 (function () {
     'use strict';

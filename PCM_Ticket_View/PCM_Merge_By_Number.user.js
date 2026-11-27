@@ -1,21 +1,17 @@
-// @file_name = PCM_Merge_By_Number.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-07
-// @created = 2026-10-07 09:19
-// @note = Why: PCM's Merge Tickets search list leaves out some tickets, so they cannot be picked even though PCM accepts a merge into them (seen with tickets generated from incoming mail). Limitation: the script only fills in the ticket to merge into; PCM still decides. A ticket created by hand in PCM has no initial channel and cannot be merged at all: PCM refuses to merge into it ("Could not merge into ticket without initial channel"), hides the Merge option on it, and also refuses a merge sent from it ("Could not merge ticket without initial channel"). Tested both ways; this is enforced by PCM, not only hidden in the page. Use Parent and Child Tickets to link such tickets instead.
-
 // ==UserScript==
 // @name         PCM Merge By Number
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-07
+// @version      1.1_2026-11-27
 // @description  Adds a "merge into ticket number" field to PCM's Merge Tickets window, for when the search list does not show the ticket you want. Needed because PCM's search list leaves out some tickets that PCM does accept as merge targets (seen with tickets generated from incoming mail). Type the number and press Use: the ticket is looked up to confirm it exists and its title is shown, then it is put in the window exactly as if you had picked it from the list. You still press PCM's own Merge button, so the merge goes through PCM's normal request and checks. Limitation: a ticket created by hand in PCM (no initial channel) cannot be merged in either direction; PCM refuses it, so link it with Parent and Child Tickets instead. Optional (a tick box in the window, off by default): when you type a number in PCM's own search field and the ticket is not in its list, the script looks it up and tells you to use its field instead. Event-driven via Bootstrap's shown.bs.modal: zero cost while the window is closed, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Merge_By_Number.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Merge_By_Number.user.js
 // ==/UserScript==
+
+// @created = 2026-10-07 09:19
+// @note = Why: PCM's Merge Tickets search list leaves out some tickets, so they cannot be picked even though PCM accepts a merge into them (seen with tickets generated from incoming mail). Limitation: the script only fills in the ticket to merge into; PCM still decides. A ticket created by hand in PCM has no initial channel and cannot be merged at all: PCM refuses to merge into it ("Could not merge into ticket without initial channel"), hides the Merge option on it, and also refuses a merge sent from it ("Could not merge ticket without initial channel"). Tested both ways; this is enforced by PCM, not only hidden in the page. Use Parent and Child Tickets to link such tickets instead.
 
 (function () {
     'use strict';

@@ -1,13 +1,7 @@
-// @file_name = PCM_Organisation_Quick_Search.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-01
-// @created = 2026-10-01 10:27
-// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
-
 // ==UserScript==
 // @name         PCM Organisation Quick Search
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-01
+// @version      1.1_2026-11-27
 // @description  Adds one-click search buttons under Attributes > Organisation. A button opens the Organisation dropdown and types its text into the search box: the Customer ID found by the PCM Ticket Info Extractor, the Customer ID the customer entered in Forms (shown only when it differs), and fixed search strings from the SEARCH_BUTTONS config. When the search returns exactly one organisation it is picked automatically; otherwise the dropdown stays open with the results. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -15,8 +9,10 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Organisation_Quick_Search.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Attributes/PCM_Organisation_Quick_Search.user.js
 // ==/UserScript==
+
+// @created = 2026-10-01 10:27
+// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 (function () {
   'use strict';

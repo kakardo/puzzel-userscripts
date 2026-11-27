@@ -1,14 +1,7 @@
-// @file_name = PCM_New_Ticket_Notifier.user.js
-// @author = Kardo Rostam
-// @version = 2.7_2026-11-27
-// @created = 2026-04-24 (v1.0)
-// @note = Paused since 2.5: switched off with ENABLED at the top; it does nothing while that is false.
-// @note = @name has no [Paused] on purpose: Tampermonkey knows a script by its name, so a new name would install it as a new script.
-
 // ==UserScript==
 // @name         PCM New Ticket Notifier
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.7_2026-11-27
+// @version      2.8_2026-11-27
 // @description  PAUSED: it does nothing until ENABLED at the top is set to true. Shows persistent alerts with priority and title when new tickets appear in the PCM ticket list. Alerting keeps working in hidden tabs; the 15s background timer is a cheap watchdog instead of a full rescan.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets
@@ -17,8 +10,11 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_New_Ticket_Notifier.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_New_Ticket_Notifier.user.js
 // ==/UserScript==
+
+// @created = 2026-04-24 (v1.0)
+// @note = Paused since 2.5: switched off with ENABLED at the top; it does nothing while that is false.
+// @note = @name has no [Paused] on purpose: Tampermonkey knows a script by its name, so a new name would install it as a new script.
 
 (function() {
     'use strict';
@@ -41,7 +37,7 @@
 
     const SCRIPT = {
         name: '[Paused] PCM New Ticket Notifier',
-        version: '2.7_2026-11-27'
+        version: '2.8_2026-11-27'
     };
 
     const CONFIG = {

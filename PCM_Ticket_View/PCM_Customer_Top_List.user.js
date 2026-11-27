@@ -1,14 +1,7 @@
-// @file_name = PCM_Customer_Top_List.user.js
-// @author = Kardo Rostam
-// @version = 2.5_2026-11-17
-// @created = 2026-11-02 12:03
-// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails, companies, account ids and ticket counts are read from the page at runtime and kept only in this browser's Tampermonkey storage, never written here.
-// @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
-
 // ==UserScript==
 // @name         PCM Customer Top List
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      2.5_2026-11-17
+// @version      2.6_2026-11-27
 // @description  Adds a "Top" button to PCM's top bar, right of Help and in the same style, placed as early as possible while the page loads and faded in, so it does not pop up. It opens two lists of the customers with the most tickets: the last 30 days (with that share of their all-time total in per cent) and all time, split into steps by ticket count (1000+, 500+, 200+, 100+, 50+, 20+, Under 20; SCALE at the top), each step under a heading in its own colour from red to blue. The lists are built as you work: when you open a ticket, the customer's ticket list (the same list PCM loads for Customer Tickets, shared with PCM Customer Ticket Count and PCM Customer ID Reminder, so no extra request when they are installed) is read once, and the customer's name, total and the ticket times of the last 30 days are saved in Tampermonkey's own storage in this browser (so clearing the browser cache or site data keeps them), one entry per customer by the profile id from the name link (customers without one, or with fewer than 5 tickets, are not saved); each name links to the profile, with the company after it on the same line, without its number (the account id is in the tooltip) and opening the organisation in PCM when clicked (from PCM Ticket Info Extractor or the ticket's Organisation, split from names like "123 Name", "Name 123", "123 - Name" or "Name (123)"). Customers with 500 tickets or more show the full total that PCM Customer Ticket Count counts once a week, when it has one. So the lists show the customers you have opened, not everyone. A Sync button in the footer fetches the ticket list and the profile page (current name and company) of every customer in both lists again (one request at a time) and shows how long it took and how much data it drew. No polling: the button does nothing until pressed, and the ticket page is watched by one scoped MutationObserver behind the shared visibility gate. A third tab, Stats, counts your visits in this browser (today, this week, all time): tickets visited (every time a ticket page opens) and the ticket list visited (opened or refreshed with F5; PCM Auto Refresh only reloads the list itself, not the page, so it does not count). One stored number per visit, nothing else.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
@@ -18,8 +11,11 @@
 // @grant        GM_setValue
 // @grant        unsafeWindow
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Customer_Top_List.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/PCM_Customer_Top_List.user.js
 // ==/UserScript==
+
+// @created = 2026-11-02 12:03
+// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples). Customer names, emails, companies, account ids and ticket counts are read from the page at runtime and kept only in this browser's Tampermonkey storage, never written here.
+// @note = run-at document-start on purpose: the button is added the moment Help is in the page. Tampermonkey can still start the script just after the first paint, so the button fades in instead of popping up.
 
 (function () {
     'use strict';

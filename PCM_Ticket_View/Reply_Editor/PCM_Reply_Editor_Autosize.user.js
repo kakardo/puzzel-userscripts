@@ -1,20 +1,16 @@
-// @file_name = PCM_Reply_Editor_Autosize.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-08
-// @created = 2026-10-08 16:37
-
 // ==UserScript==
 // @name         PCM Reply Editor Autosize
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-08
+// @version      1.1_2026-11-27
 // @description  Lets the reply editor (where you write mails and notes) grow with its text instead of staying 10 rows high and scrolling. It starts at 10 rows, grows as you type, and only scrolls once the text is longer than 100 rows. Both limits are settings at the top. Pure CSS on the editor's own text area: no observers, no polling, nothing runs while you type.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Reply_Editor_Autosize.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Reply_Editor_Autosize.user.js
 // ==/UserScript==
+
+// @created = 2026-10-08 16:37
 
 (function () {
     'use strict';

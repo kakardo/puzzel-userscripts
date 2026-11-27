@@ -1,21 +1,17 @@
-// @file_name = PCM_Ticket_Search_New_Tab.user.js
-// @author = Kardo Rostam
-// @version = 1.4_2026-11-02
-// @created = 2026-10-28 14:11
-// @note = run-at document-start on purpose: the arrow is added the moment the field is in the page. Tampermonkey can still start the script just after the first paint, so the arrow sits inside the field (taking no room) and only shows while the field has focus and something is typed.
-
 // ==UserScript==
 // @name         PCM Ticket Search New Tab
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-11-02
+// @version      1.5_2026-11-27
 // @description  Lets the "Ticket #" field in PCM's top bar open the ticket in a new tab. A small arrow inside the field's right edge (taking no room, so the field never moves; it fades in while the field has focus and something is typed, so it never covers the text) opens the typed number in a new tab, and the field's tooltip explains the options; Ctrl+Enter or Shift+Enter opens the typed ticket number in a new tab and clears the field for the next number; plain Enter keeps working as before (same tab), unless ALWAYS_NEW_TAB is turned on at the top. Only plain ticket numbers are handled; anything else is left to PCM's own search. Works on every PCM page with the top bar. Standalone and event-driven: a key and a focus listener, plus one observer that only runs while the page loads; no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
 // @run-at       document-start
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Ticket_Search_New_Tab.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Ticket_Search_New_Tab.user.js
 // ==/UserScript==
+
+// @created = 2026-10-28 14:11
+// @note = run-at document-start on purpose: the arrow is added the moment the field is in the page. Tampermonkey can still start the script just after the first paint, so the arrow sits inside the field (taking no room) and only shows while the field has focus and something is typed.
 
 (function () {
     'use strict';

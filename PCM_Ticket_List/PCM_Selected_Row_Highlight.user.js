@@ -1,13 +1,7 @@
-// @file_name = PCM_Selected_Row_Highlight.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-10-02
-// @created = 2026-10-02 09:18
-// @note = Light by default and fully working on its own. In dark mode it switches to its dark colours through the mark PCM Dark Mode (Ticket List) puts on the page root (data-pz-tickets-pagebg="on"); without that script it simply stays light.
-
 // ==UserScript==
 // @name         PCM Selected Row Highlight
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-10-02
+// @version      1.1_2026-11-27
 // @description  Makes selected rows in the tickets list (the round checkbox) easy to see in light and dark mode: a coloured band on the left edge, a tint over the whole row, and bold text in the highlight colour. The tint is laid over the row's own colour, so SLA colours (yellow, orange, red) still show through on a selected row. Pure CSS on the class DataTables already sets on selected rows, no observers, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -16,8 +10,10 @@
 // @run-at       document-idle
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Selected_Row_Highlight.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Selected_Row_Highlight.user.js
 // ==/UserScript==
+
+// @created = 2026-10-02 09:18
+// @note = Light by default and fully working on its own. In dark mode it switches to its dark colours through the mark PCM Dark Mode (Ticket List) puts on the page root (data-pz-tickets-pagebg="on"); without that script it simply stays light.
 
 (function () {
     'use strict';

@@ -1,12 +1,7 @@
-// @file_name = PCM_Hide_Columns.user.js
-// @author = Kardo Rostam
-// @version = 1.3_2026-11-04
-// @created = 2026-08-28 08:30
-
 // ==UserScript==
 // @name         PCM Hide Columns
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.3_2026-11-04
+// @version      1.4_2026-11-27
 // @description  Adds a Hide Columns button beside Reset Column Sorting with a checkbox panel per column. Hidden columns persist in localStorage, with a backup in Tampermonkey's own storage that restores them after a cleared browser cache; FORCE_HIDDEN at the top overrides both and shows as locked in the panel. The panel can copy the current hidden set as a ready-to-paste FORCE_HIDDEN line. Event-driven: reapplies on DataTables re-init, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -18,8 +13,9 @@
 // @grant        GM_deleteValue
 // @grant        unsafeWindow
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Hide_Columns.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/PCM_Hide_Columns.user.js
 // ==/UserScript==
+
+// @created = 2026-08-28 08:30
 
 (function () {
     'use strict';

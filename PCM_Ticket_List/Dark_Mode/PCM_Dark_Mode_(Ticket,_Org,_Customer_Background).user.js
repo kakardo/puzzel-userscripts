@@ -1,12 +1,7 @@
-// @file_name = PCM_Dark_Mode_(Ticket,_Org,_Customer_Background).user.js
-// @author = Kardo Rostam
-// @version = 1.4_2026-11-04
-// @created = 2026-03-25 (v1.1)
-
 // ==UserScript==
 // @name         PCM Dark Mode (Ticket, Org, Customer Background)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.4_2026-11-04
+// @version      1.5_2026-11-27
 // @description  Paints only the page background black on ticket detail pages, customers, and organisations pages. Follows the dark mode toggle of PCM Dark Mode (Ticket List), which is shown on these pages too: switched off, the pages stay light. Without that script the background is always dark.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -15,8 +10,9 @@
 // @run-at       document-idle
 // @grant        GM_addStyle
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/Dark_Mode/PCM_Dark_Mode_(Ticket,_Org,_Customer_Background).user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/Dark_Mode/PCM_Dark_Mode_(Ticket,_Org,_Customer_Background).user.js
 // ==/UserScript==
+
+// @created = 2026-03-25 (v1.1)
 
 (() => {
   'use strict';

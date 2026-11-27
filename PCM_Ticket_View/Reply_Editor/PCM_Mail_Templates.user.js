@@ -1,13 +1,7 @@
-// @file_name = PCM_Mail_Templates.user.js
-// @author = Kardo Rostam
-// @version = 5.9_2026-11-16
-// @created = 2026-09-01 10:04
-// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
-
 // ==UserScript==
 // @name         PCM Mail Templates
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      5.9_2026-11-16
+// @version      6.0_2026-11-27
 // @description  Adds a row of template buttons and small dropdown menus above the Summernote reply editor. Pressing one appends the template to the end of the mail body. Templates live in one TEMPLATES list at the top, shown in its order, so own templates and PCM templates can be mixed; each entry can have a colour, and entries can be grouped into dropdown menus. Own templates support {firstName}, {fullName}, {customer}, {partner} (read from the PCM Ticket Info Extractor outputs when present, names fall back to the To address) {ticket}, {priorityFrom} (the priority when the ticket was opened) and {priority:Name} placeholders; a Priority menu writes "Priority change: <priority when the ticket was opened> to <chosen>" with both priorities as small labels in PCM's own priority colours; {name} still works as {firstName}. Dropdown entries can be grouped under headings (the Resolve and Password menus are split into English and Svenska, the Swedish entries with Swedish names); a FollowUp menu asks the customer follow-up questions (call example, logs, local admin or IT, testing after a change), while Resolve holds the replies that resolve the ticket and Instructions holds step-by-step guides the customer can follow themselves (with links to Puzzel Help). A template can have variants (the Password resets and the Users instructions: written to the person themselves, or to someone acting on their behalf): the first press inserts the first, pressing the same template again right after switches the inserted text to the next one, round and round, so there is no duplicate entry per wording. A template or dropdown can set fontSize for its text, and **text** in a template is bold. Lines starting with 1., 2. ... or - become real numbered or bullet lists (a line directly under an item stays in that item). Names always get a capital first letter in each part ("anna-lena" becomes "Anna-Lena"). Unresolved names are dropped, other unresolved placeholders stay visible so they are easy to spot. Entries with a templateId are one-press shortcuts to PCM's own Insert Template entries, fetched by template id from the same /templates/{id}/use endpoint the modal calls, so variables are filled server-side and the text stays maintained in PCM. A last "Fill {{ }}" button fills PCM's own {{customer:name}} (as the first name), {{customer:first_name}}, {{customer:email}} and {{ticket:ticket_ref}} variables in text pasted into the mail with this ticket's values, keeping the pasted formatting, and rewords the phrases in FILL_REWORDS; unknown variables stay visible. The editor and the bar are marked translate="no" so page translation never rewrites the mail while typing. Event-driven via a scoped MutationObserver behind the shared visibility gate, no polling.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/tickets/*
@@ -15,8 +9,10 @@
 // @require      https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Shared_Library/PCM_Shared_Library.user.js
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Mail_Templates.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_View/Reply_Editor/PCM_Mail_Templates.user.js
 // ==/UserScript==
+
+// @created = 2026-09-01 10:04
+// @note = WARNING: no company or customer identifying details are allowed anywhere in this file (names, domains, emails, ids, real examples).
 
 (function () {
     'use strict';

@@ -1,13 +1,7 @@
-// @file_name = PCM_Dark_Mode_(Attributes).user.js
-// @author = Kardo Rostam
-// @version = 6.2_2026-11-03
-// @created = 2026-03-27 (v4.5)
-// @note = Follows the dark mode toggle owned by PCM Dark Mode (Ticket List): its data-pz-dark="on"/"off" mark on the tickets widget decides light or dark here. Install both; on its own this script falls back to its own stored value, which defaults to dark.
-
 // ==UserScript==
 // @name         PCM Dark Mode (Attributes)
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      6.2_2026-11-03
+// @version      6.3_2026-11-27
 // @description  Uses the shared PCM_DOM library for boot/retry and style injection. Battery friendly: applies are skipped while the tab is hidden (one catch-up on return) and the document-wide XPath search only runs when the cheap ID lookup fails. Keeps the working Attributes behavior. Status and Priority chips and dropdown options are colour coded in both modes; Priority uses the same colours as the priority badges in the tickets list.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/
@@ -17,8 +11,10 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/Dark_Mode/PCM_Dark_Mode_(Attributes).user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/PCM_Ticket_List/Dark_Mode/PCM_Dark_Mode_(Attributes).user.js
 // ==/UserScript==
+
+// @created = 2026-03-27 (v4.5)
+// @note = Follows the dark mode toggle owned by PCM Dark Mode (Ticket List): its data-pz-dark="on"/"off" mark on the tickets widget decides light or dark here. Install both; on its own this script falls back to its own stored value, which defaults to dark.
 
 (() => {
   'use strict';

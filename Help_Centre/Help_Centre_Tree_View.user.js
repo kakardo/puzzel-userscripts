@@ -1,22 +1,18 @@
-// @file_name = Help_Centre_Tree_View.user.js
-// @author = Kardo Rostam
-// @version = 1.0_2026-11-19
-// @created = 2026-11-19 16:02
-// @note = run-at document-start on purpose: the knowledge base fetches its search answer while the page loads, and fetch has to be wrapped before that to read it.
-// @note = Split off from Help Centre Results Per Page, where the tree view was added in 1.4.
-
 // ==UserScript==
 // @name         Help Centre Tree View
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.0_2026-11-19
+// @version      1.1_2026-11-27
 // @description  Adds a "Tree view" button to the search results of the Puzzel Help Centre knowledge base. It shows all results of the search (not only the page shown) as a tree, grouped by the parts of their titles ("Puzzel ID - Migration - New URLs" goes under Puzzel ID, then Migration), each group folding open and shut and showing how many articles it holds; a group with a single article shows it as one line, and within a level groups come first, then single articles, in the order the search ranked them. "List view" goes back; the choice is remembered in this browser. The results are read from the search answer the knowledge base already receives, so there are no extra requests. Event-driven: one fetch wrapper that only reads the search answer, and one observer on the knowledge base area.
 // @author       Kardo Rostam
 // @match        https://www.puzzel.com/help*
 // @run-at       document-start
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Help_Centre/Help_Centre_Tree_View.user.js
-// @updateURL    https://raw.githubusercontent.com/kakardo/puzzel-userscripts/main/Help_Centre/Help_Centre_Tree_View.user.js
 // ==/UserScript==
+
+// @created = 2026-11-19 16:02
+// @note = run-at document-start on purpose: the knowledge base fetches its search answer while the page loads, and fetch has to be wrapped before that to read it.
+// @note = Split off from Help Centre Results Per Page, where the tree view was added in 1.4.
 
 (function () {
     'use strict';
