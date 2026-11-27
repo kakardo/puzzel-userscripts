@@ -1,13 +1,13 @@
 // @file_name = PCM_Name_Field_Placeholder.user.js
 // @author = Kardo Rostam
-// @version = 1.8_2026-08-27
+// @version = 1.9_2026-11-27
 // @created = 2026-04-08 09:47
 
 // ==UserScript==
 // @name         PCM Name Field Placeholder
 // @namespace    https://github.com/kakardo/puzzel-userscripts
-// @version      1.8_2026-08-27
-// @description  Adds a purple placeholder name link above the email in Customer Intelligence only when no visible name already exists. Runs once per page load with limited retries.
+// @version      1.9_2026-11-27
+// @description  Adds a purple placeholder name link above the email in Customer Intelligence only when no visible name already exists. Text that other scripts add (elements with an id starting with "pcm-", such as the "(Reminder: add customer ID)" note, which sits in the empty name line) does not count as a name. Runs once per page load with limited retries.
 // @author       Kardo Rostam
 // @match        https://puzzel.cm.puzzel.com/*
 // @run-at       document-idle
@@ -67,14 +67,29 @@
         return candidates[0] || null;
     }
 
+    // An element's visible text without what scripts add (ids "pcm-"):
+    // PCM Customer ID Reminder puts its note into the empty name line,
+    // which made that line look like a name.
+    function ownText(el) {
+        let text = '';
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            const parent = node.parentElement;
+            if (parent && parent.closest('[id^="pcm-"]')) continue;
+            text += node.nodeValue;
+        }
+        return text.trim();
+    }
+
     function hasVisibleNameAboveEmail(panel, emailEl) {
         if (!panel || !emailEl) return false;
 
         const emailRect = emailEl.getBoundingClientRect();
         const candidates = [...panel.querySelectorAll('*')].filter(el => {
-            if (!isVisible(el) || el.id === PLACEHOLDER_ID || el === emailEl) return false;
+            if (!isVisible(el) || el.id === PLACEHOLDER_ID || el === emailEl || el.closest('[id^="pcm-"]')) return false;
 
-            const text = (el.innerText || el.textContent || '').trim();
+            const text = ownText(el);
             if (!text) return false;
             if (EMAIL_RE.test(text)) return false;
             if (text === PLACEHOLDER_TEXT) return false;
@@ -86,7 +101,7 @@
         });
 
         return candidates.some(el => {
-            const text = (el.innerText || el.textContent || '').trim();
+            const text = ownText(el);
             return !!text && !EMAIL_RE.test(text) && text !== PLACEHOLDER_TEXT;
         });
     }
